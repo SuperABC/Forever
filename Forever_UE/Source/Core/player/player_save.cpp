@@ -59,7 +59,7 @@ Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
 	bool valid = asset->IsValid();
 	asset->name = name; // 覆写回存档里的名字，容器/房间/worldAssets的key都按它索引
 	if (!SaveRefs::ReadModState(valid ? asset->mod : static_cast<AssetMod*>(nullptr), r)) {
-		debugf("Warning: failed to parse saved state of asset mod %s.\n", type.c_str());
+		debugf(DebugLevel::Warning, "failed to parse saved state of asset mod %s.\n", type.c_str());
 	}
 	asset->count = count;
 	asset->usesLeft = usesLeft;
@@ -76,7 +76,7 @@ Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
 		if (content) asset->contents[content->name] = content;
 	}
 	if (!valid) {
-		debugf("Warning: asset mod %s is not available, item %s dropped.\n", type.c_str(), name.c_str());
+		debugf(DebugLevel::Warning, "asset mod %s is not available, item %s dropped.\n", type.c_str(), name.c_str());
 		delete asset;
 		return nullptr;
 	}

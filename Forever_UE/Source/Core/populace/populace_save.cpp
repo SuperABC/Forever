@@ -289,10 +289,8 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 				outPendingOrganizations.clear();
 				return nullptr;
 			}
-			for (const string& other : populace->nameFactory.GetRegisteredIds()) populace->nameFactory.SetConfig(other, false);
-			populace->nameFactory.SetConfig(nameId, true);
 			populace->name = new Name(&populace->nameFactory, nameId);
-			if (!SaveRefs::ReadModState(populace->name->mod, r)) debugf("Warning: failed to parse saved state of name mod %s.\n", nameId.c_str());
+			if (!SaveRefs::ReadModState(populace->name->mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of name mod %s.\n", nameId.c_str());
 			for (const string& reserved : ReadStrings(r)) populace->name->reserve.insert(reserved);
 		}
 
@@ -336,7 +334,7 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			if (r.U8() != 0) {
 				string schedulerId = r.Str();
 				c->scheduler = new Scheduler(&populace->schedulerFactory, &populace->scriptFactory, schedulerId, c);
-				if (!SaveRefs::ReadModState(c->scheduler->mod, r)) debugf("Warning: failed to parse saved state of scheduler mod %s.\n", schedulerId.c_str());
+				if (!SaveRefs::ReadModState(c->scheduler->mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of scheduler mod %s.\n", schedulerId.c_str());
 			}
 			// 头像。
 			c->avatar = r.Str();

@@ -271,6 +271,6 @@ bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* popul
 		error = "scripts section is truncated";
 		return false;
 	}
-	if (missing > 0) debugf("Warning: %d saved script states had no matching script and were skipped.\n", missing);
+	if (missing > 0) debugf(DebugLevel::Warning, "%d saved script states had no matching script and were skipped.\n", missing);
 	return true;
 }

@@ -13,8 +13,8 @@
 
 ## 关键设计
 
-- **一次只应该有一个路网布局方案生效**——`RoadnetFactory::SetConfig`/`GetRoadnet()`单选，
-  详见`roadnet_factory.md`。`Roadnet`本身不关心这个，只是按调用方传入的id构造。
+- **一次只应该有一个路网布局方案生效**——单选由`Config::GetUniqueConceptMod("Roadnets")`给出(`Map::InitRoadnet`)，
+  见`Source/Core/common/config.md`。`Roadnet`本身不关心这个，只是按调用方传入的id构造。
 - **边界`Road`指针和`Roadnet::roads`（主数组）里的对象是同一个，不各自独立拷贝一份**——
   `RoadnetMod::lots`的边界类型是`unordered_map<int, Road*>`，约定这些指针必须指向
   `mod->roads`里的元素本身（`roadnet_mod.h`的接口注释明确写了这个约束）；`Roadnet::

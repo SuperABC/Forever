@@ -59,7 +59,7 @@
   - 物理→运动学（`BusToKinematic`）：先用`ABusController::QueryLoopProgress`+`Route::SyncVehicleProgress`把时刻表进度对齐到实车位置（物理车比名义速度慢，不对齐会"瞬移"），再`ClearCommands`（停站补`leave_stop`）、销毁物理公交+Controller、`SetPhysicsDriven(false)`、`Route::ResetStopState`（下一次`Update`当第一次观察，正好停着就补发`enter_stop`）、恢复运动学Actor。玩家驾驶/搭乘中不收回。
   - `enter_stop/leave_stop`任何时刻只有一个发出方：运动学段 = Core时刻表（`AForeverFrameworkActor`转发），物理段 = `ABusController`（`FireStopEvent`，用`stationByNodeId`把辅助导航节点id反查回车站）。
   - `busPhysicsClasses`（UPROPERTY的`TSet`）保存`LoadClass`出来的蓝图类：`FBusState::physicsClass`是裸指针，GC后会悬空，`SpawnActor`时崩溃。
-- **测试运行 / 停止运行**（`StartBusTestRun/StopBusRun`，`vehicle_command` Change触发）：`run` = 随机公交环线（`CollectBusLoops`）的随机站，先`NavigateToNode`，到站后接`LoopNodes`；`stop` = `StopNow`。
+- **测试运行 / 停止运行**（`StartVehicleLineRun/StopVehicleLineRun`，`vehicle_command` Change触发）：`run` = 随机环线（目前只实现了走路网的线路，`CollectBusLoops`）的随机站，先`NavigateToNode`，到站后接`LoopNodes`；`stop` = `StopNow`。
   线路公交被点过后`bDetached`（退出时刻表，`physicsDriven`锁定，之后由Controller持有，LOD外靠Controller自带的运动学模式）。停车场公交第一次被驱动时`FindOrAddBusState`登记状态（没有时刻表、没有运动学表示）。
 - 下车后Controller下一帧自动收回；读档`controlledVehicle`是线路公交走`ApplyBoardVehicle`（物理公交不在就强制切换）。
 - 不保存：测试运行状态不进存档，读档后公交回到停车场/默认状态（脚本变量`running`会随脚本存档，读档后可能与实际不一致）。
@@ -75,7 +75,7 @@
 
 ### 线路调试画线与铺轨
 
-- **`BuildRouteDebugMesh`**：每种`stationType`一个`UProceduralMeshComponent`+MID（bus绿/train蓝/plane红/其它默认色，`GetRouteDebugTarget`选），
+- **`BuildRouteDebugMesh`**：每种`stationType`一个`UProceduralMeshComponent`+MID（`routeDebugMeshes`/`routeDebugMaterials`两个`TMap`，按地图上实际出现的类型现建，颜色按类型名`FCrc::StrCrc32`哈希取色相，不认识任何具体类型），
   遍历`route->GetLines()`的`runs`→`pieces`，按每个`TrackPath`几何采样（`SampleRouteEdge(const TrackPath&)`，每`ROUTE_DEBUG_SAMPLE_STEP`地图单位一个采样点，至少16段，`TSet<const TrackPath*>`去重）连成ribbon，
   路径中点画箭头指示方向，站点的inlet/outlet/stop画小方块。`bShowRouteDebug`（默认false）为false时`ClearMeshSection`而不是跳过，避免旧可视化残留。`stationByNodeId`遍历`RouteLine::runs`。
 - **`BuildPiers(Map*, Traffic*)`**：画 `Route::GetPiers()`(Core 选好的桥墩)。mesh 空串=`/Game/Asset/Common/Mesh/Cylinder`，用 `GetOrCreateTrackISM` 同一套 ISM 缓存，所以必须在 `BuildTracks`(开头统一清实例)之后调。墩底=`Map::SampleHeight(x,y)`(水面不管，取到的就是水底)，墩顶=`topZ`；缩放读 mesh `GetBounds()`(不假设资产原尺寸和轴心)：水平直径=2×radius，竖直撑满墩高，包围盒中心对齐墩中心。
@@ -103,7 +103,7 @@
   `Element/VehicleElement.h`、`Element/TransitVehicleElement.h`、`Controller/BusController.h`、`Element/CitizenElement.h`（despawn豁免）。
 - 被依赖：`AForeverFrameworkActor::BeginPlay()`在`EnsureTrafficGenerated()`→`EnsureStoryGenerated()`之后依次调用`GenerateVehicles`/`BuildRouteDebugMesh`/`BuildTracks`
   （必须排在`EnsureStoryGenerated()`之后——车辆script的`game_start`要先广播完，生成`AVehicleElement`时建触发盒烘焙的选项快照才不会是空的）；
-  `UForeverStoryFrameworkComponent`调用`ApplyEnterVehicle`/`ApplyBoardVehicle`/`ApplyLeaveVehicle`；`AForeverFrameworkActor`调用`StartBusTestRun`/`StopBusRun`/`StartTestNavigation`（以及读档恢复时的`ApplyBoardVehicle`）；
+  `UForeverStoryFrameworkComponent`调用`ApplyEnterVehicle`/`ApplyBoardVehicle`/`ApplyLeaveVehicle`；`AForeverFrameworkActor`调用`StartVehicleLineRun`/`StopVehicleLineRun`/`StartTestNavigation`（以及读档恢复时的`ApplyBoardVehicle`）；
   `AVehicleElement::ExitVehicle`调用`ExitVehicle`；`AForeverFrameworkActor`的`visualize_navigation`和`AForeverPlayerController`（`TestNavigate`/`OnPossess`）调用`StartGuide`/`RefreshGuide`；`ABusController`调用`FireStopEvent`。
 
 ## 待办/后续阶段

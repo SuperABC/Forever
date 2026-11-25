@@ -407,7 +407,7 @@ void Roadnet::PlacePiers(Map* map) {
 		};
 		PierPlacer::PlaceAlongChains(map, request, chains, blocked, piers);
 	}
-	debugf("Roadnet::PlacePiers: placed %d pier(s).\n", static_cast<int>(piers.size()));
+	debugf(DebugLevel::Log, "Roadnet::PlacePiers: placed %d pier(s).\n", static_cast<int>(piers.size()));
 }
 
 const vector<Node*>& Roadnet::GetExterns() const {

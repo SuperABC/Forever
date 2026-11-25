@@ -322,26 +322,33 @@ bool Player::HasThrowableInHand(const string& type) const {
 
 bool Player::ApplyChange(const Change* change, const ScriptContext& context) {
 	// 脚本强制换天气：名字非法时Weather自己打警告并忽略；合法则重置自动换天气的倒计时。
-	if (auto* changeWeather = dynamic_cast<const ChangeWeatherChange*>(change)) {
+	switch (change->GetKind()) {
+	case ChangeKind::ChangeWeather: {
+		auto* changeWeather = static_cast<const ChangeWeatherChange*>(change);
 		weather.SetByName(ToString(EvaluateExpression(changeWeather->GetWeather(), context)));
 		return true;
 	}
 
 	// add_option/remove_option作用在玩家身上/地上的资产上(房间里的由Map::ApplyChange处理)，名字全局唯一，
 	// 找不到静默忽略，和其它域一样。
-	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+	case ChangeKind::AddOption: {
+		auto* addOption = static_cast<const AddOptionChange*>(change);
 		if (!addOption->GetCategory().empty() && addOption->GetCategory() != "asset") return false;
 		if (Asset* asset = FindAssetByName(ToString(EvaluateExpression(addOption->GetName(), context)))) {
 			asset->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		}
 		return true;
 	}
-	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+	case ChangeKind::RemoveOption: {
+		auto* removeOption = static_cast<const RemoveOptionChange*>(change);
 		if (!removeOption->GetCategory().empty() && removeOption->GetCategory() != "asset") return false;
 		if (Asset* asset = FindAssetByName(ToString(EvaluateExpression(removeOption->GetName(), context)))) {
 			asset->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
 		}
 		return true;
+	}
+	default:
+		break;
 	}
 	return false;
 }

@@ -4,6 +4,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
@@ -34,6 +35,10 @@ public:
 	// 必须在调用方触发mod的RegisterModComponents导出函数之前调用,否则CreateComponent
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
+
+	// 注销不在keepIds里的注册项，返回注销了几个。注册项里的函数指针指向mod dll的代码，dll卸载前必须先注销；
+	// 还有存活实例的id要留在keepIds里(销毁它要用注册时的deleter)。见Core/common/registry.md"卸载"。
+	virtual int UnregisterExcept(const std::unordered_set<std::string>& keepIds);
 
 private:
 	// 启用=已注册且id在configuredArgs里,详见配对md。

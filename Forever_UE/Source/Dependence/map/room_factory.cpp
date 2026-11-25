@@ -58,6 +58,19 @@ void RoomFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
 }
 
+int RoomFactory::UnregisterExcept(const unordered_set<string>& keepIds) {
+	int removed = 0;
+	for (auto it = registries.begin(); it != registries.end();) {
+		if (keepIds.count(it->first)) {
+			++it;
+			continue;
+		}
+		it = registries.erase(it);
+		removed++;
+	}
+	return removed;
+}
+
 bool RoomFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }

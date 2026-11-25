@@ -14,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <windows.h>
 
 
 using namespace std;
@@ -58,7 +59,7 @@ namespace {
 			else options.configPath = arg;
 		}
 		if (options.configPath.empty()) {
-			fprintf(stderr, "usage: CoreTest <config.json> [--suite random,mods,lint,world,econ,save,perform,route,green,presets,plateau,polit,transit|all] [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]\n");
+			fprintf(stderr, "usage: CoreTest <config.json> [--suite random,mods,lint,world,econ,save,perform,route,green,presets,plateau,polit,transit,terrain,unload|all] [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]\n");
 			return false;
 		}
 		return true;
@@ -98,6 +99,7 @@ static int RealMain(int argc, char** argv) {
 		{ "polit", RunPolitSuite },
 		{ "transit", RunTransitSuite },
 		{ "terrain", RunTerrainSuite },
+		{ "unload", RunUnloadSuite },
 	};
 
 	int totalFailures = 0, totalPasses = 0;
@@ -125,6 +127,8 @@ static int RealMain(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+	// Core和mod的debugf默认写标准错误，文本是UTF-8(工程开了/utf-8)，控制台不设成UTF-8中文会乱码。
+	SetConsoleOutputCP(CP_UTF8);
 	InstallCrashHandler();
 	try {
 		return RealMain(argc, argv);

@@ -14,8 +14,10 @@ NameMod* NameFactory::CreateName(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
+	if (!IsEnabled(id)) return nullptr;
+
 	auto argsIt = configuredArgs.find(id);
-	NameMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
+	NameMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -40,12 +42,13 @@ void NameFactory::DestroyName(NameMod* instance) {
 }
 
 bool NameFactory::CheckRegistered(const string& id) const {
-	return registries.find(id) != registries.end();
+	return IsEnabled(id);
 }
 
 vector<string> NameFactory::GetRegisteredIds() const {
 	vector<string> ids;
 	for (const auto& [id, entry] : registries) {
+		if (configuredArgs.find(id) == configuredArgs.end()) continue;
 		ids.push_back(id);
 	}
 	return ids;
@@ -55,15 +58,21 @@ void NameFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
 }
 
-void NameFactory::SetConfig(const string& id, bool enabled) {
-	enabledConfig[id] = enabled;
+int NameFactory::UnregisterExcept(const unordered_set<string>& keepIds) {
+	int removed = 0;
+	for (auto it = registries.begin(); it != registries.end();) {
+		if (keepIds.count(it->first)) {
+			++it;
+			continue;
+		}
+		it = registries.erase(it);
+		removed++;
+	}
+	return removed;
 }
 
-string NameFactory::GetName() const {
-	for (const auto& [id, enabled] : enabledConfig) {
-		if (enabled) return id;
-	}
-	return string();
+bool NameFactory::IsEnabled(const string& id) const {
+	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }
 
 vector<pair<string, NameMod*>> NameFactory::GetLiveInstances() const {

@@ -41,10 +41,16 @@ public:
 	virtual void SetValue(const std::string& name, ValueType value) = 0;
 };
 
-// 用OutputDebugStringA实现——只有附加调试器时才能看到，不会写进Saved/Logs/Forever.log，
-// 需要玩家可见或PIE无调试器场景下读取的诊断信息要用UE_LOG(只有Forever UE模块层能用)，不是
-// 这个函数。
-void debugf(const char* format, ...);
+// ---- 日志(设计见utility.md"debugf") ----
+// Dependence/Core/Basic和各mod里不带UE的代码统一用debugf打日志。它只管格式化，文本交给当前的输出函数(sink)：
+// 默认写标准错误(CoreTest/ModTest这类控制台程序直接能看到)，宿主可以用SetDebugSink换掉(UE里接到UE_LOG，进Forever.log)。
+enum class DebugLevel : int { Log = 0, Warning = 1, Error = 2 };
+// text是一条已经格式化好的消息(调用方习惯以换行结尾)。普通函数指针，可以跨DLL传，见mod_concepts.h的BindModHost。
+using DebugSink = void(*)(DebugLevel level, const char* text);
+// 换输出函数；传nullptr恢复默认(写标准错误)。只影响调用方所在模块自己那份Dependence。
+void SetDebugSink(DebugSink sink);
+DebugSink GetDebugSink();
+void debugf(DebugLevel level, const char* format, ...);
 
 // [0, range-1]的随机整数，range<=0时返回0。
 int GetRandom(int range);

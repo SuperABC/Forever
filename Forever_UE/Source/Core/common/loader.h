@@ -31,6 +31,8 @@ public:
 	}
 
 	void UnloadAll();
+	// 卸载一个dll(没加载过就什么都不做)。调用前必须已经把它的注册项从各Factory注销，见Registry::UnloadMods。
+	void Unload(const std::string& dllPath);
 
 	bool IsLoaded(const std::string& dllPath) const { return modHandles.count(dllPath) > 0; }
 

@@ -86,7 +86,7 @@ Core对象的STL容器mutator"，而是"mod的编译产物里默认实现构造�
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`、`expression.h`（`ScriptContext`、`EvaluateExpression`）、`change.h`（`FindLabel`里
-  `dynamic_cast<const PlaceHolderChange*>`）、`../common/handle.h`（`PostHandle`）、
+  `ChangeCast<PlaceHolderChange>`）、`../common/handle.h`（`PostHandle`）、
   `<deque>`。
 - 被谁依赖：`script_factory.h`（`ScriptFactory::CreateFunc`/`DestroyFunc`按`ScriptMod*`工作）、
   `Core/story/script.h`（`ScriptAction`、`Script::mod`、`Script::WrapScript`/`AutoPop`转调

@@ -382,7 +382,7 @@ void Traffic::InitStations(Map* map) {
 		createdCount++;
 	}
 
-	debugf("Traffic::InitStations: created %d station(s).\n", createdCount);
+	debugf(DebugLevel::Log, "Traffic::InitStations: created %d station(s).\n", createdCount);
 }
 
 void Traffic::InitRoadsideStations(Map* map) {
@@ -397,7 +397,7 @@ void Traffic::InitRoadsideStations(Map* map) {
 	for (const TransitData::RoadLine& line : transit.roadLines) {
 		for (const TransitData::RoadStop& stop : line.stops) {
 			if (stationFactory.HasManualAssign(stop.station)) manualModIds.insert(stop.station);
-			else debugf("Warning: Traffic::InitRoadsideStations: bus stop references station '%s' that supports no manual placement, ignored.\n", stop.station.c_str());
+			else debugf(DebugLevel::Warning, "Traffic::InitRoadsideStations: bus stop references station '%s' that supports no manual placement, ignored.\n", stop.station.c_str());
 		}
 	}
 
@@ -440,7 +440,7 @@ void Traffic::InitRoadsideStations(Map* map) {
 			string name = request.name.empty() ? "Station" + to_string(stationCounter++) : request.name;
 			if (stations.count(name)) {
 				// insert_or_assign会静默覆盖并泄漏旧Station；重名一律丢弃新站(后到的不算)。
-				debugf("Warning: Traffic::InitRoadsideStations: duplicate station name '%s', discarded.\n", name.c_str());
+				debugf(DebugLevel::Warning, "Traffic::InitRoadsideStations: duplicate station name '%s', discarded.\n", name.c_str());
 				continue;
 			}
 			Station* station = new Station(&stationFactory, modId, name,
@@ -455,7 +455,7 @@ void Traffic::InitRoadsideStations(Map* map) {
 		}
 	}
 
-	debugf("Traffic::InitRoadsideStations: created %d roadside station(s).\n", createdCount);
+	debugf(DebugLevel::Log, "Traffic::InitRoadsideStations: created %d roadside station(s).\n", createdCount);
 }
 
 void Traffic::InitRoutes(Map* map) {
@@ -477,7 +477,7 @@ void Traffic::InitRoutes(Map* map) {
 		for (const auto& loop : transit.loops) check(loop.route);
 		for (const auto& line : transit.roadLines) check(line.route);
 		for (const string& route : missing)
-			debugf("Warning: Traffic::InitRoutes: editor transit data references route '%s' which is not enabled/registered, those lines are ignored.\n", route.c_str());
+			debugf(DebugLevel::Warning, "Traffic::InitRoutes: editor transit data references route '%s' which is not enabled/registered, those lines are ignored.\n", route.c_str());
 	}
 
 	for (const string& modId : routeIds) {
@@ -494,7 +494,7 @@ void Traffic::InitRoutes(Map* map) {
 		for (auto& [builtName, builtRoute] : routes) built.push_back(builtRoute);
 		route->PlacePiers(map, built);
 
-		debugf("Traffic::InitRoutes: route %s built %d line(s).\n", name.c_str(), static_cast<int>(route->GetLines().size()));
+		debugf(DebugLevel::Log, "Traffic::InitRoutes: route %s built %d line(s).\n", name.c_str(), static_cast<int>(route->GetLines().size()));
 
 		routes.insert_or_assign(name, route);
 	}
@@ -523,11 +523,10 @@ void Traffic::InitStockedVehicles(Map* map) {
 				if (!vehicle) continue;
 				vehicle->BindSlot(room, static_cast<int>(slotIndex));
 				parkedCount++;
-				debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
 			}
 		}
 	}
-	debugf("Traffic::InitStockedVehicles: %d vehicle(s).\n", parkedCount);
+	debugf(DebugLevel::Log, "Traffic::InitStockedVehicles: %d vehicle(s).\n", parkedCount);
 }
 
 VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, int slotIndex,
@@ -545,7 +544,6 @@ VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, in
 	vehicleAssets.push_back(asset);
 	if (ownerCitizen) ownerCitizen->AddAsset(asset);
 	if (ownerOrganization) ownerOrganization->AddAsset(asset);
-	debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
 	return asset;
 }
 
@@ -587,7 +585,7 @@ void Traffic::AssignVehicles(const Populace& populace, const Society& society) {
 		}
 	}
 
-	debugf("Traffic::AssignVehicles: %d citizen vehicle(s), %d organization vehicle(s).\n", citizenVehicles, organizationVehicles);
+	debugf(DebugLevel::Log, "Traffic::AssignVehicles: %d citizen vehicle(s), %d organization vehicle(s).\n", citizenVehicles, organizationVehicles);
 }
 
 void Traffic::InitTransitVehicles() {
@@ -694,17 +692,23 @@ void Traffic::SilenceInitialStopEvents() {
 }
 
 bool Traffic::ApplyChange(const Change* change, const ScriptContext& context) {
-	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+	switch (change->GetKind()) {
+	case ChangeKind::AddOption: {
+		auto* addOption = static_cast<const AddOptionChange*>(change);
 		if (!addOption->GetCategory().empty() && addOption->GetCategory() != "vehicle") return false; // 指定了别的类别：不是这个域的
 		Vehicle* target = FindVehicleByName(ToString(EvaluateExpression(addOption->GetName(), context)));
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		return true;
 	}
-	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+	case ChangeKind::RemoveOption: {
+		auto* removeOption = static_cast<const RemoveOptionChange*>(change);
 		if (!removeOption->GetCategory().empty() && removeOption->GetCategory() != "vehicle") return false; // 指定了别的类别：不是这个域的
 		Vehicle* target = FindVehicleByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
 		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
 		return true;
+	}
+	default:
+		break;
 	}
 	return false;
 }

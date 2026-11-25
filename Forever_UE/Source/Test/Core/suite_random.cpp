@@ -5,6 +5,7 @@
 
 #include "common/config.h"
 #include "common/mod_args.h"
+#include "common/mod_concepts.h"
 #include "common/random.h"
 
 #ifndef NOMINMAX
@@ -82,8 +83,8 @@ namespace {
 		}
 	}
 
-	// 2. 每个被加载的mod DLL都导出BindRandomHost(否则它的GetRandom退回random_device，且unscoped计数宿主看不到)。
-	void CheckBindRandomHost() {
+	// 2. 每个被加载的mod DLL都导出BindModHost(否则它的GetRandom退回random_device，且unscoped计数宿主看不到)。
+	void CheckBindModHost() {
 		TestRun& run = TestRun::Get();
 		int dllCount = 0;
 		for (const string& path : Config::GetMods()) {
@@ -91,8 +92,8 @@ namespace {
 			if (!module) module = LoadLibraryA(path.c_str());
 			if (!module) continue;
 			dllCount++;
-			run.Check(GetProcAddress(module, kBindRandomHostSymbol) != nullptr, "dll exports BindRandomHost: " + path,
-				"add FOREVER_MOD_BIND_RANDOM to the dll entry file, otherwise its GetRandom ignores the seed");
+			run.Check(GetProcAddress(module, kBindModHostSymbol) != nullptr, "dll exports BindModHost: " + path,
+				"add FOREVER_MOD_BIND_HOST to the dll entry file, otherwise its GetRandom ignores the seed");
 		}
 		run.Metric("mod dlls inspected", dllCount, "");
 	}
@@ -214,7 +215,7 @@ void RunRandomSuite(const TestOptions& options) {
 		TestRun::Get().Check(false, "load config", error);
 		return;
 	}
-	CheckBindRandomHost();
+	CheckBindModHost();
 	CheckModArgs();
 	CheckRandomSources(options);
 	CheckSnapshotRestore();
@@ -234,5 +235,6 @@ SuiteBody FindSuiteBody(const std::string& name) {
 	if (name == "transit") return TransitSuiteBody;
 	if (name == "transit_twice" || name == "transit_hub") return TransitTwiceSuiteBody;
 	if (name == "transit_bus") return TransitBusSuiteBody;
+	if (name == "unload") return UnloadSuiteBody;
 	return nullptr;
 }

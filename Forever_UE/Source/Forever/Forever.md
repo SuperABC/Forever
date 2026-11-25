@@ -2,10 +2,14 @@
 
 ## 职责
 
-`Forever`游戏模块的入口：`FForeverGameModule`(`IMPLEMENT_PRIMARY_GAME_MODULE`)，在每个`World`初始化之前**关掉UE自带的导航系统**。
+`Forever`游戏模块的入口：`FForeverGameModule`(`IMPLEMENT_PRIMARY_GAME_MODULE`)，在每个`World`初始化之前**关掉UE自带的导航系统**；并在模块启动时把Core的`debugf`接进UE日志。
 
 ## 关键设计
 
+- **`debugf`进UE日志(2026-11-25)**：`StartupModule`第一件事是`SetDebugSink(&ForeverDebugSink)`(`Dependence/common/utility.md`)。
+  之后Core/Dependence里的`debugf`，以及之后加载的每个mod dll里的`debugf`(`ModLoader`经`BindModHost`把这个函数交过去)，
+  都按级别打成`UE_LOG(LogForeverCore, Log/Warning/Error)`，进`Forever.log`。函数里只做UTF-8转码、去掉结尾换行和`UE_LOG`，
+  不碰游戏对象——它可能在任意线程、从任意dll被调用。`ShutdownModule`里恢复默认。
 - 这个项目所有导航(车行/行人寻路)都由Core的导航图实现，不用UE的`NavigationSystem`/NavMesh。`DefaultEngine.ini`里已把`NavigationSystemConfigClassName`设成`NullNavSysConfig`，但那只影响新建关卡——已有关卡(`Menu`/`World`/`Editor.umap`)的`WorldSettings`里序列化着一份`NavigationSystemModuleConfig`。
 - 所以`StartupModule`里注册`FWorldDelegates::OnPreWorldInitialization`(`UWorld::InitWorld`里它先于`AddNavigationSystemToWorld`)，给`WorldSettings`挂一个`UNullNavSysConfig`覆盖(`RF_Transient`)。之后所有创建导航系统的路径(编辑器/PIE/游戏)读到的都是空配置：不创建导航系统、不维护导航八叉树、不会因为增删组件/实例去刷新导航数据。`WorldSettings`已有覆盖就不重复挂。
 - `ShutdownModule`里注销委托。

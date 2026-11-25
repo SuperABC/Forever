@@ -25,8 +25,7 @@ public:
 	// 对象不保证释放干净——读档失败本来就要退回重新生成世界)。
 	static Map* Load(const SaveArchive& archive, std::string& error);
 
-	// 最近一次Save/Load的统计(各类对象数量、无法解析的引用数)。Core的debugf只走
-	// OutputDebugString、不进UE日志，所以由UE层取出来打进Output Log。
+	// 最近一次Save/Load的统计(各类对象数量、无法解析的引用数)，由UE层取出来打进Output Log。
 	static const std::string& GetLastReport();
 
 private:

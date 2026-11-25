@@ -24,15 +24,24 @@ void* ModLoader::LoadHandle(const string& dllPath) {
 		return nullptr;
 
 	modHandles[dllPath] = handle;
-	// 每个DLL静态链接各自一份Dependence：把Core的随机host交给它，GetRandom才会用到Core的流。没导出就退回不可控随机。
-	if (auto bind = reinterpret_cast<void(*)(RandomHost*)>(GetProcAddress(handle, kBindRandomHostSymbol))) {
-		bind(GetRandomHost());
+	// 每个DLL静态链接各自一份Dependence：把宿主的随机host和debugf输出函数交给它，GetRandom才会用到Core的流、
+	// 它的debugf才进宿主的日志。没导出就退回不可控随机+写标准错误。
+	if (auto bind = reinterpret_cast<void(*)(const ModHostBinding*)>(GetProcAddress(handle, kBindModHostSymbol))) {
+		const ModHostBinding binding = CurrentModHostBinding();
+		bind(&binding);
 	}
 	return handle;
 }
 
 void* ModLoader::GetSymbol(void* handle, const char* name) {
 	return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(handle), name));
+}
+
+void ModLoader::Unload(const string& dllPath) {
+	auto it = modHandles.find(dllPath);
+	if (it == modHandles.end()) return;
+	FreeLibrary(static_cast<HMODULE>(it->second));
+	modHandles.erase(it);
 }
 
 void ModLoader::UnloadAll() {

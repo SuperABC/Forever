@@ -8,7 +8,7 @@
 ——`Populace`只通过这层转发访问取名算法，不直接持有`NameMod*`，和`Terrain`/
 `Roadnet`/`Zone`/`Building`/`Script`等聚合类"上层只操作Core层包装类"的既有架构一致。
 
-`NameFactory`是`RoadnetFactory`同一个"单选"模式（`SetConfig`/`GetName`）——Name这个
+Name和Roadnet一样是"单选"concept（`Config::GetUniqueConceptMod`）——Name这个
 concept只需要唯一一个"当前生效"的取名算法给`Populace`用，不是Terrain/Zone/Building
 那种按`GetPriority()`/权重多mod叠加。`config.json`的`"name_mods"`数组列出哪个id就用
 哪个，见`populace.md`"InitNames"一节。

@@ -173,7 +173,7 @@ void UForeverRoadnetFrameworkComponent::BuildPiers() {
 		pierCount++;
 	}
 	if (pierCount > 0) {
-		debugf("UForeverRoadnetFrameworkComponent::BuildPiers: placed %d pier instance(s).\n", pierCount);
+		debugf(DebugLevel::Log, "UForeverRoadnetFrameworkComponent::BuildPiers: placed %d pier instance(s).\n", pierCount);
 	}
 }
 

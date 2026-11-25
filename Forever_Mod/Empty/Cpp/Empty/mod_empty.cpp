@@ -1,5 +1,5 @@
 #include "empty_mods.h"
-#include "common/random.h"
+#include "common/mod_concepts.h"
 
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
@@ -32,8 +32,8 @@ int EmptyParty::count = 0;
 int EmptyBuilding::count = 0;
 
 // 这个DLL里每个concept各有一个占位id"<concept>_empty"，都不依赖任何其它mod。
-// 把宿主(Core)的随机host绑进本DLL自己那份Dependence，见Dependence/common/random.md
-FOREVER_MOD_BIND_RANDOM
+// 把宿主的随机host和debugf输出函数绑进本DLL自己那份Dependence，见Dependence/common/mod_concepts.md
+FOREVER_MOD_BIND_HOST
 
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {

@@ -153,7 +153,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 		int demolished = map->DemolishAlongStrips(mod->demolitions, [](const Building* building) {
 			return !building->GetStationMod().empty();
 		});
-		debugf("Route::Build: 线路%s拆除了%d座建筑。\n", name.c_str(), demolished);
+		debugf(DebugLevel::Log, "Route::Build: 线路%s拆除了%d座建筑。\n", name.c_str(), demolished);
 	}
 	mod->SetManualTransit(nullptr);
 
@@ -218,7 +218,7 @@ void Route::PlacePiers(Map* map, const vector<const Route*>& others) {
 
 		PierPlacer::PlaceAlongChains(map, request, chains, blocked, piers);
 	}
-	debugf("Route::PlacePiers: 线路%s放了%d根桥墩。\n", name.c_str(), static_cast<int>(piers.size()));
+	debugf(DebugLevel::Log, "Route::PlacePiers: 线路%s放了%d根桥墩。\n", name.c_str(), static_cast<int>(piers.size()));
 }
 
 int Route::GraphNodeIndex(const GraphNode& node) {
@@ -491,7 +491,7 @@ void Route::Assemble(Map* map) {
 				auto it = stationIndexByName.find(entry.name);
 				Station* station = it != stationIndexByName.end() ? stopStations[it->second] : nullptr;
 				if (!station || entry.stopIndex < 0 || entry.stopIndex >= static_cast<int>(station->GetStops().size())) {
-					debugf("Route::Assemble: 线路%s的一条线路引用了不存在的站点/停靠位(%s,%d)，整条线路丢弃。\n",
+					debugf(DebugLevel::Warning, "Route::Assemble: 线路%s的一条线路引用了不存在的站点/停靠位(%s,%d)，整条线路丢弃。\n",
 						name.c_str(), entry.name.c_str(), entry.stopIndex);
 					valid = false;
 					break;
@@ -506,7 +506,7 @@ void Route::Assemble(Map* map) {
 				const auto& a = stops[i];
 				const auto& b = stops[(i + 1) % stops.size()];
 				if (!BuildRoadRun(map, a.first, a.second, b.first, b.second, run)) {
-					debugf("Route::Assemble: 线路%s里%s->%s在路网上不可达，整条线路丢弃。\n",
+					debugf(DebugLevel::Warning, "Route::Assemble: 线路%s里%s->%s在路网上不可达，整条线路丢弃。\n",
 						name.c_str(), a.first->GetName().c_str(), b.first->GetName().c_str());
 					valid = false;
 					break;
@@ -537,7 +537,7 @@ void Route::Assemble(Map* map) {
 		for (const StationConnection& connection : station->GetConnections()) {
 			shared_ptr<TrackPath> path = TrackPath::FromSegments(connection.segments);
 			if (!path) {
-				debugf("Route::Assemble: 站点%s有一条站内连线没有几何，跳过。\n", station->GetName().c_str());
+				debugf(DebugLevel::Warning, "Route::Assemble: 站点%s有一条站内连线没有几何，跳过。\n", station->GetName().c_str());
 				continue;
 			}
 			GraphNode from, to;
@@ -574,7 +574,7 @@ void Route::Assemble(Map* map) {
 		int from = endpointNode(link.from), to = endpointNode(link.to);
 		shared_ptr<TrackPath> path = TrackPath::FromSegments(link.segments);
 		if (from < 0 || to < 0 || !path) {
-			debugf("Route::Assemble: 线路%s的一条站间连线端点无效或没有几何，跳过。\n", name.c_str());
+			debugf(DebugLevel::Warning, "Route::Assemble: 线路%s的一条站间连线端点无效或没有几何，跳过。\n", name.c_str());
 			continue;
 		}
 		AddGraphEdge(from, to, std::move(path), EDGE_LINK, link.withinStation);
@@ -590,7 +590,7 @@ void Route::Assemble(Map* map) {
 			if (entry.stopIndex >= 0) {
 				auto it = stationIndexByName.find(entry.name);
 				if (it == stationIndexByName.end() || entry.stopIndex >= static_cast<int>(stopStations[it->second]->GetStops().size())) {
-					debugf("Route::Assemble: 线路%s的一条线路引用了不存在的站点/停靠位(%s,%d)，整条线路丢弃。\n",
+					debugf(DebugLevel::Warning, "Route::Assemble: 线路%s的一条线路引用了不存在的站点/停靠位(%s,%d)，整条线路丢弃。\n",
 						name.c_str(), entry.name.c_str(), entry.stopIndex);
 					valid = false;
 					break;
@@ -601,7 +601,7 @@ void Route::Assemble(Map* map) {
 			} else {
 				auto it = externIndexByName.find(entry.name);
 				if (it == externIndexByName.end()) {
-					debugf("Route::Assemble: 线路%s的一条线路引用了不存在的extern点(%s)，整条线路丢弃。\n", name.c_str(), entry.name.c_str());
+					debugf(DebugLevel::Warning, "Route::Assemble: 线路%s的一条线路引用了不存在的extern点(%s)，整条线路丢弃。\n", name.c_str(), entry.name.c_str());
 					valid = false;
 					break;
 				}
@@ -614,7 +614,7 @@ void Route::Assemble(Map* map) {
 
 		RouteLine line;
 		if (!PlanGraphLine(waypoints, line)) {
-			debugf("Route::Assemble: 线路%s的一条线路在寻路图里不可达(没有停靠位或站间连线不通)，整条线路丢弃。\n", name.c_str());
+			debugf(DebugLevel::Warning, "Route::Assemble: 线路%s的一条线路在寻路图里不可达(没有停靠位或站间连线不通)，整条线路丢弃。\n", name.c_str());
 			continue;
 		}
 		line.vehicleCount = modLineIdx < mod->lineVehicleCounts.size() ? mod->lineVehicleCounts[modLineIdx] : 0;

@@ -12,7 +12,7 @@
 - 用函数内static实现懒汉单例(`Get()`，首次调用时构造并对当时`Config::GetMods()`的dll跑一遍
   `RegisterMods`)，不挂在任何UE Subsystem的生命周期上——Core必须保持engine-agnostic(见CONVENTIONS.md)，
   纯C++单例足够满足"全局只注册一次"：`Core.lib`静态链接进`UnrealEditor-Forever.dll`，只要这个dll不被
-  卸载/热重载，函数内static对象活得比任何一次PIE开的持有者都长。
+  卸载/热重载，函数内static对象活得比任何一次PIE开的持有者都长。(这里说的是UE模块自己的dll；mod dll每局结束会卸载，见"卸载"。)
 - 23个Factory对"已注册mod id列表"之外没有跨局累积的状态——`CreateXxx`/`DestroyXxx`只是按注册时存的
   creator/deleter函数指针创建/销毁一个实例，所以多局共用同一个Factory实例是安全的，不需要每局重新注册。
 - 各持有者(`Map`/`Populace`/`Society`/`Story`/`Industry`/`Traffic`/`Player`及`Asset`/`Phone`等)不自己持有
@@ -28,9 +28,49 @@
 - **`RefreshMods()`：增量加载新增的dll**。每次真正开局(`AForeverFrameworkActor::BeginPlay`)调用：只对
   `loadedDllPaths`里没有的路径补做23个concept的`RegisterConcept`(`ModLoader`按路径缓存句柄)，然后
   `ReloadModArgs()`。这样退出游戏回菜单、在配置界面新增dll路径之后再开局，新dll的mod也能用。
-  - 已加载的dll**不卸载**：从配置里移除的dll保持加载，但它的mod id不在`configuredArgs`里，
-    `Factory::IsEnabled`判为未启用，照样是禁用状态。
+  - 一局结束时dll已经被`UnloadMods`卸掉了(见下面"卸载")，所以正常情况下这里是把配置里的dll**全部重新加载**一遍；
+    只有因为泄漏被留下的dll才会跳过。
   - 加载失败的路径(`IsLoaded`为false)不记进`loadedDllPaths`，下一局会重试。
+
+## 23个concept的清单只有一份：`ForEachConcept`(2026-11-25)
+
+- **`ForEachConcept(fn)`**(`registry.h`，公开的模板)对每个concept调一次`fn(conceptKey, factory, &Factory::CreateXxx, &Factory::DestroyXxx)`。
+  Core里凡是"对23个concept各做一遍"的事都从它遍历：`RegisterMods`(注册)、`ReloadModArgs`(灌参数)、`CheckModRegistered`(查询)、
+  `GetLiveInstanceCounts`/`UnloadMods`(数活实例、注销)，以及`save.cpp`的`GetConceptOps`(存档的逐concept操作)。
+  以前这些地方各列一遍23行，加一个concept要改六七处，漏一处编译不报错、运行时悄悄不对。
+- **导出函数名和json key不在这里重复写**：`RegisterMods`用`FindModConceptDescriptor(conceptKey)`从Dependence的`mod_concepts`表里查
+  `RegisterMod<Concepts>`/`FinishMod<Concepts>`，`ReloadModArgs`用`ModConceptJsonKey(conceptKey)`算`"<concept>_mods"`。
+- **自检**：`Registry`构造时`CheckConceptList()`核对这份清单和`GetModConceptDescriptors()`一一对上(不多、不少、不重复)，
+  对不上抛`RuntimeException`。CoreTest的mods套件另有一条看得见的检查。
+- **新增concept要改的地方**：①`Dependence/common/mod_concepts.cpp`的导出符号表加一行；②`registry.h`的`ForEachConcept`加一行、
+  加getter和成员(这三处挨在一起)；③`Test/Mod/mod_checks.cpp`的`AllFactories`和`ModTestHost`各加一行(ModTest启动时也会核对)。
+  ②里漏了`ForEachConcept`那一行，自检会报错；别的地方不用再动。
+- 为什么不用宏从一张表生成成员和getter：那样能只剩一份，但`GetTerrainFactory`这类名字由宏拼出来，编辑器里跳转和搜索都不好用。
+
+## 卸载：mod dll只在一局期间留在进程里(2026-11-25)
+
+目标：菜单界面上(刚打开程序，或者打完一局退回来)进程里没有任何mod dll，可以随意添加、去掉、替换；编辑器和打包版一样。
+
+- **`UnloadMods()`**：一局结束、七个域都销毁、`Script::ClearCache()`之后调(UE是`AForeverFrameworkActor::EndPlay`)。步骤：
+  1. `GetLiveInstanceCounts()`数23个Factory里还活着的mod实例(正常是0)。
+  2. 有活实例的dll留下，连同它提供的全部mod id的注册项(销毁那个实例还要用注册时的deleter)；其余dll进"要卸载"名单。
+     dll和mod id的对应关系是加载时从`Config::GetModIdsForDll`抄的(`dllModIds`)。
+  3. 每个Factory`UnregisterExcept(keepIds)`：注册项里的函数指针指向dll代码，**必须先注销再卸载**。
+  4. `ModLoader::Unload`逐个`FreeLibrary`，从`loadedDllPaths`里去掉。
+  5. 有泄漏就`debugf`警告(哪个id、几个实例、留下了哪个dll)，返回`UnloadReport`。
+- **为什么可以只留有活实例的dll**：mod之间不互相调用代码(每个dll只链接Dependence，彼此只通过id字符串打交道)，
+  一个活着的实例只需要它自己那个dll。泄漏的Core对象如果还抓着别的dll的实例，那些实例同样在"活着"的名单里。
+- **"卸载时还有活实例"是bug**(某个对象没跟着一局结束销毁)，这条保护只是让它不至于崩溃。它只看得见mod实例，
+  别处存下的函数指针/字符串指针发现不了——UE侧要守的规则在`CONVENTIONS.md`第13节。
+- **平时dll是卸载的**，所以任何要用Factory的地方都得先`RefreshMods()`(不是`ReloadModArgs()`)：开局、
+  `SaveGame::ApplyManifestConfig`/`RestoreConfig`(读档前核对mod状态版本)。菜单里校验失败不进游戏时，UE再调一次
+  `UnloadMods()`卸回去；游戏进行中不能调。
+- **mod的static状态每局重置**是卸载的副产品(dll是重新`LoadLibrary`的)。`SaveGame::ResetInstanceCounters`仍然保留：
+  因为泄漏被留下的dll不会重置。
+- **Core自己的进程级static要自己复位**：卸载管不到Core。节点id计数器`Node::count`原来不复位，同一进程第二局的节点id
+  接着上一局往后编，同种子的世界和第一局不一样；现在`Map::InitTerrains`开头`Node::SetCount(0)`。这是`unload`套件查出来的。
+- **测试**：CoreTest的`unload`套件(`Source/Test/Core/suite_unload.cpp`)。
+- **做不到的**：mod的UE内容(pak/挂载的Content目录)不卸载，见`Forever/Mod/ForeverModSubsystem.md`。
 
 ## `CheckModRegistered(id)`：主线剧情`.script`的`mod_dependences`校验用
 
@@ -49,10 +89,10 @@
 未启用而"消失"——`Populace::InitNames()`用到的`"name_chinese"`最严重，不列的话会直接`THROW_EXCEPTION`导致
 游戏进不去，见`populace.md`"InitNames"一节。
 
-**`RoadnetFactory`/`NameFactory`是两个例外，走的是"单选"模式，不是"启用即认领"**：一次只应该有一个路网
-布局/取名算法生效(不是Terrain那种按`GetPriority()`多mod叠加)，`CreateXxx`/`CheckRegistered`/
-`GetRegisteredIds`保持不看`configuredArgs`的纯`registries`查询，"选哪一个生效"完全由调用方(`Map::InitRoadnet()`/
-`Populace::InitNames()`)通过`SetConfig(id, true)`+`GetRoadnet()`/`GetName()`决定；`Config`层面另有
+**`RoadnetFactory`/`NameFactory`不再是例外**(2026-11-25)：它们和其它21个Factory用同一套"启用即认领"语义，
+`CreateXxx`/`CheckRegistered`/`GetRegisteredIds`都看`configuredArgs`。这两个concept的特别之处只是"单选"——一次只应该有一个路网
+布局/取名算法生效(不是Terrain那种按`GetPriority()`多mod叠加)，"用哪一个"由调用方(`Map::InitRoadnet()`/
+`Populace::InitNames()`)问`Config::GetUniqueConceptMod`；`Config`层面另有
 `NormalizeUniqueConcepts()`保证这两个`"<concept>_mods"`数组里至多一项，见`config.md`。
 
 ## 依赖关系
@@ -69,4 +109,4 @@
 - 无。
 
 ## 种子(`--seed`)
-`ReloadModArgs`先`RandomRegistry::Reset()`，再读config顶层`seed`登记全局种子，并对每个`<concept>_mods`条目用`RandomRegistry::ExtractSeed`剥掉`--seed N`(mod构造函数收到的参数里没有它)、把种子登记给该mod id。23个concept因此都自动支持`--seed`。`ModLoader::LoadHandle`加载DLL后调用它导出的`BindRandomHost`(见`FOREVER_MOD_BIND_RANDOM`)，把Core的随机host交给DLL自己那份Dependence。详见`Dependence/common/random.md`。
+`ReloadModArgs`先`RandomRegistry::Reset()`，再读config顶层`seed`登记全局种子，并对每个`<concept>_mods`条目用`RandomRegistry::ExtractSeed`剥掉`--seed N`(mod构造函数收到的参数里没有它)、把种子登记给该mod id。23个concept因此都自动支持`--seed`。`ModLoader::LoadHandle`加载DLL后调用它导出的`BindModHost`(见`FOREVER_MOD_BIND_HOST`，`Dependence/common/mod_concepts.md`)，把Core的随机host和`debugf`输出函数交给DLL自己那份Dependence。详见`Dependence/common/random.md`。

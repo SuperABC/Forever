@@ -177,7 +177,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 			Organization* o = new Organization(&society->organizationFactory, &society->jobFactory,
 				&society->scriptFactory, id, {});
 			society->organizations.push_back(o);
-			if (!SaveRefs::ReadModState(o->mod, r)) debugf("Warning: failed to parse saved state of organization mod %s.\n", id.c_str());
+			if (!SaveRefs::ReadModState(o->mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of organization mod %s.\n", id.c_str());
 			string modName = r.Str();
 			if (o->script && !modName.empty()) o->script->SetValue("name", ValueType(modName));
 			uint32_t componentCount = r.U32();
@@ -206,7 +206,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 						job->mod->LoadState(stateReader);
 					}
 					else {
-						debugf("Warning: failed to parse saved state of job mod %s.\n", jobId.c_str());
+						debugf(DebugLevel::Warning, "failed to parse saved state of job mod %s.\n", jobId.c_str());
 					}
 				}
 				if (job->script && !jobName.empty()) job->script->SetValue("name", ValueType(jobName));
@@ -233,7 +233,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 					o->mod->LoadVacancies(vacancyReader);
 				}
 				else {
-					debugf("Warning: failed to parse saved job plan of organization %s.\n", id.c_str());
+					debugf(DebugLevel::Warning, "failed to parse saved job plan of organization %s.\n", id.c_str());
 				}
 			}
 		}

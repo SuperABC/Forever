@@ -5,6 +5,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
@@ -37,6 +38,10 @@ public:
 	// 必须在调用方触发mod的RegisterModZones导出函数之前调用,否则CreateZone
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
+
+	// 注销不在keepIds里的注册项，返回注销了几个。注册项里的函数指针指向mod dll的代码，dll卸载前必须先注销；
+	// 还有存活实例的id要留在keepIds里(销毁它要用注册时的deleter)。见Core/common/registry.md"卸载"。
+	virtual int UnregisterExcept(const std::unordered_set<std::string>& keepIds);
 
 	// 转发调用注册时提供的static Assign函数，不需要任何ZoneMod实例存在。id未注册时不调用emit。
 	virtual void Assign(const std::string& id, const std::vector<Lot*>& lots,

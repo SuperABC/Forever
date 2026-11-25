@@ -129,3 +129,37 @@ Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverPlaye
 ## 12. 存档格式随便改,不考虑兼容
 
 游戏还没发布,也没有需要保留的旧存档(每次测试都重新存)。改存档数据布局(`.fsav`的段、文件外壳、mod状态)时:直接按新格式改读写,**不用**考虑旧存档能不能读,**不升**`SAVE_FILE_VERSION`/各段版本号/mod的`stateVersion`,**不写**旧版本迁移代码,也不要因为"不想动存档格式"而把本该存的状态省掉。只有用户明确要求升版本时才升。详见`Source/Core/common/save.md`的"版本号"。
+
+## 13. mod dll的生命周期:只在一局游戏期间留在进程里
+
+**规则**:mod dll在开局时加载(`AForeverFrameworkActor::BeginPlay`的`Registry::RefreshMods`),一局结束、七个域都销毁之后注销并卸载(`EndPlay`里的`Registry::UnloadMods`)。菜单界面上——不管是刚打开程序,还是打完一局退回来——进程里**没有任何mod dll**,所以菜单里可以随意添加、去掉、替换dll。编辑器和打包版是同一套逻辑。设计见`Forever_UE/Source/Core/common/registry.md`"卸载"。
+
+**dll一卸载,它的代码、虚函数表、静态数据就都不在内存里了。**这时还指进去的任何指针,下次用到就崩,而且崩的位置离原因很远。会指进mod dll的东西:
+
+- mod实例(`XxxMod*`):虚函数表在dll里。Core里包着它的对象(`Building`/`Citizen`/`Vehicle`/`Script`/`Asset`/`Puzzle`/`Weapon`…)同理。
+- mod自己`new`出来交给宿主的对象(比如mod造的`Change`):`Change`这类的代码在静态库里,每个dll各有一份,mod造的对象用的是mod那份虚函数表。
+- mod返回的`const char*`、`const std::string&`,以及任何指向mod内部数据的指针/引用。
+- 从dll里取出来的函数指针(Factory里的注册项就是)。
+
+### 写UE代码时要守的
+
+- **活得比游戏关卡长的对象不能持有上面任何一种东西。**这类对象包括:`UGameInstanceSubsystem`/`UEngineSubsystem`、`static`/全局变量、菜单关卡的Widget、跨关卡保留的`UObject`。它们只能存拷贝出来的值(`FString`、数字、自己`new`的数据),不能存Core对象的指针。
+- **mod返回的字符串当场拷贝**(`UTF8_TO_TCHAR(...)`构造`FString`,或拷进自己的`std::string`),不要把`const char*`存起来以后再用。
+- **凡是经Factory创建、由UE对象自己持有的东西,必须在`AForeverFrameworkActor::EndPlay`卸载之前销毁。**关卡里的Actor/Widget的销毁可能晚于`EndPlay`,不能指望析构顺序——在`EndPlay`里显式收掉(例子:`UPuzzleWidget`持有`Puzzle`,`EndPlay`里调`AbortPuzzle()`,Widget的`NativeDestruct`里再兜底一次)。新加这类对象时照这个模式做。
+- **菜单里的代码不要碰`Registry`和各Factory。**菜单只用`Config`(它只在添加路径时临时打开dll读一下id,马上关掉)。确实需要Factory的(读档前核对mod状态版本),用之前调`Registry::RefreshMods()`,用完如果不进游戏就调`Registry::UnloadMods()`——参照`UForeverSaveSubsystem::RequestLoad`。**游戏进行中绝不能调`UnloadMods`**。
+- **会碰Core的异步工作要在`EndPlay`卸载之前跑完**(后台线程、`Async`、定时器、延迟回调)。现有的异步寻路在`EndPlay`开头`WaitForPendingPathfinding()`。新加的异步任务如果读Core对象或调mod,要有同样的等待;纯UE数据(比如截图写盘)的不受影响。
+- **`EndPlay`之后别再用Core指针。**关卡里的Actor/组件手里的`Citizen*`/`Vehicle*`这类裸指针在`EndPlay`之后全部是悬空的,它们的`EndPlay`/`BeginDestroy`/`Tick`里不能解引用。
+
+### 兜底和怎么发现问题
+
+- `UnloadMods`卸载前会数23个Factory里还活着的mod实例。还有活实例的dll**不卸载**(连同它的注册项一起留下),其余照常卸载,并在`Forever.log`里打一条`LogForeverCore: Warning: Registry::UnloadMods: ... still alive after the game ended (leak)`,写明是哪个mod id、几个实例、留下了哪个dll。**看到这条就是有东西没跟着一局结束销毁,要去修,不是正常现象。**
+- 这个兜底只看得见mod实例。别处存下的函数指针、字符串指针它发现不了——所以上面几条规则要靠写代码时自己守。
+- Core这一侧由CoreTest的`unload`套件查:销毁世界后没有活着的`Script`和mod实例、dll确实离开进程、内存不逐轮上涨、卸载重载后同种子的世界和第一次一致。UE这一侧没有自动化测试,靠"进游戏→退回菜单→再进游戏"多试几轮,并留意上面那条警告。
+
+### 做不到的
+
+mod的UE内容(打包版的`.pak`、编辑器里挂载的Content目录)挂载之后不卸载,到进程退出为止。去掉一个带内容的mod,dll会走,pak文件仍被占用;不退出程序替换同一个mod的pak不会生效。
+
+### 对mod作者的要求
+
+mod不能留下会在卸载后被调用的东西:不开线程、不向系统或别的库注册回调。mod里的`static`状态每局都会重置(dll是重新加载的),不要指望它跨局保留。这两条也写在`Forever_Mod/README.md`里。

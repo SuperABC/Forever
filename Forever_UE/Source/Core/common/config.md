@@ -29,17 +29,29 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   错误"这两种根因不同的情况——否则排查"为什么回退扫描了默认目录"时无法区分。调用方
   （`ForeverModSubsystem`）据此决定要不要回退扫描默认目录(和`UForeverKeyBindingSubsystem`
   读`KeyBindings.ini`的容错风格一致)。
+- **`AddDllPath`先预筛、再加载**(2026-11-25)——递归扫到的每个dll先用`ProbeModDll`(`Dependence/common/mod_concepts.h`)只读文件
+  看导出表：没有导出任何`GetMod<Concepts>`的不是mod，直接跳过，**不`LoadLibrary`**。以前是"加载→问→不是就卸载"，
+  无关dll的`DllMain`和全局构造在"问"之前就已经跑过了，`dll_paths`配到范围大的目录时有风险。mod自己的dll仍然要加载
+  (取id列表必须调它的函数)。
 - **`AddDllPath`探测完立即`FreeLibrary`,不长期持有句柄**——探测阶段只需要确认"这是不是
   一个合法mod dll"，真正常驻加载是`ModLoader`的职责；`Config`和`ModLoader`各自独立
   `LoadLibraryA`同一个dll两次在Windows上是安全的(按路径做引用计数)。探测时会真正调用一次
   `GetMod<Concept>`读取返回的`vector<string>*`内容（不只是探测符号是否存在），拿到这个dll
   实际提供哪些`(concept, modId)`，供`GetModEnables()`等按id粒度展示用；本工程统一动态CRT
   (MultiThreadedDLL/MultiThreadedDebugDLL)，调用方只读不释放这份mod内static数据是安全的。
-- **`AddDllPath`跳过路径里带`Debug`目录段的dll**——Debug配置用`/MDd`调试CRT编译，
+- **`AddDllPath`跳过调试版的dll**——Debug配置用`/MDd`调试CRT编译，
   `std::string`内存布局和Release/Development不兼容，跨DLL读取它返回的`vector<string>`会
-  按错误的布局解释内存直接崩溃（`EXCEPTION_ACCESS_VIOLATION`）。手工配置的`dll_paths`一直
-  靠人工只填Release目录规避，但回退扫描(`ForeverModSubsystem::Initialize()`的默认目录
-  分支)会无差别递归整个目录树，必须在这里显式挡掉。
+  按错误的布局解释内存直接崩溃（`EXCEPTION_ACCESS_VIOLATION`）。判断方法是`ProbeModDll`看导入表里有没有调试版CRT
+  (`MSVCP140D.dll`/`VCRUNTIME140D.dll`/`ucrtbased.dll`)，不执行dll。2026-11-25以前靠"路径里有没有`Debug`这一段
+  目录名"判断，那只是个约定，Debug版dll放到别的目录名下就挡不住。静态链接调试CRT(`/MTd`)的dll导入表里看不出来，
+  本工程的mod统一用动态CRT，不会出现。
+- **路径只有一种写法（`NormalizePath`，2026-11-25）**——`AddDllPath`/`RemoveDllPath`/`AddResourcePath`/`RemoveResourcePath`/`AddStoryScript`/`RemoveStoryScript`六个入口一进来就把路径规范化：转成绝对路径、去掉`.`/`..`和多余的分隔符、正斜杠、结尾不带斜杠、盘符大写。
+  `dllPaths`/`resourcePaths`等map都拿路径字符串当键，同一个目录写法不同就会被当成两个根
+  (config.json里出现过`.../Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts`)。
+  用的是词法规范化(`lexically_normal`)，**不是`canonical`**：不解析目录连接(junction)。Windows自己解析`..`也是词法的，
+  所以规范化前后指的是同一个目录；`canonical`会把经过junction的路径换成真实目标(打包产物里`Resource/`就是junction)。
+  已有的config.json不用手改：读进来时就规范化了，下次`WriteConfig`写回去的就是规范写法。大小写只统一盘符，
+  路径其余部分大小写不同仍算两个写法。
 - **路径统一规范化成正斜杠（`ToForwardSlashes`）**——`filesystem::absolute()`/
   `canonical()`在Windows下会把分隔符规范化成反斜杠，一旦原样塞进JSON字符串值（反斜杠后面
   跟的如果不是合法JSON转义字符，比如`\W`/`\P`/`\F`）就是非法JSON，这份自定义`JsonReader`
@@ -103,6 +115,11 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - **`GetMainStoryScriptPaths()`**：Story screen的`story_scripts`列表非空时就是这份列表（按顺序，各文件的
   milestones/names/`name_reserve`/`global_settings`合并进同一个主线`Script`），列表为空就是没有主线脚本，
   不兜底到任何固定名字的脚本(2026-11-25以前会退回名为`test`的脚本)。
+- 单选concept的名单(`Roadnets`/`Names`)只在`config.cpp`的`UniqueConcepts()`里列一次，`NormalizeUniqueConcepts`和`IsUniqueConcept`都用它。
+- **`GetUniqueConceptMod(conceptKey)`**(2026-11-25)：单选concept(`Roadnets`/`Names`，`IsUniqueConcept`)当前启用的那个mod id，
+  一个都没启用返回空串；配置里列了多个时取第一个并`debugf`警告(界面和`WriteConfig`都会经`NormalizeUniqueConcepts`收口成一个，
+  手改`config.json`才会出现)。`Map::InitRoadnet`和`Populace::InitNames`都靠它决定用哪个mod——"单选"这件事只在`Config`里表达，
+  两个Factory不再各存一张启用标记表。
 - **新发现的mod默认禁用**：`IsModEnabled`对没列出的id（含`jsonKey`整个不存在）返回false，刚`AddDllPath`扫出来的mod
   需要在Mod screen手动勾选一次才生效。
 - **`WriteConfig`只在Start Game校验通过那一刻调用一次**，不是每次编辑都自动保存；`<concept>_mods`数组就是

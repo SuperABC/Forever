@@ -1,5 +1,5 @@
 #include "map/terrain_factory.h"
-#include "common/random.h"
+#include "common/mod_concepts.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
 #include "map/green_factory.h"
@@ -153,8 +153,8 @@
 using namespace std;
 
 // 每个mod id声明依赖的mod id列表，约束见basic.md。
-// 把宿主(Core)的随机host绑进本DLL自己那份Dependence，见Dependence/common/random.md
-FOREVER_MOD_BIND_RANDOM
+// 把宿主的随机host和debugf输出函数绑进本DLL自己那份Dependence，见Dependence/common/mod_concepts.md
+FOREVER_MOD_BIND_HOST
 
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	// Forever_Mod/Empty里的占位mod，见basic.md。

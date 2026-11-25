@@ -30,7 +30,7 @@
   只认`self`/`system`/`local`后面紧跟的那一个`.`，切出的剩余部分原样保留、不做任何字符
   替换（`self.job.title`切出的变量名是`"job.title"`，不是`"job_title"`）。
 - **求值语义**：空表达式`EvaluateValue`得空串、`EvaluateBool`得true（所以空`condition`=恒成立）；`EvaluateBool`结果不是bool会抛`RuntimeException`；
-  `Parse`失败返回false并往cerr打印、`root`保持空；`EvaluateExpressionBool`解析失败时按**false**处理（并`debugf`警告，语法错误的condition不会被当成恒成立），`EvaluateExpression`解析失败时得空串（并`debugf`警告）。
+  `Parse`失败返回false并`debugf`警告、`root`保持空；`EvaluateExpressionBool`解析失败时按**false**处理（并`debugf`警告，语法错误的condition不会被当成恒成立），`EvaluateExpression`解析失败时得空串（并`debugf`警告）。
   `$$`后第一个字符必须是字母/下划线/非ASCII才算变量，否则当字符串常量。
 - **隐式字符串拼接**：相邻两个操作数之间自动插入`+`；`+`任一侧是字符串即拼接。整数运算保持int，含double则转double；除零/模零抛异常。
   `-`出现在表达式开头、运算符、`(`/`[`/`,`之后时是一元负号（中缀转后缀时改写成内部前缀运算符token，入栈不弹栈），所以`1 + -5`、`a * -5`、`(-3)`都能正确求值；优先级比`^`低、不高于`*`，即`-2^2 == -4`。

@@ -8,7 +8,7 @@ using namespace std;
 void ScriptFactory::RegisterScript(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	// 重复注册同一id拒绝覆盖：已存活实例要用原来的deleter释放，被覆盖后会换成另一个mod的deleter
 	if (registries.find(id) != registries.end()) {
-		debugf("ScriptFactory::RegisterScript: id '%s' already registered, ignored.\n", id.c_str());
+		debugf(DebugLevel::Warning, "ScriptFactory::RegisterScript: id '%s' already registered, ignored.\n", id.c_str());
 		return;
 	}
 	registries[id] = { creator, deleter };
@@ -41,7 +41,7 @@ void ScriptFactory::DestroyScript(ScriptMod* instance) {
 	auto regIt = registries.find(liveIt->second);
 	if (regIt == registries.end()) {
 		// 找不到deleter时Factory不能直接delete(实例由Mod DLL new出)，保留liveInstances记录不丢指针
-		debugf("ScriptFactory::DestroyScript: no deleter for id '%s', instance kept alive.\n", liveIt->second.c_str());
+		debugf(DebugLevel::Warning, "ScriptFactory::DestroyScript: no deleter for id '%s', instance kept alive.\n", liveIt->second.c_str());
 		return;
 	}
 	regIt->second.deleter(instance);
@@ -65,6 +65,19 @@ vector<string> ScriptFactory::GetRegisteredIds() const {
 
 void ScriptFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+int ScriptFactory::UnregisterExcept(const unordered_set<string>& keepIds) {
+	int removed = 0;
+	for (auto it = registries.begin(); it != registries.end();) {
+		if (keepIds.count(it->first)) {
+			++it;
+			continue;
+		}
+		it = registries.erase(it);
+		removed++;
+	}
+	return removed;
 }
 
 bool ScriptFactory::IsEnabled(const string& id) const {

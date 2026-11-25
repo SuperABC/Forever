@@ -4,6 +4,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
@@ -35,14 +36,15 @@ public:
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
-	// 一次只应该有一个取名算法生效——SetConfig标记某个已注册id是否启用(config.json里
-	// "name_mods"数组的条目)，GetName返回第一个被标记启用的id(找不到返回空字符串)。
-	// 调用方(Populace::InitNames)按这个id唯一决定用哪个mod的取名算法，和
-	// Map::InitRoadnet()/RoadnetFactory::GetRoadnet同一个模式。
-	virtual void SetConfig(const std::string& id, bool enabled);
-	virtual std::string GetName() const;
+	// 注销不在keepIds里的注册项，返回注销了几个。注册项里的函数指针指向mod dll的代码，dll卸载前必须先注销；
+	// 还有存活实例的id要留在keepIds里(销毁它要用注册时的deleter)。见Core/common/registry.md"卸载"。
+	virtual int UnregisterExcept(const std::unordered_set<std::string>& keepIds);
 
 private:
+	// 启用=已注册且id在configuredArgs里,和其它Factory一样。这个concept是单选的(config里只应该启用一个),
+	// "用哪一个"由Core从Config::GetUniqueConceptMod取,Factory不管。
+	bool IsEnabled(const std::string& id) const;
+
 	struct Entry {
 		CreateFunc creator;
 		DestroyFunc deleter;
@@ -51,5 +53,4 @@ private:
 	std::unordered_map<std::string, Entry> registries;
 	std::unordered_map<NameMod*, std::string> liveInstances;
 	std::unordered_map<std::string, std::string> configuredArgs;
-	std::unordered_map<std::string, bool> enabledConfig;
 };

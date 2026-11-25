@@ -370,5 +370,5 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 		successCount++;
 	}
 
-	debugf("Log: Generate mountain %d.\n", successCount);
+	debugf(DebugLevel::Log, "Generate mountain %d.\n", successCount);
 }

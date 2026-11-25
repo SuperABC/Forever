@@ -35,8 +35,8 @@ int GetRandom(int range) {
 	return value >= range ? range - 1 : value;
 }
 
-// 原生版走OutputDebugString；网页版打到stderr(浏览器控制台)。
-void debugf(const char* format, ...) {
+// 网页版不编utility.cpp，这里直接打到stderr(浏览器控制台)；级别不区分。
+void debugf(DebugLevel, const char* format, ...) {
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);

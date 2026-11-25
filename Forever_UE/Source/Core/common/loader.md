@@ -70,9 +70,8 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
 - 依赖:无引擎依赖,纯C++(`<windows.h>`只在`.cpp`里)。
 - 被谁依赖:`Source/Core/common/config.cpp`(用`GetModConceptDescriptors()`做探测)、
   `Source/Core/common/registry.cpp`(持有全部23个concept唯一的`ModLoader`实例，`RegisterMods`里
-  对每个concept各调一次`RegisterConcept`，见`registry.md`)。
+  经`ForEachConcept`对每个concept各调一次`RegisterConcept`，导出函数名从`mod_concepts`表里查，见`registry.md`)。
 
 ## 待办/后续阶段
 
-- 如果同一个dll需要支持"重新扫描/热重载"场景,需要在`UnloadAll`之外补充"卸载单个
-  dll"的能力,目前只支持一次性加载、退出时整体卸载。
+- `Unload(dllPath)`(2026-11-25)：卸载单个dll。调用前必须已经把它的注册项从各Factory注销，由`Registry::UnloadMods`统一做，见`registry.md`"卸载"。

@@ -13,6 +13,7 @@
   动态broadphase，建筑LOD整层增删越来越卡(见`ForeverBuildingFrameworkComponent.md`"性能")。13个域组件都用`CreateDefaultSubobject`创建，是固定组成部分。
 - **7个域指针全部是原生指针，不是`std::unique_ptr`**：头文件里只有前置声明，UHT给UCLASS生成的VTableHelper构造函数(在`.gen.cpp`，看不到完整类型)会在异常展开路径引用`~unique_ptr`而编译失败。
   所以用原生指针+显式析构函数(定义在`.cpp`里)和`EndPlay`里手动`delete`。它们不跨DLL(`Core.lib`静态链接进本模块)，普通`delete`安全；彼此不持有对方的裸指针，删除顺序不影响内存安全。
+- **`EndPlay`的最后一步是卸载mod dll**(2026-11-25)：各域`delete`完之后`Script::ClearCache()`，再`Registry::Get().UnloadMods()`。mod dll只在一局期间留在进程里，回到菜单时进程里没有任何mod dll(`CONVENTIONS.md`第13节)。卸载之前要先收掉UE对象手里的mod实例(目前只有`UPuzzleWidget`，调`AbortPuzzle()`)。还有mod实例活着的dll不会被卸载，`Forever.log`里会有`LogForeverCore`的警告。
 - **`EndPlay`必须同步`delete`各域**，不能只靠析构函数：析构时机取决于UObject垃圾回收，可能晚于下一次PIE；`Map`持有的`ModLoader`析构时才`FreeLibrary`卸载mod dll，
   没卸载干净时下一次`LoadLibrary`拿到旧dll镜像，表现为"代码改了、编译成功、PIE里跑的还是旧逻辑"。`EndPlay`/析构里都要**先`WaitForPendingPathfinding()`**
   等异步寻路任务跑完(后台线程还持有`map`/`populace`裸指针；不能用"派发GameThread任务再等"，会在GameThread上死锁)。
@@ -75,6 +76,11 @@
 traffic(并把`ConsumeStopEvents`转成`EnterStopEvent`/`LeaveStopEvent`广播给公交自己的script) → story → `FireExpiredTimers`。新的每帧逻辑加进这同一个`Tick`，不要新开入口。
 
 ## 统一的Change消费入口：`ApplyChange`
+
+分派方式(2026-11-25)：`switch (change->GetKind())`，每种Change一个`case`，进了分支再`static_cast`成子类
+(`Dependence/story/change.md`"种类")。以前是39个`dynamic_cast`的if链。分支体没有动：以`return`结尾的=UE自己处理完了；
+以`break`结尾的和`default`=继续往下交给Core七个域。`add_option`/`remove_option`在`switch`前后各有一小段(`ChangeCast`)，
+分别是"脚本给自己加选项"和"刷新场景里的选项"。新增一种只有UE能做的Change就在这个`switch`里加一个`case`。
 
 populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameStart`的回调等任何地方产出的`Change`都走这一个函数。顺序：
 1. 先判`change->GetCondition()`(非空且求值为假就不执行)，`for_range`的子change等也经过这里。

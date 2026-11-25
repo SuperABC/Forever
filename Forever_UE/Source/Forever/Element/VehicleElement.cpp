@@ -162,8 +162,8 @@ void AVehicleElement::BuildProximityBox()
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
 	FVector boxExtent(250.f, 250.f, 120.f);
 	FVector boxCenter = FVector::ZeroVector;
-	if (vehicle->GetCategory() != "car" && carMesh) {
-		// 公交这类比轿车大得多的车型：触发盒取车身自己的局部包围盒再外扩一圈，刚好比模型大一点。
+	if (carMesh) {
+		// 触发盒取车身自己的局部包围盒再外扩一圈，刚好比模型大一点；不按载具种类区分。没有网格才用上面的固定尺寸。
 		const FBoxSphereBounds localBounds = carMesh->CalcBounds(FTransform::Identity);
 		boxExtent = localBounds.BoxExtent + FVector(150.f, 150.f, 50.f);
 		boxCenter = localBounds.Origin;

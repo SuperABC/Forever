@@ -303,29 +303,15 @@ void Populace::InitNames() {
 	// name mod dll的发现/注册不在这里做，属于`Registry`全局一次性注册的范围(见
 	// Source/Core/common/registry.md)，nameFactory已经是绑定好的引用成员。
 
-	// Name这个concept只需要唯一一个"当前生效"的取名算法，和Roadnet同一个"单选"语义
-	// （不是Terrain/Zone/Building那种按GetPriority()/权重多mod叠加），和
-	// Map::InitRoadnet()同一套写法——不在C++里硬编码具体mod名字，config.json的
-	// "name_mods"数组列出哪个id就用哪个：
-	// 工厂是全局的，上一局留下的启用标记要先清掉，否则换了取名mod再开局还是用旧的。
-	for (const string& id : nameFactory.GetRegisteredIds()) nameFactory.SetConfig(id, false);
-	for (const auto& [id, args] : Config::GetConceptMods("name_mods")) {
-		nameFactory.SetConfig(id, true);
-	}
-	string activeId = nameFactory.GetName();
+	// 取名是单选concept(不是Terrain/Zone/Building那种按优先级/权重多mod叠加)：用配置里启用的那一个。
+	// 一个都没启用、或者启用的那个没有dll提供，就没法生成任何市民，属于致命配置错误，直接抛异常，交给
+	// AForeverFrameworkActor::BeginPlay()的try/catch统一处理(打日志+退出游戏)。和Map::InitRoadnet同一个处理。
+	const string activeId = Config::GetUniqueConceptMod("Names");
 	if (activeId.empty()) {
-		// config.json没有显式配置name_mods时，退化选第一个被发现注册的mod，避免完全没有
-		// 取名算法可用，和Map::InitRoadnet()同一个容错风格。
-		auto ids = nameFactory.GetRegisteredIds();
-		if (!ids.empty()) {
-			nameFactory.SetConfig(ids[0], true);
-			activeId = ids[0];
-		}
+		THROW_EXCEPTION(RuntimeException, "No name mod enabled.\n");
 	}
-	if (activeId.empty()) {
-		// 没有取名算法整个游戏就没法生成任何市民，属于致命配置错误，直接抛异常，交给
-		// AForeverFrameworkActor::BeginPlay()的try/catch统一处理（打日志+退出游戏）。
-		THROW_EXCEPTION(RuntimeException, "No name mod available.\n");
+	if (!nameFactory.CheckRegistered(activeId)) {
+		THROW_EXCEPTION(RuntimeException, "Name mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
 	}
 	name = new Name(&nameFactory, activeId);
 
@@ -480,17 +466,23 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 }
 
 bool Populace::ApplyChange(const Change* change, const ScriptContext& context) {
-	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+	switch (change->GetKind()) {
+	case ChangeKind::AddOption: {
+		auto* addOption = static_cast<const AddOptionChange*>(change);
 		if (!addOption->GetCategory().empty() && addOption->GetCategory() != "citizen") return false; // 指定了别的类别：不是这个域的
 		Citizen* target = FindCitizenByName(ToString(EvaluateExpression(addOption->GetName(), context)));
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		return true;
 	}
-	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+	case ChangeKind::RemoveOption: {
+		auto* removeOption = static_cast<const RemoveOptionChange*>(change);
 		if (!removeOption->GetCategory().empty() && removeOption->GetCategory() != "citizen") return false; // 指定了别的类别：不是这个域的
 		Citizen* target = FindCitizenByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
 		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
 		return true;
+	}
+	default:
+		break;
 	}
 
 	// 占位：Populace域目前只认add_option/remove_option。

@@ -105,6 +105,9 @@ Map::~Map() {
 
 void Map::InitTerrains() {
 	CORE_RANDOM_SCOPE("core.map");
+	// 新世界从这里开始生成：节点id计数器是进程级的static，不复位的话同一进程里第二局的节点id会接着上一局往后编，
+	// 同一个种子生成的世界就和第一局不一样了(CoreTest的unload套件查这一条)。读档不走这里，计数器由存档恢复。
+	Node::SetCount(0);
 	// 这两个回调会传进Basic等mod DLL：std::string一律按引用传，由各自模块自己拷贝——按值返回/传参时
 	// 一边分配一边释放，mod的CRT堆和Forever模块(UE的FMemory)不是同一个，超过短字符串长度(15字符)的
 	// 地形名就会在释放时崩溃。
@@ -148,7 +151,7 @@ void Map::InitTerrains() {
 	// 可建设标记：3x3范围(含自身)内所有element的高度(粗高度，有细化数组的话含细化高度)极差小于kHeightEps，
 	// 高度本身可以不为0(抹平出来的半山腰/山顶平台)。不看地形类型(沙滩等也能建)，也不看水(水为了填满岸边会伸到
 	// 地面以下，对建筑没有影响)；任一邻居越界(地图边缘)不标记。自然/程序化地形几乎不可能满足，只有抹平笔刷抹出来的区域才会。
-	debugf("Log: Mark flat elements as construction.\n");
+	debugf(DebugLevel::Log, "Mark flat elements as construction.\n");
 	for (Element& e : elements) e.construction = false;
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
@@ -173,27 +176,17 @@ void Map::InitTerrains() {
 void Map::InitRoadnet() {
 	CORE_RANDOM_SCOPE("core.map");
 	if (roadnet) {
-		debugf("Warning: roadnet already exists (generated or restored from save), skip InitRoadnet.\n");
+		debugf(DebugLevel::Warning, "roadnet already exists (generated or restored from save), skip InitRoadnet.\n");
 		return;
 	}
-	// 工厂是全局的，上一局留下的启用标记要先清掉，否则换了路网mod再开局还是按旧的生成。
-	for (const string& id : roadnetFactory.GetRegisteredIds()) roadnetFactory.SetConfig(id, false);
-	for (auto& [id, args] : Config::GetConceptMods("roadnet_mods")) {
-		roadnetFactory.SetConfig(id, true);
-	}
-	string activeId = roadnetFactory.GetRoadnet();
+	// 路网是单选concept：用配置里启用的那一个。一个都没启用、或者启用的那个没有dll提供，都没法生成地图，
+	// 属于致命配置错误，直接抛异常(和Populace::InitNames同一个处理)。
+	const string activeId = Config::GetUniqueConceptMod("Roadnets");
 	if (activeId.empty()) {
-		// config.json没有显式配置roadnet_mods时，退化选第一个被发现注册的mod，
-		// 避免PIE里完全没有路网可看(和ForeverModSubsystem"缺配置就用默认"的容错风格一致)。
-		auto ids = roadnetFactory.GetRegisteredIds();
-		if (!ids.empty()) {
-			roadnetFactory.SetConfig(ids[0], true);
-			activeId = ids[0];
-		}
+		THROW_EXCEPTION(RuntimeException, "No roadnet mod enabled.\n");
 	}
-	if (activeId.empty()) {
-		debugf("Warning: no roadnet mod available, skip InitRoadnet.\n");
-		return;
+	if (!roadnetFactory.CheckRegistered(activeId)) {
+		THROW_EXCEPTION(RuntimeException, "Roadnet mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
 	}
 
 	roadnet = new Roadnet(&roadnetFactory, activeId);
@@ -530,7 +523,7 @@ void Map::PlacePresets() {
 			}
 		}
 		if (!target) {
-			debugf("Warning: preset \"%s\" does not fit in a single free sub-lot (crosses a path road or overlaps an earlier placement), skipped.\n", preset.modId.c_str());
+			debugf(DebugLevel::Warning, "preset \"%s\" does not fit in a single free sub-lot (crosses a path road or overlaps an earlier placement), skipped.\n", preset.modId.c_str());
 			continue;
 		}
 
@@ -556,7 +549,7 @@ void Map::PlacePresets() {
 			pendingPathRoadLinks.push_back(allLinks[i]);
 		}
 		if (!success) {
-			debugf("Warning: preset \"%s\" RequestPlacement failed (direction has no road or rectangle too small), skipped.\n", preset.modId.c_str());
+			debugf(DebugLevel::Warning, "preset \"%s\" RequestPlacement failed (direction has no road or rectangle too small), skipped.\n", preset.modId.c_str());
 			continue;
 		}
 		Lot* parent = wholeLot ? nullptr : lot;
@@ -681,11 +674,11 @@ void Map::InitBuildings() {
 		if (!ok) {
 			string fallback = PickRandomBuildingId(placed.area);
 			if (!fallback.empty()) {
-				if (!placed.id.empty()) debugf("Warning: preset mod \"%s\" is not enabled/registered, falling back to random building \"%s\".\n", placed.id.c_str(), fallback.c_str());
+				if (!placed.id.empty()) debugf(DebugLevel::Warning, "preset mod \"%s\" is not enabled/registered, falling back to random building \"%s\".\n", placed.id.c_str(), fallback.c_str());
 				ok = CreateBuildingAt(fallback, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction, &created);
 			}
 		}
-		if (!ok) debugf("Warning: preset \"%s\" created nothing (no random candidate for the lot area, e.g. placeholder area); space is reserved.\n", placed.id.c_str());
+		if (!ok) debugf(DebugLevel::Warning, "preset \"%s\" created nothing (no random candidate for the lot area, e.g. placeholder area); space is reserved.\n", placed.id.c_str());
 		else if (created && placed.outputIndex >= 0) presetOfBuilding[created] = placed.outputIndex;
 	}
 	pendingBuildingPresets.clear();
@@ -813,7 +806,7 @@ void Map::InitGreens() {
 		vector<float> xy = site.xy;
 		int n = static_cast<int>(xy.size() / 2);
 		if (n < 3 || PolygonSelfIntersects(xy)) {
-			debugf("Warning: Green polygon skipped (points=%d, self-intersecting or <3 points).\n", n);
+			debugf(DebugLevel::Warning, "Green polygon skipped (points=%d, self-intersecting or <3 points).\n", n);
 			skipped++;
 			continue;
 		}
@@ -831,7 +824,7 @@ void Map::InitGreens() {
 		GreenMod* mod = nullptr;
 		if (!site.modId.empty()) {
 			if (find(ids.begin(), ids.end(), site.modId) != ids.end()) mod = greenFactory.CreateGreen(site.modId);
-			if (!mod) debugf("Warning: Green site specifies mod \"%s\" which is not enabled/registered, falling back to weighted random.\n", site.modId.c_str());
+			if (!mod) debugf(DebugLevel::Warning, "Green site specifies mod \"%s\" which is not enabled/registered, falling back to weighted random.\n", site.modId.c_str());
 		}
 		if (!mod) {
 			// 按有没有连路选一套权重，权重0的mod不参与；全0=这块绿化区留空(不报错)。
@@ -892,7 +885,7 @@ void Map::InitGreens() {
 	}
 
 	FlushPendingBuildingRoadAccess();
-	debugf("Log: Greens created=%d, skipped=%d, circles=%d.\n", created, skipped, circleCount);
+	debugf(DebugLevel::Log, "Greens created=%d, skipped=%d, circles=%d.\n", created, skipped, circleCount);
 }
 
 float Map::ProjectPointOntoRoad(Road* road, float px, float py) {
@@ -1085,7 +1078,7 @@ void Map::InitVegetation() {
 		greenTrees += vegetation.ExpandRequests(mod->trees, frame, greenCanPlace);
 	}
 
-	debugf("Log: Vegetation road trees=%d, building trees=%d, zone trees=%d, green trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees, zoneTrees, greenTrees,
+	debugf(DebugLevel::Log, "Vegetation road trees=%d, building trees=%d, zone trees=%d, green trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees, zoneTrees, greenTrees,
 		(int)vegetation.GetTrees().size(), (int)vegetation.GetMeshPaths().size());
 }
 
@@ -1109,7 +1102,7 @@ void Map::InitLamps() {
 		roadLamps = lamps.ExpandRequests(roadnet->GetLamps(), frame, [this, filter](float x, float y) {
 			return filter ? CanPlaceTree(x, y) : CheckXY((int)floorf(x), (int)floorf(y)); });
 	}
-	debugf("Log: Lamps road lamps=%d, total=%d, blueprints=%d.\n", roadLamps,
+	debugf(DebugLevel::Log, "Lamps road lamps=%d, total=%d, blueprints=%d.\n", roadLamps,
 		(int)lamps.GetLamps().size(), (int)lamps.GetBlueprintPaths().size());
 }
 
@@ -1567,7 +1560,7 @@ void Map::Checkin(const Populace& populace) {
 bool Map::AddZone(Zone* zone) {
 	if (!zone) return false;
 	if (zones.find(zone->GetName()) != zones.end()) {
-		debugf("Warning: Duplicate zone name \"%s\", rejected.\n", zone->GetName().data());
+		debugf(DebugLevel::Warning, "Duplicate zone name \"%s\", rejected.\n", zone->GetName().data());
 		return false;
 	}
 	zones[zone->GetName()] = zone;
@@ -1577,7 +1570,7 @@ bool Map::AddZone(Zone* zone) {
 bool Map::AddBuilding(Building* building) {
 	if (!building) return false;
 	if (buildings.find(building->GetName()) != buildings.end()) {
-		debugf("Warning: Duplicate building name \"%s\", rejected.\n", building->GetName().data());
+		debugf(DebugLevel::Warning, "Duplicate building name \"%s\", rejected.\n", building->GetName().data());
 		return false;
 	}
 	buildings[building->GetName()] = building;
@@ -2460,7 +2453,7 @@ bool Map::IsConstruction(int x, int y) const {
 
 string Map::GetTerrain(int x, int y) const {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return "";
 	}
 	return At(x, y).terrain;
@@ -2468,7 +2461,7 @@ string Map::GetTerrain(int x, int y) const {
 
 bool Map::SetTerrain(int x, int y, const string& terrain) {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return false;
 	}
 	At(x, y).terrain = terrain;
@@ -2477,7 +2470,7 @@ bool Map::SetTerrain(int x, int y, const string& terrain) {
 
 float Map::GetHeight(int x, int y) const {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return 0.f;
 	}
 	return At(x, y).height;
@@ -2485,7 +2478,7 @@ float Map::GetHeight(int x, int y) const {
 
 bool Map::SetHeight(int x, int y, float height) {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return false;
 	}
 	At(x, y).height = height;
@@ -2498,7 +2491,7 @@ bool Map::SetHeight(int x, int y, float height) {
 
 const float* Map::GetFineHeights(int x, int y) const {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return nullptr;
 	}
 	const auto& fine = At(x, y).fineHeights;
@@ -2507,7 +2500,7 @@ const float* Map::GetFineHeights(int x, int y) const {
 
 bool Map::SetFineHeights(int x, int y, const float* data) {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return false;
 	}
 	auto& fine = At(x, y).fineHeights;
@@ -2563,7 +2556,7 @@ bool Map::UsesAntiDiagonal(int ex, int ey) const {
 
 pair<bool, float> Map::GetWater(int x, int y) const {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return { false, 0.f };
 	}
 	return At(x, y).water;
@@ -2571,7 +2564,7 @@ pair<bool, float> Map::GetWater(int x, int y) const {
 
 bool Map::SetWater(int x, int y, bool hasWater, float height) {
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return false;
 	}
 	At(x, y).water = { hasWater, height };
@@ -2581,7 +2574,7 @@ bool Map::SetWater(int x, int y, bool hasWater, float height) {
 const vector<TerrainHatch>& Map::GetHatches(int x, int y) const {
 	static const vector<TerrainHatch> empty;
 	if (!CheckXY(x, y)) {
-		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		debugf(DebugLevel::Warning, "Invalid coordinates (%d, %d) for map.\n", x, y);
 		return empty;
 	}
 	return At(x, y).hatches;
@@ -3026,7 +3019,7 @@ int Map::DemolishAlongStrips(const vector<DemolishRequest>& strips, const functi
 	for (Building* building : doomedBuildings) delete building;
 	for (Zone* zone : doomedZones) delete zone;
 
-	debugf("Map::DemolishAlongStrips: 拆除%d座建筑、%d个园区，清理%d棵树。\n", count, static_cast<int>(doomedZones.size()), removedTrees);
+	debugf(DebugLevel::Log, "Map::DemolishAlongStrips: 拆除%d座建筑、%d个园区，清理%d棵树。\n", count, static_cast<int>(doomedZones.size()), removedTrees);
 	return count;
 }
 
@@ -4036,7 +4029,9 @@ void Map::ClearPedestrianRouteCache() const {
 bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 	CORE_RANDOM_SCOPE("core.map");
 	// 门/电梯/资产的选项与门状态Change，全部按交互名查目标，找不到静默忽略(同Traffic::ApplyChange)。
-	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+	switch (change->GetKind()) {
+	case ChangeKind::AddOption: {
+		auto* addOption = static_cast<const AddOptionChange*>(change);
 		// category指定了就只找那一类(资产要遍历全部房间，不指定时每次都白扫一遍)；没指定保持旧行为，三类都试。
 		const string& category = addOption->GetCategory();
 		if (!category.empty() && category != "door" && category != "elevator" && category != "asset") return false; // citizen/vehicle：别的域处理
@@ -4053,7 +4048,8 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		}
 		return true;
 	}
-	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+	case ChangeKind::RemoveOption: {
+		auto* removeOption = static_cast<const RemoveOptionChange*>(change);
 		// category指定了就只找那一类(资产要遍历全部房间，不指定时每次都白扫一遍)；没指定保持旧行为，三类都试。
 		const string& category = removeOption->GetCategory();
 		if (!category.empty() && category != "door" && category != "elevator" && category != "asset") return false; // citizen/vehicle：别的域处理
@@ -4070,7 +4066,8 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		}
 		return true;
 	}
-	if (auto* launch = dynamic_cast<const LaunchElevatorChange*>(change)) {
+	case ChangeKind::LaunchElevator: {
+		auto* launch = static_cast<const LaunchElevatorChange*>(change);
 		// elevator是电梯的交互名(脚本里的$$self.name)；building只用于日志。command解析成层号，见
 		// ParseElevatorCommand。真正的移动由UE层ABuildingElement::Tick按Cabin的行程状态推进。
 		string elevator = ToString(EvaluateExpression(launch->GetElevator(), context));
@@ -4078,23 +4075,25 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		Cabin* cabin = FindCabinByName(elevator);
 		int level = 0;
 		if (!cabin) {
-			debugf("Warning: launch_elevator: elevator %s not found.\n", elevator.c_str());
+			debugf(DebugLevel::Warning, "launch_elevator: elevator %s not found.\n", elevator.c_str());
 		}
 		else if (!ParseElevatorCommand(command, level)) {
-			debugf("Warning: launch_elevator: cannot parse floor from command \"%s\".\n", command.c_str());
+			debugf(DebugLevel::Warning, "launch_elevator: cannot parse floor from command \"%s\".\n", command.c_str());
 		}
 		else {
 			cabin->Launch(level);
 		}
 		return true;
 	}
-	if (auto* setDoor = dynamic_cast<const SetDoorChange*>(change)) {
+	case ChangeKind::SetDoor: {
+		auto* setDoor = static_cast<const SetDoorChange*>(change);
 		// access是布尔表达式：true=常开，false=常锁。
 		Door* target = FindDoorByName(ToString(EvaluateExpression(setDoor->GetName(), context)));
 		if (target) target->SetAccess(EvaluateExpressionBool(setDoor->GetAccess(), context) ? DOOR_ACCESS_OPEN : DOOR_ACCESS_LOCKED);
 		return true;
 	}
-	if (auto* record = dynamic_cast<const RecordObjectChange*>(change)) {
+	case ChangeKind::RecordObject: {
+		auto* record = static_cast<const RecordObjectChange*>(change);
 		// 候选地址按object类别收集(逻辑同PostImplement的list zones/buildings/rooms)，policy选一个写进
 		// variable；变量名规则同set_value。unordered_map遍历顺序不稳定，first只保证"某一个"，全图唯一的
 		// mod取它无碍。
@@ -4121,7 +4120,7 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 			}
 		}
 		else {
-			debugf("Warning: record_object: unknown object \"%s\".\n", object.c_str());
+			debugf(DebugLevel::Warning, "record_object: unknown object \"%s\".\n", object.c_str());
 		}
 
 		string address;
@@ -4130,7 +4129,7 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 			address = policy == "random" ? candidates[GetRandom(static_cast<int>(candidates.size()))] : candidates.front();
 		}
 		else {
-			debugf("Warning: record_object: no %s of kind \"%s\" found.\n", object.c_str(), kind.c_str());
+			debugf(DebugLevel::Warning, "record_object: no %s of kind \"%s\" found.\n", object.c_str(), kind.c_str());
 		}
 
 		string key;
@@ -4138,10 +4137,11 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		Container* target = scope == VARIABLE_SCOPE_SELF ? context.self
 			: scope == VARIABLE_SCOPE_GLOBAL ? context.global : nullptr;
 		if (target) target->SetValue(key, ValueType(address));
-		else debugf("Warning: record_object cannot write read-only variable %s.\n", record->GetVariable().c_str());
+		else debugf(DebugLevel::Warning, "record_object cannot write read-only variable %s.\n", record->GetVariable().c_str());
 		return true;
 	}
-	if (auto* registerDoor = dynamic_cast<const RegisterDoorChange*>(change)) {
+	case ChangeKind::RegisterDoor: {
+		auto* registerDoor = static_cast<const RegisterDoorChange*>(change);
 		// pass是布尔表达式，留空时EvaluateExpressionBool按true处理(允许通过)。
 		Door* target = FindDoorByName(ToString(EvaluateExpression(registerDoor->GetName(), context)));
 		if (target) {
@@ -4149,6 +4149,9 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 				EvaluateExpressionBool(registerDoor->GetPass(), context));
 		}
 		return true;
+	}
+	default:
+		break;
 	}
 	return false;
 }

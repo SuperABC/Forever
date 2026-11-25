@@ -109,7 +109,7 @@ void Weather::Tick(long long deltaMs, int month) {
 bool Weather::SetByName(const string& name) {
 	Type next;
 	if (!FromName(name, next)) {
-		debugf("Warning: unknown weather \"%s\" in change_weather, ignored.\n", name.c_str());
+		debugf(DebugLevel::Warning, "unknown weather \"%s\" in change_weather, ignored.\n", name.c_str());
 		return false;
 	}
 	if (next != type) {

@@ -11,20 +11,46 @@
 #undef GetObject
 
 
-// 变化基类：纯数据类，执行逻辑在各域的ApplyChange里按dynamic_cast分派，见change.md。
+// 变化的种类：每个Change子类一个，顺序和下面类的声明顺序一致。执行处按它switch，一步跳到对应分支，
+// 不用逐个dynamic_cast。数值不稳定(中间插入新种类后面的都会变)，不要写进存档，持久化用GetType()的名字。
+enum class ChangeKind : int {
+	ForRange, PlaceHolder, GlobalMessage, DebugPrint, GameEnd, SetValue,
+	GlobalSetting, RemoveValue, DeactivateMilestone, AddOption, RemoveOption, SpawnNpc,
+	RemoveNpc, NPCRevive, NPCTeleport, NPCNavigate, AssignTask, TeleportPlayer,
+	OpenShop, StartPuzzle, PayWage, EnterVehicle, ShowRoute, VisualizeNavigation,
+	VehicleCommand, VehicleNavigate, LeaveVehicle, BoardVehicle, ForceLeave, SetDoor,
+	RecordObject, RegisterDoor, JumpTime, CreateTimer, RemoveTimer, LaunchElevator,
+	PlayVideo, PlayBgm, StopBgm, BankTransaction, GiveEstate, RemoveEstate,
+	GiveVehicle, RemoveVehicle, PlayerInjured, PlayerCured, PlayerIll, PlayerRecover,
+	PlayerSleep, ChangeTime, ChangeWanted, ChangeWeather, ChangeControl, PickAsset,
+	GrantAsset, DeductAsset, DropAsset, SpawnEffect, SoundEffect, SpawnActor,
+	DestroyAsset, SingleDamage, AddSatiety, AreaDamage, CitizenFlee,
+};
+
+// 种类 <-> 脚本里的类型名("set_value"这种)，全工程只有这一张表(change.cpp)。名字不认识返回false。
+const std::string& ChangeKindName(ChangeKind kind);
+bool FindChangeKind(const std::string& name, ChangeKind& outKind);
+
+// 变化基类：纯数据类，执行逻辑在各域的ApplyChange里按GetKind()分派，见change.md。
 class Change {
 public:
-	Change();
+	// 种类由子类构造函数传进来(各子类传自己的静态常量Kind)，之后不变。
+	explicit Change(ChangeKind kind);
 
 	virtual ~Change();
 
-	virtual const std::string& GetType() const = 0;
+	ChangeKind GetKind() const { return kind; }
+
+	// 脚本里的类型名，由种类查表得到。
+	const std::string& GetType() const;
 
 	const std::string& GetCondition() const;
 
 	void SetCondition(const std::string& condition);
 
 private:
+	ChangeKind kind;
+
 	// 控制条件
 	std::string condition;
 
@@ -38,7 +64,7 @@ public:
 
 	virtual ~ForRangeChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ForRange;
 
 	std::string GetVar() const;
 
@@ -77,7 +103,7 @@ public:
 
 	virtual ~PlaceHolderChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlaceHolder;
 
 	void SetLabel(std::string label);
 
@@ -98,7 +124,7 @@ public:
 
 	virtual ~GlobalMessageChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::GlobalMessage;
 
 	void SetMessage(std::string message);
 
@@ -129,7 +155,7 @@ public:
 
 	virtual ~DebugPrintChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::DebugPrint;
 
 	void SetMessage(std::string message);
 
@@ -148,7 +174,7 @@ public:
 
 	virtual ~GameEndChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::GameEnd;
 
 private:
 };
@@ -162,7 +188,7 @@ public:
 
 	virtual ~SetValueChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SetValue;
 
 	void SetVariable(std::string variable);
 
@@ -190,7 +216,7 @@ public:
 
 	virtual ~GlobalSettingChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::GlobalSetting;
 
 	void SetSetting(std::string setting);
 
@@ -218,7 +244,7 @@ public:
 
 	virtual ~RemoveValueChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RemoveValue;
 
 	void SetVariable(std::string variable);
 
@@ -239,7 +265,7 @@ public:
 
 	virtual ~DeactivateMilestoneChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::DeactivateMilestone;
 
 	void SetMilestone(std::string milestone);
 
@@ -260,7 +286,7 @@ public:
 
 	virtual ~AddOptionChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::AddOption;
 
 	void SetName(std::string name);
 
@@ -296,7 +322,7 @@ public:
 
 	virtual ~RemoveOptionChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RemoveOption;
 
 	void SetName(std::string name);
 
@@ -334,7 +360,7 @@ public:
 
 	virtual ~SpawnNpcChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SpawnNpc;
 
 	void SetAvatar(std::string avatar);
 
@@ -438,7 +464,7 @@ public:
 
 	virtual ~RemoveNpcChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RemoveNpc;
 
 	void SetName(std::string name);
 
@@ -459,7 +485,7 @@ public:
 
 	virtual ~NPCReviveChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::NPCRevive;
 
 	void SetName(std::string name);
 	const std::string& GetName() const;
@@ -481,7 +507,7 @@ public:
 
 	virtual ~NPCTeleportChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::NPCTeleport;
 
 	void SetName(std::string name);
 
@@ -510,7 +536,7 @@ public:
 
 	virtual ~NPCNavigateChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::NPCNavigate;
 
 	void SetName(std::string name);
 
@@ -550,7 +576,7 @@ public:
 
 	virtual ~AssignTaskChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::AssignTask;
 
 	const std::string& GetTask() const;
 
@@ -579,7 +605,7 @@ public:
 
 	virtual ~TeleportPlayerChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::TeleportPlayer;
 
 	void SetDestination(std::string destination);
 
@@ -600,7 +626,7 @@ public:
 
 	virtual ~OpenShopChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::OpenShop;
 
 	void SetSaler(std::string saler);
 
@@ -623,7 +649,7 @@ public:
 
 	virtual ~StartPuzzleChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::StartPuzzle;
 
 	void SetPuzzle(std::string puzzle);
 
@@ -650,7 +676,7 @@ public:
 	PayWageChange(std::string amount);
 	virtual ~PayWageChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PayWage;
 
 	void SetAmount(std::string amount);
 	const std::string& GetAmount() const;
@@ -669,7 +695,7 @@ public:
 
 	virtual ~EnterVehicleChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::EnterVehicle;
 
 	void SetVehicle(std::string vehicle);
 
@@ -694,7 +720,7 @@ public:
 
 	virtual ~ShowRouteChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ShowRoute;
 
 	const std::string& GetTarget() const;
 
@@ -710,7 +736,7 @@ public:
 
 	virtual ~VisualizeNavigationChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::VisualizeNavigation;
 
 	void SetAddress(std::string address);
 	const std::string& GetAddress() const;
@@ -721,9 +747,9 @@ private:
 
 };
 
-// 给载具的Controller发运行指令（UE-only效果，见UForeverTrafficFrameworkComponent::StartBusTestRun/StopBusRun）：
-//   command == "run"：随机选一条公交环线的随机站，先导航过去再开始循环；
-//   command == "stop"：刹停并保持，线路公交同时退出时刻表。
+// 给载具的Controller发运行指令（UE-only效果，见UForeverTrafficFrameworkComponent::StartVehicleLineRun/StopVehicleLineRun）：
+//   command == "run"：随机选一条环线的随机站，先导航过去再沿环线循环；
+//   command == "stop"：刹停并保持，本来挂在线路上的载具同时退出时刻表。
 class VehicleCommandChange : public Change {
 public:
 	VehicleCommandChange();
@@ -732,7 +758,7 @@ public:
 
 	virtual ~VehicleCommandChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::VehicleCommand;
 
 	void SetVehicle(std::string vehicle);
 	const std::string& GetVehicle() const;
@@ -757,7 +783,7 @@ public:
 
 	virtual ~VehicleNavigateChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::VehicleNavigate;
 
 	void SetVehicle(std::string vehicle);
 	const std::string& GetVehicle() const;
@@ -783,7 +809,7 @@ public:
 
 	virtual ~LeaveVehicleChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::LeaveVehicle;
 
 	void SetVehicle(std::string vehicle);
 
@@ -803,7 +829,7 @@ public:
 	BoardVehicleChange(std::string vehicle);
 	virtual ~BoardVehicleChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::BoardVehicle;
 
 	void SetVehicle(std::string vehicle);
 	const std::string& GetVehicle() const;
@@ -821,7 +847,7 @@ public:
 	ForceLeaveChange(std::string vehicle);
 	virtual ~ForceLeaveChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ForceLeave;
 
 	void SetVehicle(std::string vehicle);
 	const std::string& GetVehicle() const;
@@ -840,7 +866,7 @@ public:
 
 	virtual ~SetDoorChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SetDoor;
 
 	void SetName(std::string name);
 
@@ -868,7 +894,7 @@ public:
 
 	virtual ~RecordObjectChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RecordObject;
 
 	void SetObject(std::string object);
 	const std::string& GetObject() const;
@@ -903,7 +929,7 @@ public:
 
 	virtual ~RegisterDoorChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RegisterDoor;
 
 	void SetName(std::string name);
 
@@ -939,7 +965,7 @@ public:
 
 	virtual ~JumpTimeChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::JumpTime;
 
 	void SetTime(std::string time);
 	const std::string& GetTime() const;
@@ -965,7 +991,7 @@ public:
 
 	virtual ~CreateTimerChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::CreateTimer;
 
 	void SetName(std::string name);
 
@@ -1013,7 +1039,7 @@ public:
 
 	virtual ~RemoveTimerChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RemoveTimer;
 
 	void SetName(std::string name);
 
@@ -1034,7 +1060,7 @@ public:
 
 	virtual ~LaunchElevatorChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::LaunchElevator;
 
 	void SetBuilding(std::string building);
 
@@ -1069,7 +1095,7 @@ public:
 
 	virtual ~PlayVideoChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayVideo;
 
 	void SetPath(std::string path);
 
@@ -1090,7 +1116,7 @@ public:
 
 	virtual ~PlayBgmChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayBgm;
 
 	void SetBgm(std::string bgm);
 
@@ -1116,7 +1142,7 @@ public:
 
 	virtual ~StopBgmChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::StopBgm;
 
 private:
 };
@@ -1130,7 +1156,7 @@ public:
 
 	virtual ~BankTransactionChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::BankTransaction;
 
 	void SetName(std::string name);
 
@@ -1158,7 +1184,7 @@ public:
 
 	virtual ~GiveEstateChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::GiveEstate;
 
 	void SetEstate(std::string estate);
 
@@ -1193,7 +1219,7 @@ public:
 
 	virtual ~RemoveEstateChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RemoveEstate;
 
 	void SetEstate(std::string estate);
 
@@ -1221,7 +1247,7 @@ public:
 
 	virtual ~GiveVehicleChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::GiveVehicle;
 
 	void SetVehicle(std::string vehicle);
 
@@ -1256,7 +1282,7 @@ public:
 
 	virtual ~RemoveVehicleChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::RemoveVehicle;
 
 	void SetVehicle(std::string vehicle);
 
@@ -1284,7 +1310,7 @@ public:
 
 	virtual ~PlayerInjuredChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayerInjured;
 
 	void SetWound(std::string wound);
 
@@ -1305,7 +1331,7 @@ public:
 
 	virtual ~PlayerCuredChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayerCured;
 
 	void SetWound(std::string wound);
 
@@ -1326,7 +1352,7 @@ public:
 
 	virtual ~PlayerIllChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayerIll;
 
 	void SetIllness(std::string illness);
 
@@ -1347,7 +1373,7 @@ public:
 
 	virtual ~PlayerRecoverChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayerRecover;
 
 	void SetIllness(std::string illness);
 
@@ -1368,7 +1394,7 @@ public:
 
 	virtual ~PlayerSleepChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PlayerSleep;
 
 	void SetHour(std::string hour);
 
@@ -1389,7 +1415,7 @@ public:
 
 	virtual ~ChangeTimeChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ChangeTime;
 
 	void SetDelta(std::string delta);
 
@@ -1410,7 +1436,7 @@ public:
 
 	virtual ~ChangeWantedChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ChangeWanted;
 
 	void SetReason(std::string reason);
 
@@ -1438,7 +1464,7 @@ public:
 
 	virtual ~ChangeWeatherChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ChangeWeather;
 
 	void SetWeather(std::string weather);
 
@@ -1459,7 +1485,7 @@ public:
 
 	virtual ~ChangeControlChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::ChangeControl;
 
 	void SetName(std::string name);
 
@@ -1480,7 +1506,7 @@ public:
 	PickAssetChange(std::string asset);
 	virtual ~PickAssetChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::PickAsset;
 
 	void SetAsset(std::string asset);
 	const std::string& GetAsset() const;
@@ -1490,23 +1516,27 @@ private:
 };
 
 // 凭空给玩家一个或一组资产，放置顺序同PickAssetChange(没有场景里的Actor需要删除)。结果通过get_asset事件
-// 发回执行这个Change的脚本。
+// 发回执行这个Change的脚本。slot(可省略，表达式)指定放到哪：Player::AddByPath认的路径("leftShoulder"/
+// "rightShoulder"/"back"/"left"/"right"或容器路径)，那个位置放不了就失败；省略则按上面的顺序自动放。
 class GrantAssetChange : public Change {
 public:
 	GrantAssetChange();
-	GrantAssetChange(std::string type, std::string count);
+	GrantAssetChange(std::string type, std::string count, std::string slot = std::string());
 	virtual ~GrantAssetChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::GrantAsset;
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
 	void SetCount(std::string count);
 	const std::string& GetCount() const;
+	void SetSlot(std::string slot);
+	const std::string& GetSlot() const;
 
 private:
 	std::string type;
 	std::string count;
+	std::string slot;
 };
 
 // 扣除玩家一个或一组资产(递归左右手和背包)：身上够数才扣，否则整体失败。成功对每件被扣的资产、失败对
@@ -1517,7 +1547,7 @@ public:
 	DeductAssetChange(std::string type, std::string count);
 	virtual ~DeductAssetChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::DeductAsset;
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
@@ -1536,7 +1566,7 @@ public:
 	DropAssetChange(std::string type, std::string count);
 	virtual ~DropAssetChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::DropAsset;
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
@@ -1559,7 +1589,7 @@ public:
 		std::string normal = std::string());
 	virtual ~SpawnEffectChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SpawnEffect;
 
 	void SetEffect(std::string effect);
 	const std::string& GetEffect() const;
@@ -1592,7 +1622,7 @@ public:
 		std::string volume = std::string(), std::string pitch = std::string());
 	virtual ~SoundEffectChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SoundEffect;
 
 	void SetSound(std::string sound);
 	const std::string& GetSound() const;
@@ -1624,7 +1654,7 @@ public:
 	SpawnActorChange(std::string actor, std::string position, std::string direction = std::string(), std::string scale = std::string());
 	virtual ~SpawnActorChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SpawnActor;
 
 	void SetActor(std::string actor);
 	const std::string& GetActor() const;
@@ -1651,7 +1681,7 @@ public:
 	DestroyAssetChange(std::string asset);
 	virtual ~DestroyAssetChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::DestroyAsset;
 
 	void SetAsset(std::string asset);
 	const std::string& GetAsset() const;
@@ -1670,7 +1700,7 @@ public:
 	SingleDamageChange(std::string target, std::string damage, std::string source, std::string weapon, std::string part);
 	virtual ~SingleDamageChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::SingleDamage;
 
 	void SetTarget(std::string target);
 	const std::string& GetTarget() const;
@@ -1700,7 +1730,7 @@ public:
 	AddSatietyChange(std::string target, std::string amount);
 	virtual ~AddSatietyChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::AddSatiety;
 
 	void SetTarget(std::string target);
 	const std::string& GetTarget() const;
@@ -1723,7 +1753,7 @@ public:
 		std::string source, std::string weapon);
 	virtual ~AreaDamageChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::AreaDamage;
 
 	void SetPosition(std::string position);
 	const std::string& GetPosition() const;
@@ -1761,7 +1791,7 @@ public:
 
 	virtual ~CitizenFleeChange();
 
-	virtual const std::string& GetType() const override;
+	static constexpr ChangeKind Kind = ChangeKind::CitizenFlee;
 
 	const std::string& GetName() const;
 
@@ -1771,3 +1801,11 @@ private:
 	std::string name;
 	std::string from;
 };
+
+// 按种类转型：种类对得上返回子类指针，否则nullptr。用法和dynamic_cast一样，但只比较一个整数
+// (dynamic_cast要查运行时类型信息，对象来自别的dll时还会退化成比较类型名字符串)。
+// 要处理多种Change的地方用switch (change->GetKind())，只认一两种的地方用它。
+template <typename T>
+const T* ChangeCast(const Change* change) {
+	return change && change->GetKind() == T::Kind ? static_cast<const T*>(change) : nullptr;
+}

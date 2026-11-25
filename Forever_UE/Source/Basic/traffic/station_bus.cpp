@@ -122,7 +122,7 @@ void BusStation::AssignManualRoads(const vector<Road*>& roads, const TransitData
 			const TransitData::RoadStop& stop = line.stops[stopIndex];
 			if (stop.station != GetId()) continue;
 			if (stop.road < 0 || stop.road >= static_cast<int>(roads.size()) || !roads[stop.road]) {
-				debugf("Warning: BusStation manual stop L%d S%d references missing road %d, skipped.\n", static_cast<int>(lineIndex), static_cast<int>(stopIndex), stop.road);
+				debugf(DebugLevel::Warning, "BusStation manual stop L%d S%d references missing road %d, skipped.\n", static_cast<int>(lineIndex), static_cast<int>(stopIndex), stop.road);
 				continue;
 			}
 			Road* road = roads[stop.road];
@@ -133,7 +133,7 @@ void BusStation::AssignManualRoads(const vector<Road*>& roads, const TransitData
 			bool rightSide = stop.rightSide;
 			if (road->GetVehicleLanes(rightSide ? 0 : 1).empty()) {
 				if (road->GetVehicleLanes(rightSide ? 1 : 0).empty()) {
-					debugf("Warning: BusStation manual stop L%d S%d: road '%s' has no vehicle lane, skipped.\n", static_cast<int>(lineIndex), static_cast<int>(stopIndex), road->GetName().c_str());
+					debugf(DebugLevel::Warning, "BusStation manual stop L%d S%d: road '%s' has no vehicle lane, skipped.\n", static_cast<int>(lineIndex), static_cast<int>(stopIndex), road->GetName().c_str());
 					continue;
 				}
 				rightSide = !rightSide;
@@ -142,7 +142,7 @@ void BusStation::AssignManualRoads(const vector<Road*>& roads, const TransitData
 			float target = BusProjectToRoad(road, stop.x, stop.y) * length;
 			float position = target;
 			if (!BusFindStopPosition(road, rightSide ? 0 : 1, length, target, position)) {
-				debugf("Warning: BusStation manual stop L%d S%d: no free spot on road '%s', placed at the requested position.\n", static_cast<int>(lineIndex), static_cast<int>(stopIndex), road->GetName().c_str());
+				debugf(DebugLevel::Warning, "BusStation manual stop L%d S%d: no free spot on road '%s', placed at the requested position.\n", static_cast<int>(lineIndex), static_cast<int>(stopIndex), road->GetName().c_str());
 				position = target;
 			}
 			emit(context, RoadStationRequest{ road, position / length, rightSide, BusStopName(static_cast<int>(lineIndex), static_cast<int>(stopIndex)) });

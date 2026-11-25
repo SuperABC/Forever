@@ -560,7 +560,7 @@ void MapSaveCodec::BuildSaveTables(const Map& map, SaveTables& t) {
 	for (const Road* road : throughRoads) addLoose(road);
 	int looseRoads = 0;
 	for (uint8_t owner : t.roadOwners) if (owner == ROAD_OWNER_NONE) looseRoads++;
-	if (looseRoads > 0) debugf("Warning: map save found %d referenced roads without an owner.\n", looseRoads);
+	if (looseRoads > 0) debugf(DebugLevel::Warning, "map save found %d referenced roads without an owner.\n", looseRoads);
 
 	// 导航边：车行图、行人图按key排序遍历，去重编号(行人边双向各引用一次同一个Connection*)。
 	auto addEdges = [&](const NavGraph& graph) {
@@ -581,7 +581,7 @@ void MapSaveCodec::BuildSaveTables(const Map& map, SaveTables& t) {
 		if (!node) return;
 		auto [it, inserted] = t.anchorsById.emplace(node->GetId(), node);
 		if (!inserted && it->second != node) {
-			debugf("Warning: map save found two navigation anchors sharing node id %d.\n", node->GetId());
+			debugf(DebugLevel::Warning, "map save found two navigation anchors sharing node id %d.\n", node->GetId());
 		}
 		};
 	for (const Node* node : map.navAnchorNodes) addAnchor(node);
@@ -735,8 +735,6 @@ bool MapSaveCodec::ReadRoadnet(Map& map, LoadTables& t, ByteReader& r, string& e
 			error = "roadnet mod '" + id + "' is not available";
 			return false;
 		}
-		for (const string& other : map.roadnetFactory.GetRegisteredIds()) map.roadnetFactory.SetConfig(other, false);
-		map.roadnetFactory.SetConfig(id, true);
 		map.roadnet = new Roadnet(&map.roadnetFactory, id);
 		Roadnet* roadnet = map.roadnet;
 		roadnet->type = r.Str();
@@ -1369,7 +1367,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		}
 		Zone* zone = new Zone(&map.zoneFactory, mod);
 		t.zones.push_back(zone);
-		if (!ReadModState(mod, r)) debugf("Warning: failed to parse saved state of zone mod %s.\n", id.c_str());
+		if (!ReadModState(mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of zone mod %s.\n", id.c_str());
 		zone->type = r.Str();
 		zone->name = r.Str();
 		ReadQuad(*zone, r);
@@ -1410,7 +1408,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		}
 		Building* building = new Building(&map.buildingFactory, mod);
 		t.buildings.push_back(building);
-		if (!ReadModState(mod, r)) debugf("Warning: failed to parse saved state of building mod %s.\n", id.c_str());
+		if (!ReadModState(mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of building mod %s.\n", id.c_str());
 		building->type = r.Str();
 		building->name = r.Str();
 		ReadQuad(*building, r);
@@ -1467,7 +1465,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			}
 			Component* component = new Component(&map.componentFactory, componentMod, building);
 			building->components.push_back(component);
-			if (!ReadModState(componentMod, r)) debugf("Warning: failed to parse saved state of component mod %s.\n", componentId.c_str());
+			if (!ReadModState(componentMod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of component mod %s.\n", componentId.c_str());
 			component->type = r.Str();
 			component->name = r.Str();
 		}
@@ -1500,7 +1498,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 					roomMod->LoadState(stateReader);
 				}
 				else {
-					debugf("Warning: failed to parse saved state of room mod %s.\n", roomId.c_str());
+					debugf(DebugLevel::Warning, "failed to parse saved state of room mod %s.\n", roomId.c_str());
 				}
 			}
 			room->type = type;
@@ -1671,7 +1669,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		}
 		Green* green = new Green(&map.greenFactory, mod);
 		map.greens.push_back(green);
-		if (!ReadModState(mod, r)) debugf("Warning: failed to parse saved state of green mod %s.\n", id.c_str());
+		if (!ReadModState(mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of green mod %s.\n", id.c_str());
 		green->type = r.Str();
 		green->name = r.Str();
 		uint32_t polygonSize = r.U32();
@@ -1815,7 +1813,7 @@ void MapSaveCodec::Save(const Map& map, SaveArchive& archive) {
 	lastReport = FormatReport("saved", static_cast<int>(tables.roads.size()), static_cast<int>(tables.lots.size()),
 		static_cast<int>(tables.edges.size()), static_cast<int>(tables.zones.size()), static_cast<int>(tables.buildings.size()),
 		static_cast<int>(map.allDoors.size()), static_cast<int>(map.vegetation.trees.size()), tables.unresolved);
-	debugf("Log: %s.\n", lastReport.c_str());
+	debugf(DebugLevel::Log, "%s.\n", lastReport.c_str());
 }
 
 Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
@@ -1855,7 +1853,7 @@ Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
 		lastReport = FormatReport("loaded", static_cast<int>(tables.roads.size()), static_cast<int>(tables.lots.size()),
 			static_cast<int>(tables.edges.size()), static_cast<int>(tables.zones.size()), static_cast<int>(tables.buildings.size()),
 			static_cast<int>(tables.doors.size()), static_cast<int>(map->vegetation.trees.size()), tables.unresolved);
-		debugf("Log: %s.\n", lastReport.c_str());
+		debugf(DebugLevel::Log, "%s.\n", lastReport.c_str());
 		return map;
 	}
 	catch (const exception& e) {

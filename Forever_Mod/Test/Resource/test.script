@@ -9,6 +9,22 @@
 			"goal": "",
 			"changes": [
 				{ "type": "global_setting", "setting": "time_flow_ratio", "value": "1" },
+				// 开局装备(原来写在UE的AForeverCharacter::PossessedBy里)。必须排在control前面：占有角色时会激活肩膀上的武器。
+				// 背包先给，后面没写slot的都自动进背包；手枪/步枪直接挂左/右肩。资产mod没启用的那一项只打一条警告。
+				{ "type": "grant_asset", "asset_type": "\"asset_container\"", "slot": "\"back\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_pistol\"", "slot": "\"leftShoulder\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_rifle\"", "slot": "\"rightShoulder\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_ammo_pistol\"", "count": "120" },
+				{ "type": "grant_asset", "asset_type": "\"asset_ammo_rifle\"", "count": "120" },
+				{ "type": "grant_asset", "asset_type": "\"asset_shotgun\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_ammo_shotgun\"", "count": "120" },
+				{ "type": "grant_asset", "asset_type": "\"asset_sniper\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_ammo_sniper\"", "count": "120" },
+				{ "type": "grant_asset", "asset_type": "\"asset_rpg\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_ammo_rpg\"", "count": "10" },
+				{ "type": "grant_asset", "asset_type": "\"asset_camera\"" },
+				{ "type": "grant_asset", "asset_type": "\"asset_grenade\"", "count": "10" },
+				{ "type": "grant_asset", "asset_type": "\"asset_smoke_grenade\"", "count": "10" },
 				{ "type": "place_holder", "label": "control" }
 			],
 			"dialogs": [],

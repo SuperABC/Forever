@@ -77,7 +77,7 @@ void BusRoute::LayoutManual() {
 	// 站由station_bus::AssignManualRoads按同名建出来，缺站/不通的线由Core Assemble丢掉。
 	constexpr int kStationsPerVehicle = 4;
 	if (!manual) {
-		debugf("Warning: BusRoute --skip but no manual transit data is available, no bus lines.\n");
+		debugf(DebugLevel::Warning, "BusRoute --skip but no manual transit data is available, no bus lines.\n");
 		return;
 	}
 	for (size_t lineIndex = 0; lineIndex < manual->roadLines.size(); lineIndex++) {

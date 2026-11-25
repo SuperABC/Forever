@@ -50,7 +50,7 @@ private:
 	}
 };
 
-// 当前流的共享槽：Core持有唯一一份，加载每个mod DLL时通过它导出的BindRandomHost把指针交给该DLL自己那份
+// 当前流的共享槽：Core持有唯一一份，加载每个mod DLL时通过它导出的BindModHost(见mod_concepts.h)把指针交给该DLL自己那份
 // Dependence(每个DLL静态链接各自的Dependence，GetRandom看不到别的模块的全局)。mod单线程调用，不加锁。
 struct RandomHost {
 	RandomStream* current = nullptr; // 非空：GetRandom从这条流取；空：退回不可控的random_device
@@ -116,9 +116,4 @@ public:
 // Core域级入口用：在函数开头写 CORE_RANDOM_SCOPE("core.map"); 整个函数里的GetRandom都取该域的流。
 #define CORE_RANDOM_SCOPE(domain) RandomScope coreRandomScope(RandomRegistry::GetDomainStream(domain))
 
-// mod DLL导出：Core加载DLL后调用，把宿主的host指针交给DLL自己那份Dependence。
-// 每个mod DLL的入口cpp写一行 FOREVER_MOD_BIND_RANDOM 即可。
-#define FOREVER_MOD_BIND_RANDOM \
-	extern "C" __declspec(dllexport) void BindRandomHost(RandomHost* host) { SetRandomHost(host); }
-
-inline constexpr const char* kBindRandomHostSymbol = "BindRandomHost";
+// 宿主把host交给mod dll的导出函数(BindModHost)和入口宏(FOREVER_MOD_BIND_HOST)在common/mod_concepts.h。

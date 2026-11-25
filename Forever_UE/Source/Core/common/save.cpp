@@ -101,7 +101,7 @@ namespace {
 	}
 
 	// 23个concept的统一操作表：按jsonKey枚举存活实例(id+计数器+状态版本)、临时创建实例取状态
-	// 版本、恢复计数器。每个concept的Factory/Mod类型不同，用模板+成员函数指针生成，避免手写21遍。
+	// 版本、恢复计数器。每个concept的Factory/Mod类型不同，用模板+成员函数指针生成；concept清单来自Registry::ForEachConcept。
 	struct ConceptOps {
 		string jsonKey;
 		function<void(vector<tuple<string, int, int>>&)> collectLive; // (id, counter, stateVersion)
@@ -111,7 +111,7 @@ namespace {
 	};
 
 	template <class Factory, class Mod>
-	ConceptOps MakeOps(const char* jsonKey, Factory& factory, Mod* (Factory::* create)(const string&),
+	ConceptOps MakeOps(const string& jsonKey, Factory& factory, Mod* (Factory::* create)(const string&),
 		void (Factory::* destroy)(Mod*)) {
 		ConceptOps ops;
 		ops.jsonKey = jsonKey;
@@ -140,31 +140,11 @@ namespace {
 
 	const vector<ConceptOps>& GetConceptOps() {
 		static vector<ConceptOps> table = [] {
-			Registry& r = Registry::Get();
+			// concept清单只有Registry::ForEachConcept那一份，这里不再各列一遍。
 			vector<ConceptOps> t;
-			t.push_back(MakeOps("app_mods", r.GetAppFactory(), &AppFactory::CreateApp, &AppFactory::DestroyApp));
-			t.push_back(MakeOps("asset_mods", r.GetAssetFactory(), &AssetFactory::CreateAsset, &AssetFactory::DestroyAsset));
-			t.push_back(MakeOps("building_mods", r.GetBuildingFactory(), &BuildingFactory::CreateBuilding, &BuildingFactory::DestroyBuilding));
-			t.push_back(MakeOps("component_mods", r.GetComponentFactory(), &ComponentFactory::CreateComponent, &ComponentFactory::DestroyComponent));
-			t.push_back(MakeOps("job_mods", r.GetJobFactory(), &JobFactory::CreateJob, &JobFactory::DestroyJob));
-			t.push_back(MakeOps("manufacture_mods", r.GetManufactureFactory(), &ManufactureFactory::CreateManufacture, &ManufactureFactory::DestroyManufacture));
-			t.push_back(MakeOps("name_mods", r.GetNameFactory(), &NameFactory::CreateName, &NameFactory::DestroyName));
-			t.push_back(MakeOps("organization_mods", r.GetOrganizationFactory(), &OrganizationFactory::CreateOrganization, &OrganizationFactory::DestroyOrganization));
-			t.push_back(MakeOps("product_mods", r.GetProductFactory(), &ProductFactory::CreateProduct, &ProductFactory::DestroyProduct));
-			t.push_back(MakeOps("puzzle_mods", r.GetPuzzleFactory(), &PuzzleFactory::CreatePuzzle, &PuzzleFactory::DestroyPuzzle));
-			t.push_back(MakeOps("roadnet_mods", r.GetRoadnetFactory(), &RoadnetFactory::CreateRoadnet, &RoadnetFactory::DestroyRoadnet));
-			t.push_back(MakeOps("room_mods", r.GetRoomFactory(), &RoomFactory::CreateRoom, &RoomFactory::DestroyRoom));
-			t.push_back(MakeOps("route_mods", r.GetRouteFactory(), &RouteFactory::CreateRoute, &RouteFactory::DestroyRoute));
-			t.push_back(MakeOps("scheduler_mods", r.GetSchedulerFactory(), &SchedulerFactory::CreateScheduler, &SchedulerFactory::DestroyScheduler));
-			t.push_back(MakeOps("script_mods", r.GetScriptFactory(), &ScriptFactory::CreateScript, &ScriptFactory::DestroyScript));
-			t.push_back(MakeOps("station_mods", r.GetStationFactory(), &StationFactory::CreateStation, &StationFactory::DestroyStation));
-			t.push_back(MakeOps("storage_mods", r.GetStorageFactory(), &StorageFactory::CreateStorage, &StorageFactory::DestroyStorage));
-			t.push_back(MakeOps("terrain_mods", r.GetTerrainFactory(), &TerrainFactory::CreateTerrain, &TerrainFactory::DestroyTerrain));
-			t.push_back(MakeOps("vehicle_mods", r.GetVehicleFactory(), &VehicleFactory::CreateVehicle, &VehicleFactory::DestroyVehicle));
-			t.push_back(MakeOps("weapon_mods", r.GetWeaponFactory(), &WeaponFactory::CreateWeapon, &WeaponFactory::DestroyWeapon));
-			t.push_back(MakeOps("zone_mods", r.GetZoneFactory(), &ZoneFactory::CreateZone, &ZoneFactory::DestroyZone));
-			t.push_back(MakeOps("green_mods", r.GetGreenFactory(), &GreenFactory::CreateGreen, &GreenFactory::DestroyGreen));
-			t.push_back(MakeOps("party_mods", r.GetPartyFactory(), &PartyFactory::CreateParty, &PartyFactory::DestroyParty));
+			Registry::Get().ForEachConcept([&t](const char* conceptKey, auto& factory, auto create, auto destroy) {
+				t.push_back(MakeOps(ModConceptJsonKey(conceptKey), factory, create, destroy));
+			});
 			return t;
 		}();
 		return table;
@@ -568,7 +548,7 @@ SaveGame::ConfigSnapshot SaveGame::ApplyManifestConfig(const SaveManifest& manif
 	Config::SetStoryScripts(storyPaths);
 	Config::SetMainStoryScriptModName(manifest.mainStory);
 
-	Registry::Get().ReloadModArgs();
+	Registry::Get().RefreshMods(); // dll平时是卸载的：先确保已加载，再刷新参数
 	return snapshot;
 }
 
@@ -577,7 +557,7 @@ void SaveGame::RestoreConfig(const ConfigSnapshot& snapshot) {
 	for (auto& [key, list] : snapshot.conceptMods) Config::SetConceptMods(key, list);
 	Config::SetStoryScripts(snapshot.storyScripts);
 	Config::SetMainStoryScriptModName(snapshot.mainStory);
-	Registry::Get().ReloadModArgs();
+	Registry::Get().RefreshMods(); // dll平时是卸载的：先确保已加载，再刷新参数
 }
 
 vector<string> SaveGame::ValidateModsRegistered(const SaveManifest& manifest) {

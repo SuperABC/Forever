@@ -5,6 +5,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
@@ -39,6 +40,10 @@ public:
 	// 必须在调用方触发mod的RegisterModStations导出函数之前调用,否则CreateStation
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
+
+	// 注销不在keepIds里的注册项，返回注销了几个。注册项里的函数指针指向mod dll的代码，dll卸载前必须先注销；
+	// 还有存活实例的id要留在keepIds里(销毁它要用注册时的deleter)。见Core/common/registry.md"卸载"。
+	virtual int UnregisterExcept(const std::unordered_set<std::string>& keepIds);
 
 	// 转发调用注册时提供的static函数，不需要任何StationMod实例存在——和BuildingFactory::Assign
 	// 同一个模式(见building_factory.h)。id未注册/未启用时直接不调用emit。

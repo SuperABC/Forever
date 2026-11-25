@@ -33,10 +33,16 @@ unordered_map<string, vector<pair<string, string>>> Config::dllConceptIds = {};
 unordered_map<string, vector<string>> Config::modDependences = {};
 vector<string> Config::storyScriptPaths = {};
 
-void Config::NormalizeUniqueConcepts() {
-	static const vector<string> kUniqueConcepts = { "Roadnets", "Names" };
+namespace {
+	// 单选concept(config里只能启用一个mod)的名单，只在这里列一次。
+	const vector<string>& UniqueConcepts() {
+		static const vector<string> kUniqueConcepts = { "Roadnets", "Names" };
+		return kUniqueConcepts;
+	}
+}
 
-	for (const string& conceptKey : kUniqueConcepts) {
+void Config::NormalizeUniqueConcepts() {
+	for (const string& conceptKey : UniqueConcepts()) {
 		string jsonKey = ConceptKeyToJsonKey(conceptKey);
 		auto it = conceptMods.find(jsonKey);
 		if (it == conceptMods.end())
@@ -99,6 +105,22 @@ namespace {
 		return result;
 	}
 
+	// 路径的统一写法：绝对路径、去掉"."/".."和多余的分隔符、正斜杠、结尾不带斜杠、盘符大写。
+	// dllPaths/resourcePaths等map都拿路径字符串当键，同一个目录只有一种写法才不会被当成两个根
+	// (config.json里出现过".../Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts"这种写法)。
+	// 用词法规范化(lexically_normal)而不是canonical：不解析目录连接(junction)。Windows自己解析".."也是词法的，
+	// 所以规范化前后指的是同一个目录；canonical会把经过junction的路径换成它的真实目标(打包产物里Resource/就是junction)。
+	string NormalizePath(const string& path) {
+		if (path.empty()) return path;
+		error_code absoluteError;
+		filesystem::path absolute = filesystem::absolute(filesystem::path(path), absoluteError);
+		if (absoluteError) absolute = filesystem::path(path);
+		string result = ToForwardSlashes(absolute.lexically_normal().string());
+		while (result.size() > 3 && result.back() == '/') result.pop_back(); // "C:/"这种根目录保留斜杠
+		if (result.size() >= 2 && result[1] == ':') result[0] = static_cast<char>(toupper(static_cast<unsigned char>(result[0])));
+		return result;
+	}
+
 	using GetModFunc = void* (*)();
 }
 
@@ -132,7 +154,7 @@ void Config::ReadConfig(const string& path) {
 	ifstream fin(path);
 	if (!fin.is_open()) {
 		// 留空不抛异常，调用方据此回退默认目录；但要打警告，区分"文件打不开"(路径错/被独占)和"JSON语法错误"。
-		cerr << "[Config] Warning: cannot open config file: " << path << "\n";
+		debugf(DebugLevel::Warning, "[Config] cannot open config file: %s\n", path.c_str());
 		return;
 	}
 
@@ -148,8 +170,7 @@ void Config::ReadConfig(const string& path) {
 	fin.close();
 
 	if (!parsed) {
-		cerr << "[Config] Warning: json syntax error in " << path << ": "
-			<< reader.GetErrorMessages() << "\n";
+		debugf(DebugLevel::Error, "[Config] json syntax error in %s: %s\n", path.c_str(), reader.GetErrorMessages().c_str());
 		return;
 	}
 
@@ -205,7 +226,7 @@ void Config::ReadConfig(const string& path) {
 			}
 		}
 		if (present && (!valid || w <= 0 || h <= 0)) {
-			cerr << "[Config] Warning: \"map_size\" must be a positive integer or [width, height], ignored.\n";
+			debugf(DebugLevel::Warning, "[Config] \"map_size\" must be a positive integer or [width, height], ignored.\n");
 		}
 		else if (present) {
 			hasMapSize = true;
@@ -274,10 +295,11 @@ vector<string> Config::GetMods() {
 	return mods;
 }
 
-void Config::AddDllPath(const string& path) {
+void Config::AddDllPath(const string& rawPath) {
+	const string path = NormalizePath(rawPath); // 同一个目录只认一种写法
 	filesystem::path dir(path);
 	if (!filesystem::exists(dir) || !filesystem::is_directory(dir)) {
-		cerr << "[Config] Warning: mod path does not exist: " << path << "\n";
+		debugf(DebugLevel::Warning, "[Config] mod path does not exist: %s\n", path.c_str());
 		return;
 	}
 
@@ -290,20 +312,11 @@ void Config::AddDllPath(const string& path) {
 		if (!CheckFileFormat(entry.path(), ".dll"))
 			continue;
 
-		// 跳过带"Debug"目录段的dll：/MDd调试CRT的std::string布局不兼容，跨DLL读返回的vector<string>会崩；
-		// 回退扫描会无差别递归整个目录树，必须在这里挡掉(见config.md)
-		bool underDebugDir = false;
-		for (const auto& part : entry.path()) {
-			string partLower = part.string();
-			for (char& c : partLower) {
-				c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-			}
-			if (partLower == "debug") {
-				underDebugDir = true;
-				break;
-			}
-		}
-		if (underDebugDir)
+		// 先只读文件看导出表/导入表(ProbeModDll，不加载、不执行)：没有导出任何GetMod<Concepts>的不是mod，直接跳过——
+		// 这里会无差别递归整个目录树，无关dll的DllMain不能因为"探测一下"就被执行。
+		// 调试版(导入了调试CRT)也跳过：/MDd的std::string布局和Release不兼容，跨DLL读返回的vector<string>会崩(见config.md)。
+		const ModDllProbe probe = ProbeModDll(entry.path().string());
+		if (!probe.isMod || probe.isDebug)
 			continue;
 
 		string full = ToForwardSlashes(filesystem::absolute(entry.path()).string());
@@ -349,7 +362,8 @@ void Config::AddDllPath(const string& path) {
 	}
 }
 
-void Config::RemoveDllPath(const string& path) {
+void Config::RemoveDllPath(const string& rawPath) {
+	const string path = NormalizePath(rawPath); // 同一个目录只认一种写法
 	auto it = dllPaths.find(path);
 	if (it != dllPaths.end()) {
 		for (const string& dll : it->second) {
@@ -387,10 +401,11 @@ vector<string> Config::GetLayouts() {
 	return paths;
 }
 
-void Config::AddResourcePath(const string& path) {
+void Config::AddResourcePath(const string& rawPath) {
+	const string path = NormalizePath(rawPath); // 同一个目录只认一种写法
 	filesystem::path dir(path);
 	if (!filesystem::exists(dir) || !filesystem::is_directory(dir)) {
-		cerr << "[Config] Warning: resource path does not exist: " << path << "\n";
+		debugf(DebugLevel::Warning, "[Config] resource path does not exist: %s\n", path.c_str());
 		return;
 	}
 
@@ -573,7 +588,18 @@ vector<Config::ModEntry> Config::GetModEnables() {
 }
 
 bool Config::IsUniqueConcept(const string& conceptKey) {
-	return conceptKey == "Roadnets" || conceptKey == "Names";
+	const vector<string>& unique = UniqueConcepts();
+	return find(unique.begin(), unique.end(), conceptKey) != unique.end();
+}
+
+string Config::GetUniqueConceptMod(const string& conceptKey) {
+	const vector<pair<string, string>> mods = GetConceptMods(ConceptKeyToJsonKey(conceptKey));
+	if (mods.empty()) return string();
+	if (mods.size() > 1) {
+		debugf(DebugLevel::Warning, "[Config] %d %s mods are enabled but only one can be used; using \"%s\".\n",
+			static_cast<int>(mods.size()), conceptKey.c_str(), mods.front().first.c_str());
+	}
+	return mods.front().first;
 }
 
 void Config::SetModEnabled(const string& conceptKey, const string& modId, bool enabled) {
@@ -720,7 +746,8 @@ vector<string> Config::GetResourceRootPaths() {
 	return paths;
 }
 
-void Config::RemoveResourcePath(const string& path) {
+void Config::RemoveResourcePath(const string& rawPath) {
+	const string path = NormalizePath(rawPath); // 同一个目录只认一种写法
 	resourcePaths.erase(path);
 	pluginPaths.erase(path);
 	pakPaths.erase(path);
@@ -729,17 +756,17 @@ void Config::RemoveResourcePath(const string& path) {
 
 void Config::AddStoryScript(const string& path) {
 	if (!CheckFileFormat(filesystem::path(path), ".script")) {
-		cerr << "[Config] Warning: not a .script file: " << path << "\n";
+		debugf(DebugLevel::Warning, "[Config] not a .script file: %s\n", path.c_str());
 		return;
 	}
-	string full = ToForwardSlashes(filesystem::absolute(path).string());
+	string full = NormalizePath(path);
 	if (find(storyScriptPaths.begin(), storyScriptPaths.end(), full) == storyScriptPaths.end()) {
 		storyScriptPaths.push_back(full);
 	}
 }
 
 void Config::RemoveStoryScript(const string& path) {
-	string full = ToForwardSlashes(filesystem::absolute(path).string());
+	string full = NormalizePath(path);
 	storyScriptPaths.erase(remove(storyScriptPaths.begin(), storyScriptPaths.end(), full), storyScriptPaths.end());
 }
 
@@ -802,7 +829,7 @@ void Config::WriteConfig(const string& path) {
 
 	ofstream fout(path);
 	if (!fout.is_open()) {
-		cerr << "[Config] Warning: cannot write config to " << path << "\n";
+		debugf(DebugLevel::Warning, "[Config] cannot write config to %s\n", path.c_str());
 		return;
 	}
 	fout << text;

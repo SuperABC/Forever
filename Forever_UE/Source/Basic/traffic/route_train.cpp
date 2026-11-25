@@ -421,7 +421,7 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 			Zone zone{ midArc[span.first], midArc[span.last], true };
 			if (zone.sIn < TUNNEL_RAMP_LENGTH || midLength - zone.sOut < TUNNEL_RAMP_LENGTH) zone.tunnel = false;
 			zones.push_back(zone);
-			debugf("Log: TrainRoute pair (%d,%d) mountain arc [%.1f,%.1f] of %.1f -> %s.\n",
+			debugf(DebugLevel::Log, "TrainRoute pair (%d,%d) mountain arc [%.1f,%.1f] of %.1f -> %s.\n",
 				railPair.right, railPair.left, zone.sIn, zone.sOut, midLength, zone.tunnel ? "tunnel" : "raise");
 		}
 
@@ -742,15 +742,15 @@ namespace {
 
 void TrainRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 	if (!manual || manual->Empty()) {
-		debugf("Warning: TrainRoute --skip but the roadnet has no manual transit data, no train lines.\n");
+		debugf(DebugLevel::Warning, "TrainRoute --skip but the roadnet has no manual transit data, no train lines.\n");
 		return;
 	}
 	const TransitData& data = *manual;
 	const string routeId = GetType();
 	ManualPlan plan = PlanManualRoute(data, routeId, stationInfos, false);
-	for (const string& warning : plan.warnings) debugf("Warning: TrainRoute manual: %s\n", warning.c_str());
+	for (const string& warning : plan.warnings) debugf(DebugLevel::Warning, "TrainRoute manual: %s\n", warning.c_str());
 	if (plan.lines.empty()) {
-		debugf("Warning: TrainRoute manual: no usable train line in the roadnet loops of %s.\n", routeId.c_str());
+		debugf(DebugLevel::Warning, "TrainRoute manual: no usable train line in the roadnet loops of %s.\n", routeId.c_str());
 		return;
 	}
 
@@ -833,7 +833,7 @@ void TrainRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 		if (in.name == out.name) continue;
 		if (turn[1] == turn[2]) { addUTurn(in, out); continue; }
 		if (in.hx * out.hx + in.hy * out.hy < 0.5f) {
-			debugf("Warning: TrainRoute manual: sharp turn (>60 deg) at transit node %d between connections %d and %d.\n", turn[0], turn[1], turn[2]);
+			debugf(DebugLevel::Warning, "TrainRoute manual: sharp turn (>60 deg) at transit node %d between connections %d and %d.\n", turn[0], turn[1], turn[2]);
 		}
 		float chord = hypotf(out.x - in.x, out.y - in.y);
 		addLink(ExternOf(in.name), ExternOf(out.name), { MakeBezierSegment(in.x, in.y, in.z, in.hx, in.hy, out.x, out.y, out.z, out.hx, out.hy, chord / 3.f) });
@@ -909,7 +909,7 @@ void TrainRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 		if (chord < 1e-3f) continue;
 		float cx = (to.x - from.x) / chord, cy = (to.y - from.y) / chord;
 		if (from.hx * cx + from.hy * cy < 0.5f || to.hx * cx + to.hy * cy < 0.5f) {
-			debugf("Warning: TrainRoute manual: gap link (%.1f,%.1f)->(%.1f,%.1f) bends more than 60 deg at an end; move the nearest transit node in line with the station track.\n",
+			debugf(DebugLevel::Warning, "TrainRoute manual: gap link (%.1f,%.1f)->(%.1f,%.1f) bends more than 60 deg at an end; move the nearest transit node in line with the station track.\n",
 				from.x, from.y, to.x, to.y);
 		}
 		int index = addLink(from.endpoint, to.endpoint, { MakeBezierSegment(from.x, from.y, from.z, from.hx, from.hy, to.x, to.y, to.z, to.hx, to.hy, chord / 3.f) });
@@ -929,11 +929,11 @@ void TrainRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 			}
 			entries.push_back(out);
 		}
-		if (entries.size() < 2) { debugf("Warning: TrainRoute manual: a line has fewer than 2 waypoints, dropped.\n"); continue; }
+		if (entries.size() < 2) { debugf(DebugLevel::Warning, "TrainRoute manual: a line has fewer than 2 waypoints, dropped.\n"); continue; }
 		lines.push_back(std::move(entries));
 		lineVehicleCounts.push_back(kVehiclesPerTrainLine);
 	}
-	debugf("Log: TrainRoute manual: %d rail pairs, %d turn/gap links, %d lines.\n",
+	debugf(DebugLevel::Log, "TrainRoute manual: %d rail pairs, %d turn/gap links, %d lines.\n",
 		static_cast<int>(manualPairs.size()), static_cast<int>(links.size()) - 2 * static_cast<int>(manualPairs.size()), static_cast<int>(lines.size()));
 }
 

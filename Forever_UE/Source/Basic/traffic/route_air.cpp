@@ -238,15 +238,15 @@ void AirRoute::LayoutRoute(const vector<RouteStationInfo>& stations, int sizeX, 
 // 站和节点之间的缺口：一段Bezier(沿跑道朝向起降)；两座机场之间没有航线的缺口：起飞爬升->天空点->降落，同自动互联。
 void AirRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 	if (!manual || manual->Empty()) {
-		debugf("Warning: AirRoute --skip but the roadnet has no manual transit data, no air lines.\n");
+		debugf(DebugLevel::Warning, "AirRoute --skip but the roadnet has no manual transit data, no air lines.\n");
 		return;
 	}
 	const TransitData& data = *manual;
 	const string routeId = GetType();
 	ManualPlan plan = PlanManualRoute(data, routeId, stationInfos, true);
-	for (const string& warning : plan.warnings) debugf("Warning: AirRoute manual: %s\n", warning.c_str());
+	for (const string& warning : plan.warnings) debugf(DebugLevel::Warning, "AirRoute manual: %s\n", warning.c_str());
 	if (plan.lines.empty()) {
-		debugf("Warning: AirRoute manual: no usable air line in the roadnet loops of %s.\n", routeId.c_str());
+		debugf(DebugLevel::Warning, "AirRoute manual: no usable air line in the roadnet loops of %s.\n", routeId.c_str());
 		return;
 	}
 
@@ -334,11 +334,11 @@ void AirRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 			float gx = fromStation ? dx / chord : -dx / chord, gy = fromStation ? dy / chord : -dy / chord; // 行驶方向的弦向
 			float alongStation = (fromStation ? 1.f : -1.f) * (hx * dx + hy * dy) / chord;
 			if (alongStation < 0.5f) {
-				debugf("Warning: AirRoute manual: gap between station %s runway %d and transit node %d bends more than 60 deg; move the node in line with the runway.\n",
+				debugf(DebugLevel::Warning, "AirRoute manual: gap between station %s runway %d and transit node %d bends more than 60 deg; move the node in line with the runway.\n",
 					info.name.c_str(), track, nodePort.node);
 			}
 			if (fabsf(node.z - port.z) / chord > 0.6f) {
-				debugf("Warning: AirRoute manual: gap between station %s runway %d and transit node %d climbs steeper than 0.6; raise the node farther away or lower its height.\n",
+				debugf(DebugLevel::Warning, "AirRoute manual: gap between station %s runway %d and transit node %d climbs steeper than 0.6; raise the node farther away or lower its height.\n",
 					info.name.c_str(), track, nodePort.node);
 			}
 			string externName = nodeExtern(nodePort.node);
@@ -371,8 +371,8 @@ void AirRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
 			else { out.name = nodeExtern(entry.via.node); out.stopIndex = -1; }
 			entries.push_back(out);
 		}
-		if (entries.size() < 2) { debugf("Warning: AirRoute manual: a line has fewer than 2 waypoints, dropped.\n"); continue; }
+		if (entries.size() < 2) { debugf(DebugLevel::Warning, "AirRoute manual: a line has fewer than 2 waypoints, dropped.\n"); continue; }
 		lines.push_back(std::move(entries));
 	}
-	debugf("Log: AirRoute manual: %d links, %d lines.\n", static_cast<int>(links.size()), static_cast<int>(lines.size()));
+	debugf(DebugLevel::Log, "AirRoute manual: %d links, %d lines.\n", static_cast<int>(links.size()), static_cast<int>(lines.size()));
 }

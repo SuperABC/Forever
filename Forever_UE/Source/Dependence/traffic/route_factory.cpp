@@ -58,6 +58,19 @@ void RouteFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
 }
 
+int RouteFactory::UnregisterExcept(const unordered_set<string>& keepIds) {
+	int removed = 0;
+	for (auto it = registries.begin(); it != registries.end();) {
+		if (keepIds.count(it->first)) {
+			++it;
+			continue;
+		}
+		it = registries.erase(it);
+		removed++;
+	}
+	return removed;
+}
+
 bool RouteFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }

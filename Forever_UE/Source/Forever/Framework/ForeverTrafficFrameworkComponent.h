@@ -69,10 +69,11 @@ public:
 	// stationNodeId 是 Map 辅助导航节点 id（Station 的 stationNode）。
 	void FireStopEvent(Vehicle* vehicle, int32 stationNodeId, bool entering);
 
-	// vehicle_command Change 的执行：测试运行 = 随机选一条公交环线的随机站，先导航过去再开始循环；
-	// 停止运行 = 刹停并保持（线路公交同时退出时刻表，由 Controller 继续持有）。
-	void StartBusTestRun(const FString& vehicleName);
-	void StopBusRun(const FString& vehicleName);
+	// vehicle_command Change 的执行(run/stop)：run = 随机选一条环线的随机站，先导航过去再沿环线循环；
+	// stop = 刹停并保持（本来挂在线路上的载具同时退出时刻表，由 Controller 继续持有）。
+	// 入口是通用的；"哪些线路算环线、谁来开"目前只实现了走路网的线路(CollectBusLoops/ABusController)。
+	void StartVehicleLineRun(const FString& vehicleName);
+	void StopVehicleLineRun(const FString& vehicleName);
 
 	// 公交（线路公交处于物理段时）的物理 Actor，没有返回 nullptr。
 	AVehicleElement* FindBusPhysicsElement(const FString& vehicleName) const;
@@ -410,26 +411,9 @@ private:
 	void HideGuideLine();
 	bool UpdateGuide(TArray<FVector>& outPath); // TrackTestNavigationLine的source
 
+	// 线路调试网格：每种stationType一个mesh+一个MID，按地图上实际出现的类型现建，颜色按类型名哈希取。
 	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> busRouteMesh;
+	TMap<FString, TObjectPtr<UProceduralMeshComponent>> routeDebugMeshes;
 	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> trainRouteMesh;
-	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> planeRouteMesh;
-	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> otherRouteMesh;
-
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> busRouteMaterial;
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> trainRouteMaterial;
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> planeRouteMaterial;
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> otherRouteMaterial;
-
-	// 按stationType选调试mesh/MID("bus"/"train"/"plane"，其它一律落到other那一组)，没有
-	// pureBaseMaterial(资产缺失)时返回的MID可能是nullptr，调用方自己判空。
-	void GetRouteDebugTarget(const FString& stationType, UProceduralMeshComponent*& outMesh,
-		UMaterialInstanceDynamic*& outMaterial);
+	TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> routeDebugMaterials;
 };

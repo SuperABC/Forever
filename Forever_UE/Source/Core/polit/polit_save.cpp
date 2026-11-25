@@ -121,7 +121,7 @@ Polit* PolitSaveCodec::Load(const SaveArchive& archive, Map& map, Populace& popu
 			string id = r.Str();
 			PartyMod* mod = id.empty() ? nullptr : factory.CreateParty(id);
 			if (!SaveRefs::ReadModState(mod, r)) {
-				debugf("Warning: failed to parse saved state of party mod %s.\n", id.c_str());
+				debugf(DebugLevel::Warning, "failed to parse saved state of party mod %s.\n", id.c_str());
 			}
 			Party scratchParty(nullptr, nullptr, id); // mod不可用时也要把数据读完
 			Party* party = mod ? new Party(&factory, mod, id) : &scratchParty;
@@ -156,7 +156,7 @@ Polit* PolitSaveCodec::Load(const SaveArchive& archive, Map& map, Populace& popu
 				polit->parties.push_back(owner.release());
 			}
 			else {
-				debugf("Warning: party mod %s is not available, party dropped.\n", id.c_str());
+				debugf(DebugLevel::Warning, "party mod %s is not available, party dropped.\n", id.c_str());
 			}
 		}
 

@@ -95,32 +95,24 @@ lambda进去"的callback写法——**不能改成直接按值返回`std::string
 ```cpp
 Populace::Populace() : nameFactory(Registry::Get().GetNameFactory()) {}
 void Populace::InitNames() {
-	for (const auto& [id, args] : Config::GetConceptMods("name_mods")) {
-		nameFactory.SetConfig(id, true);
-	}
-	string activeId = nameFactory.GetName();
+	const string activeId = Config::GetUniqueConceptMod("Names");
 	if (activeId.empty()) {
-		auto ids = nameFactory.GetRegisteredIds();
-		if (!ids.empty()) {
-			nameFactory.SetConfig(ids[0], true);
-			activeId = ids[0];
-		}
+		THROW_EXCEPTION(RuntimeException, "No name mod enabled.\n");
 	}
-	if (activeId.empty()) {
-		THROW_EXCEPTION(RuntimeException, "No name mod available.\n");
+	if (!nameFactory.CheckRegistered(activeId)) {
+		THROW_EXCEPTION(RuntimeException, "Name mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
 	}
 	name = new Name(&nameFactory, activeId);
 	// ...遍历Config::GetMainStoryScriptPaths()，对每个脚本的name_reserve调ReserveName，见name.md
 }
 ```
 
-和`Map::InitRoadnet()`逐字同构：遍历`Config::GetConceptMods("name_mods")`挨个
-`SetConfig(id, true)`，`GetName()`拿到胜出的id；`config.json`没配`name_mods`时
-退化选第一个注册到的id（`GetRegisteredIds()[0]`）；两条路径都拿不到id才是真正的
-致命配置错误（没有取名算法整个游戏就没法生成任何市民），`THROW_EXCEPTION`交给
-`AForeverFrameworkActor::BeginPlay()`的`try/catch`统一处理。`EmptyName`正常注册在
-`registries`里（`GetModNames`返回的id列表不受影响），只是永远不会被`SetConfig`
-标记启用，`GetName()`不会选中它。`Populace`的析构函数`delete name`（`Name`析构里
+和`Map::InitRoadnet()`同一个处理(2026-11-25统一)：取名是单选concept，用`Config::GetUniqueConceptMod("Names")`
+取配置里启用的那一个；一个都没启用、或者启用的那个没有dll提供，都是致命配置错误
+（没有取名算法整个游戏就没法生成任何市民），`THROW_EXCEPTION`交给
+`AForeverFrameworkActor::BeginPlay()`的`try/catch`统一处理。不再有"没配就选第一个注册到的"兜底
+(取到哪个不确定，还会掩盖配置错误)。没启用的name mod(比如`EmptyName`)在`NameFactory`里和别的
+Factory一样不可见、创建不出来。`Populace`的析构函数`delete name`（`Name`析构里
 调`nameFactory.DestroyName(mod)`释放真正的`NameMod*`）。
 
 `Populace`通过`Core/populace/name.h/.cpp`的`Name`类转发`GetSurname`/

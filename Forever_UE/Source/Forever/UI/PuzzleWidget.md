@@ -13,6 +13,10 @@
 - `EndPuzzle(result)`(`Loop`返回非空时)：先把结果json展平进`PuzzleResultEvent`(delete后mod持有的json就没了)，再delete puzzle、隐藏自己、恢复游戏输入(`bShowMouseCursor=false`+`SetInputMode_GameOnly`+`SetFocusToGameViewport`)，与`ShowCurrentItem`队列清空分支一致。
 - `puzzle`/`canvas`由本类持有。`UpdateMousePos`把鼠标位置换算成画布像素坐标。
 
+- **不能让`Puzzle`活过一局**(2026-11-25)：`puzzle`包着mod dll里创建的实例，mod dll在一局结束时卸载。
+  `AbortPuzzle()`丢弃正在进行的小游戏(不发结果事件)，`AForeverFrameworkActor::EndPlay`在卸载前调它，`NativeDestruct`里再兜底一次。
+  规则见`CONVENTIONS.md`第13节。
+
 ## 依赖关系
 
 - 依赖：Core `Puzzle`、`Dependence/player/canvas.h`、`CanvasInputTranslation`。

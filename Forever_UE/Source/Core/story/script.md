@@ -58,6 +58,8 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 - **`MatchEvent`的触发条件检查在`Milestone::MatchTrigger`内部完成**，不是`Script`这一层单独
   维护的循环，见`Core/story/milestone.md`"MatchTrigger"一节。
 
+
+`BuildChanges`的分派(2026-11-25)：先用`FindChangeKind`把JSON的`type`换成`ChangeKind`(名字表在`Dependence/story/change.cpp`，不认识的名字抛`Unknown change type`)，再`switch (kind)`，每种一个`case`。以前是43个分支的`type == "..."`字符串比较链。有类但还没写解析的种类落到`default`，抛`Change type not implemented yet`。
 ## 主线剧情.script的三个顶层字段
 
 主线剧情`.script`文件（`Config::GetMainStoryScriptPaths()`列出的每一个，不是Job/Organization/Scheduler

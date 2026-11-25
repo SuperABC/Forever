@@ -20,7 +20,7 @@
 - 被谁依赖：`UForeverConfigBridgeSubsystem::ValidateAndStartGame`(依赖校验通过后调用`MountModContent()`，再`OpenLevel`)、`UForeverSaveSubsystem::RequestLoad`(读档时应用存档的mod集合后调用)。UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`，`Initialize()`不需要手动触发。
 
 ## 待办/后续阶段
-- 回菜单后再开始游戏：新增的dll路径会被`Registry::RefreshMods()`补加载，从配置里移除的dll不卸载(保持加载、因不在启用表而被禁用)。
+- 回菜单后再开始游戏：一局结束时mod dll已经全部卸载(`Registry::UnloadMods`，见`CONVENTIONS.md`第13节)，开局时`Registry::RefreshMods()`按当时的配置重新加载。所以菜单里新增、去掉、替换dll都会在下一局生效。**mod的UE内容不在此列**：本类挂载的pak/Content目录不卸载(`mountedMountPoints`只增不减)，去掉一个带内容的mod后它的pak仍被占用到进程退出，不退出程序替换同一个mod的pak不会生效。
 
 ## ReloadConfigFrom(path)
 

@@ -29,7 +29,7 @@ void Story::Init() {
 	// ScriptModName从config.json的"main_story"字段读，不由Core硬编码。
 	string scriptModName = Config::GetMainStoryScriptModName();
 	if (scriptModName.empty() || !scriptFactory.CheckRegistered(scriptModName)) {
-		debugf("Warning: main_story script mod not configured or not registered, Story::Init skipped.\n");
+		debugf(DebugLevel::Warning, "main_story script mod not configured or not registered, Story::Init skipped.\n");
 		return;
 	}
 
@@ -60,7 +60,7 @@ void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, 
 }
 
 bool Story::ApplyChange(const Change* change, const ScriptContext& context) {
-	if (auto setValue = dynamic_cast<const SetValueChange*>(change)) {
+	if (auto setValue = ChangeCast<SetValueChange>(change)) {
 		// 变量名的前缀规则和读取($$x)同一条(ResolveVariableName)：self.前缀写当前脚本自己的变量，
 		// 没有前缀写全局变量；system.(系统变量，只由C++写)和local.(事件字段)脚本不能写，忽略并警告。
 		string key;
@@ -69,7 +69,7 @@ bool Story::ApplyChange(const Change* change, const ScriptContext& context) {
 			: scope == VARIABLE_SCOPE_GLOBAL ? context.global : nullptr;
 		if (target) target->SetValue(key, EvaluateExpression(setValue->GetValue(), context));
 		else if (scope == VARIABLE_SCOPE_SYSTEM || scope == VARIABLE_SCOPE_LOCAL) {
-			debugf("Warning: set_value cannot write read-only variable %s (system./local. are read-only in scripts).\n",
+			debugf(DebugLevel::Warning, "set_value cannot write read-only variable %s (system./local. are read-only in scripts).\n",
 				setValue->GetVariable().c_str());
 		}
 		return true;

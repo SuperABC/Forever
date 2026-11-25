@@ -424,7 +424,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			if (raise) {
 				for (int i = first; i <= last; i++) raised[i] = true;
 			}
-			debugf("Log: Roadnet %s mountain samples [%d,%d] max slope %.3f sea behind %d -> %s (%s).\n",
+			debugf(DebugLevel::Log, "Roadnet %s mountain samples [%d,%d] max slope %.3f sea behind %d -> %s (%s).\n",
 				name.c_str(), first, last, maxSlope, seaBehind ? 1 : 0, raise ? "raise" : "tunnel", why);
 		}
 

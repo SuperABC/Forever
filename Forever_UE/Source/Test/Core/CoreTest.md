@@ -11,6 +11,7 @@
 - `world_build.*`：`LoadTestConfig`(注入顶层 seed 并给每个 mod 条目注入派生 `--seed`)、`BuildWorld`(与 UE 同顺序，逐阶段计时/漏包计数/签名)、`ComputeFingerprint`。
 - `child_world.*`：世界/套件子进程的入口与父进程驱动、指纹比较。
 - `suite_mods.cpp`：只查 mod 接进 Core 之后的事(id 全局唯一、Registry 认得、计数器复位、Config 的 mod 参数)；对 mod 本身的测试在 `Source/Test/Mod`(ModTest，给 mod 作者用，不依赖 Core)。
+- `suite_unload.cpp`：一局结束后的泄漏和mod dll卸载/重载(唯一会销毁世界的套件)，见`Source/Test/README.md`的unload条目。
 - `suite_*.cpp`：各套件；在子进程里跑的套件主体在 `FindSuiteBody`(suite_random.cpp)里登记。
 
 ## 关键设计

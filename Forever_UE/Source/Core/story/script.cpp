@@ -39,7 +39,7 @@ Script::~Script() {
 
 bool Script::ClearCache() {
 	if (liveCount > 0) {
-		debugf("Warning: Script::ClearCache skipped, %d script(s) still alive.\n", liveCount);
+		debugf(DebugLevel::Warning, "Script::ClearCache skipped, %d script(s) still alive.\n", liveCount);
 		return false;
 	}
 	for (auto& [path, fileCache] : caches) {
@@ -125,7 +125,7 @@ void Script::ReadScript(const string& path) {
 	}
 
 	if (!filesystem::exists(path)) {
-		debugf("Warning: Script path does not exist: %s.\n", path.data());
+		debugf(DebugLevel::Warning, "Script path does not exist: %s.\n", path.data());
 		return;
 	}
 
@@ -173,7 +173,7 @@ void Script::ReadScript(const string& path) {
 	}
 	else {
 		fin.close();
-		debugf("Json syntax error in %s: %s.\n", path.data(), reader.GetErrorMessages().data());
+		debugf(DebugLevel::Error, "Json syntax error in %s: %s.\n", path.data(), reader.GetErrorMessages().data());
 		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
 	}
 	fin.close();
@@ -185,7 +185,7 @@ void Script::ReadMilestones(const string& path) {
 	}
 	ReadScript(path);
 	if (caches.find(path) == caches.end()) {
-		debugf("Warning: Read script failed: %s.\n", path.data());
+		debugf(DebugLevel::Warning, "Read script failed: %s.\n", path.data());
 		return;
 	}
 
@@ -444,29 +444,39 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 		string type = obj["type"].AsString();
 		Change* change = nullptr;
 
-		if (type == "set_value") {
+		// 类型名先换成种类(名字表在Dependence/story/change.cpp)，再switch：一步到对应分支，不用逐个比字符串。
+		ChangeKind kind;
+		if (!FindChangeKind(type, kind)) {
+			THROW_EXCEPTION(RuntimeException, "Unknown change type: " + type + ".\n");
+		}
+		switch (kind) {
+		case ChangeKind::SetValue: {
 			auto variable = obj["variable"];
 			auto value = obj["value"];
 			if (variable.IsNull() || value.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing variable or value for set_value change.\n");
 			}
 			change = new SetValueChange(variable.AsString(), value.AsString());
+			break;
 		}
-		else if (type == "global_setting") {
+		case ChangeKind::GlobalSetting: {
 			auto setting = obj["setting"];
 			auto value = obj["value"];
 			if (setting.IsNull() || value.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing setting or value for global_setting change.\n");
 			}
 			change = new GlobalSettingChange(setting.AsString(), value.AsString());
+			break;
 		}
-		else if (type == "place_holder") {
+		case ChangeKind::PlaceHolder: {
 			change = new PlaceHolderChange(obj["label"].AsString());
+			break;
 		}
-		else if (type == "debug_print") {
+		case ChangeKind::DebugPrint: {
 			change = new DebugPrintChange(obj["message"].AsString());
+			break;
 		}
-		else if (type == "add_option") {
+		case ChangeKind::AddOption: {
 			auto name = obj["name"];
 			auto option = obj["option"];
 			if (name.IsNull() || option.IsNull()) {
@@ -480,8 +490,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Unknown category for add_option change (citizen/vehicle/door/elevator/asset).\n");
 			}
 			change = new AddOptionChange(name.AsString(), option.AsString(), categoryText);
+			break;
 		}
-		else if (type == "start_puzzle") {
+		case ChangeKind::StartPuzzle: {
 			auto puzzle = obj["puzzle"];
 			if (puzzle.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing puzzle for start_puzzle change.\n");
@@ -489,74 +500,85 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			// param可选：剧情脚本传给小游戏的启动参数(表达式)，缺省为空串
 			auto param = obj["param"];
 			change = new StartPuzzleChange(puzzle.AsString(), param.IsNull() ? string() : param.AsString());
+			break;
 		}
-		else if (type == "open_shop") {
+		case ChangeKind::OpenShop: {
 			change = new OpenShopChange();
+			break;
 		}
-		else if (type == "pay_wage") {
+		case ChangeKind::PayWage: {
 			auto amount = obj["amount"];
 			if (amount.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing amount for pay_wage change.\n");
 			}
 			change = new PayWageChange(amount.AsString());
+			break;
 		}
-		else if (type == "enter_vehicle") {
+		case ChangeKind::EnterVehicle: {
 			auto vehicle = obj["vehicle"];
 			if (vehicle.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle for enter_vehicle change.\n");
 			}
 			change = new EnterVehicleChange(vehicle.AsString());
+			break;
 		}
-		else if (type == "vehicle_command") {
+		case ChangeKind::VehicleCommand: {
 			auto vehicle = obj["vehicle"];
 			auto command = obj["command"];
 			if (vehicle.IsNull() || command.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle or command for vehicle_command change.\n");
 			}
 			change = new VehicleCommandChange(vehicle.AsString(), command.AsString());
+			break;
 		}
-		else if (type == "vehicle_navigate") {
+		case ChangeKind::VehicleNavigate: {
 			auto vehicle = obj["vehicle"];
 			auto destination = obj["destination"];
 			if (vehicle.IsNull() || destination.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle or destination for vehicle_navigate change.\n");
 			}
 			change = new VehicleNavigateChange(vehicle.AsString(), destination.AsString());
+			break;
 		}
-		else if (type == "show_route") {
+		case ChangeKind::ShowRoute: {
 			auto target = obj["name"];
 			if (target.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name for show_route change.\n");
 			}
 			change = new ShowRouteChange(target.AsString());
+			break;
 		}
-		else if (type == "visualize_navigation") {
+		case ChangeKind::VisualizeNavigation: {
 			auto address = obj["address"];
 			if (address.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing address for visualize_navigation change.\n");
 			}
 			change = new VisualizeNavigationChange(address.AsString());
+			break;
 		}
-		else if (type == "board_vehicle") {
+		case ChangeKind::BoardVehicle: {
 			auto vehicle = obj["vehicle"];
 			if (vehicle.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle for board_vehicle change.\n");
 			}
 			change = new BoardVehicleChange(vehicle.AsString());
+			break;
 		}
-		else if (type == "leave_vehicle") {
+		case ChangeKind::LeaveVehicle: {
 			auto vehicle = obj["vehicle"];
 			if (vehicle.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle for leave_vehicle change.\n");
 			}
 			change = new LeaveVehicleChange(vehicle.AsString());
+			break;
 		}
-		else if (type == "force_leave") {
+		case ChangeKind::ForceLeave: {
 			// vehicle可以省略(留空=玩家当前所在的任何载具)，见ForceLeaveChange。
 			auto vehicle = obj["vehicle"];
 			change = new ForceLeaveChange(vehicle.IsNull() ? string() : vehicle.AsString());
+			break;
 		}
-		else if (type == "set_door") {
+		case ChangeKind::SetDoor: {
 			// access可以写JSON布尔(true/false)，也可以写字符串表达式——AsString()把JSON布尔转成
 			// "true"/"false"，执行时统一按布尔表达式求值。
 			auto name = obj["name"];
@@ -565,8 +587,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or access for set_door change.\n");
 			}
 			change = new SetDoorChange(name.AsString(), access.AsString());
+			break;
 		}
-		else if (type == "global_message") {
+		case ChangeKind::GlobalMessage: {
 			auto message = obj["message"];
 			if (message.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing message for global_message change.\n");
@@ -592,16 +615,18 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				}
 			}
 			change = new GlobalMessageChange(message.AsString(), categoryText);
+			break;
 		}
-		else if (type == "change_weather") {
+		case ChangeKind::ChangeWeather: {
 			// weather是表达式，求值结果是天气名：sunny/cloudy/overcast/light_rain/heavy_rain/light_snow/heavy_snow。
 			auto weather = obj["weather"];
 			if (weather.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing weather for change_weather change.\n");
 			}
 			change = new ChangeWeatherChange(weather.AsString());
+			break;
 		}
-		else if (type == "for_range") {
+		case ChangeKind::ForRange: {
 			// {"var","from","to","step"(可选，默认1),"do":[changes]}，含两端；循环变量写进当前脚本自己的
 			// 变量池($$self.<var>)，见AForeverFrameworkActor::ApplyChange的for_range分支。
 			auto var = obj["var"];
@@ -613,45 +638,56 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			vector<const Change*> nested;
 			for (Change* child : BuildChanges(obj["do"])) nested.push_back(child);
 			change = new ForRangeChange(var.AsString(), from.AsString(), to.AsString(), obj["step"].AsString(), move(nested));
+			break;
 		}
-		else if (type == "pick_asset") {
+		case ChangeKind::PickAsset: {
 			// asset可以省略(=执行这个Change的脚本所属的资产)。
 			change = new PickAssetChange(obj["asset"].AsString());
+			break;
 		}
-		else if (type == "spawn_effect") {
+		case ChangeKind::SpawnEffect: {
 			// effect/scale/asset/position/normal都可以省略：不生成特效、缩放1、执行这个Change的脚本所属的资产的位置、朝上。
 			change = new SpawnEffectChange(obj["effect"].AsString(), obj["scale"].AsString(), obj["asset"].AsString(),
 				obj["position"].AsString(), obj["normal"].AsString());
+			break;
 		}
-		else if (type == "sound_effect") {
+		case ChangeKind::SoundEffect: {
 			// position/asset/volume/pitch都可以省略：执行脚本所属资产的位置、音量和音调倍率1。
 			change = new SoundEffectChange(obj["sound"].AsString(), obj["position"].AsString(), obj["asset"].AsString(),
 				obj["volume"].AsString(), obj["pitch"].AsString());
+			break;
 		}
-		else if (type == "spawn_actor") {
+		case ChangeKind::SpawnActor: {
 			// direction/scale可以省略：不旋转、缩放1。
 			change = new SpawnActorChange(obj["actor"].AsString(), obj["position"].AsString(), obj["direction"].AsString(),
 				obj["scale"].AsString());
+			break;
 		}
-		else if (type == "single_damage") {
+		case ChangeKind::SingleDamage: {
 			// source/weapon/part只用于击杀信息，可以省略。
 			change = new SingleDamageChange(obj["target"].AsString(), obj["damage"].AsString(), obj["source"].AsString(),
 				obj["weapon"].AsString(), obj["part"].AsString());
+			break;
 		}
-		else if (type == "add_satiety") {
+		case ChangeKind::AddSatiety: {
 			// target省略=玩家当前操控的市民。
 			change = new AddSatietyChange(obj["target"].AsString(), obj["amount"].AsString());
+			break;
 		}
-		else if (type == "area_damage") {
+		case ChangeKind::AreaDamage: {
 			// position省略=执行脚本所属资产的位置；occlusion省略=false；power省略=1。
 			change = new AreaDamageChange(obj["position"].AsString(), obj["radius"].AsString(), obj["damage"].AsString(),
 				obj["occlusion"].AsString(), obj["power"].AsString(), obj["source"].AsString(), obj["weapon"].AsString());
+			break;
 		}
-		else if (type == "destroy_asset") {
+		case ChangeKind::DestroyAsset: {
 			// asset可以省略(=执行这个Change的脚本所属的资产)。
 			change = new DestroyAssetChange(obj["asset"].AsString());
+			break;
 		}
-		else if (type == "grant_asset" || type == "deduct_asset" || type == "drop_asset") {
+		case ChangeKind::GrantAsset:
+		case ChangeKind::DeductAsset:
+		case ChangeKind::DropAsset: {
 			// JSON里的"type"已经是Change类型本身，资产类型的字段叫asset_type。
 			auto assetType = obj["asset_type"];
 			if (assetType.IsNull()) {
@@ -659,27 +695,30 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			// count可以省略(=1)。
 			string count = obj["count"].AsString();
-			if (type == "grant_asset") change = new GrantAssetChange(assetType.AsString(), count);
-			else if (type == "deduct_asset") change = new DeductAssetChange(assetType.AsString(), count);
+			if (kind == ChangeKind::GrantAsset) change = new GrantAssetChange(assetType.AsString(), count, obj["slot"].AsString()); // slot可以省略
+			else if (kind == ChangeKind::DeductAsset) change = new DeductAssetChange(assetType.AsString(), count);
 			else change = new DropAssetChange(assetType.AsString(), count);
+			break;
 		}
-		else if (type == "npc_revive") {
+		case ChangeKind::NPCRevive: {
 			auto name = obj["name"];
 			if (name.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name for npc_revive change.\n");
 			}
 			// health可以省略(=满血)。
 			change = new NPCReviveChange(name.AsString(), obj["health"].AsString());
+			break;
 		}
-		else if (type == "npc_teleport") {
+		case ChangeKind::NPCTeleport: {
 			auto name = obj["name"];
 			auto destination = obj["destination"];
 			if (name.IsNull() || destination.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or destination for npc_teleport change.\n");
 			}
 			change = new NPCTeleportChange(name.AsString(), destination.AsString());
+			break;
 		}
-		else if (type == "spawn_npc") {
+		case ChangeKind::SpawnNpc: {
 			auto name = obj["name"];
 			auto gender = obj["gender"];
 			auto birthday = obj["birthday"];
@@ -692,8 +731,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new SpawnNpcChange(obj["avatar"].AsString(), name.AsString(), gender.AsString(), birthday.AsString(),
 				obj["height"].AsString(), obj["weight"].AsString(), obj["nick"].AsString(), obj["deposit"].AsString(),
 				obj["phone"].AsString(), obj["home"].AsString(), jobs, obj["scheduler"].AsString(), obj["economy"].AsString());
+			break;
 		}
-		else if (type == "create_timer") {
+		case ChangeKind::CreateTimer: {
 			auto name = obj["name"];
 			auto time = obj["time"];
 			if (name.IsNull() || time.IsNull()) {
@@ -703,23 +743,26 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			// mode省略=absolute，可选absolute/relative/real/next，见CreateTimerChange::SetMode。
 			change = new CreateTimerChange(name.AsString(), time.AsString(), obj["category"].AsString(), obj["label"].AsString(),
 				obj["mode"].AsString());
+			break;
 		}
-		else if (type == "jump_time") {
+		case ChangeKind::JumpTime: {
 			auto time = obj["time"];
 			if (time.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing time for jump_time change.\n");
 			}
 			// mode同create_timer(absolute/relative/next，不支持real)，省略=absolute。
 			change = new JumpTimeChange(time.AsString(), obj["mode"].AsString());
+			break;
 		}
-		else if (type == "remove_timer") {
+		case ChangeKind::RemoveTimer: {
 			auto name = obj["name"];
 			if (name.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name for remove_timer change.\n");
 			}
 			change = new RemoveTimerChange(name.AsString());
+			break;
 		}
-		else if (type == "launch_elevator") {
+		case ChangeKind::LaunchElevator: {
 			auto building = obj["building"];
 			auto elevator = obj["elevator"];
 			auto command = obj["command"];
@@ -727,8 +770,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing elevator or command for launch_elevator change.\n");
 			}
 			change = new LaunchElevatorChange(building.AsString(), elevator.AsString(), command.AsString());
+			break;
 		}
-		else if (type == "remove_option") {
+		case ChangeKind::RemoveOption: {
 			auto name = obj["name"];
 			auto option = obj["option"];
 			if (name.IsNull() || option.IsNull()) {
@@ -742,8 +786,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Unknown category for remove_option change (citizen/vehicle/door/elevator/asset).\n");
 			}
 			change = new RemoveOptionChange(name.AsString(), option.AsString(), categoryText);
+			break;
 		}
-		else if (type == "npc_navigate") {
+		case ChangeKind::NPCNavigate: {
 			auto name = obj["name"];
 			auto destination = obj["destination"];
 			if (name.IsNull() || destination.IsNull()) {
@@ -758,16 +803,18 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				}
 			}
 			change = new NPCNavigateChange(name.AsString(), destination.AsString(), move(speed));
+			break;
 		}
-		else if (type == "citizen_flee") {
+		case ChangeKind::CitizenFlee: {
 			auto name = obj["name"];
 			auto from = obj["from"];
 			if (name.IsNull() || from.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or from for citizen_flee change.\n");
 			}
 			change = new CitizenFleeChange(name.AsString(), from.AsString());
+			break;
 		}
-		else if (type == "assign_task") {
+		case ChangeKind::AssignTask: {
 			auto destination = obj["destination"];
 			if (destination.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing destination for assign_task change.\n");
@@ -791,15 +838,17 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				}
 			}
 			change = new AssignTaskChange(obj["task"].AsString(), destination.AsString(), move(vehicles), obj["worker"].AsString(), move(speed));
+			break;
 		}
-		else if (type == "change_control") {
+		case ChangeKind::ChangeControl: {
 			auto name = obj["name"];
 			if (name.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name for change_control change.\n");
 			}
 			change = new ChangeControlChange(name.AsString());
+			break;
 		}
-		else if (type == "record_object") {
+		case ChangeKind::RecordObject: {
 			// {"object":"zone|building|room","kind":mod type(可空),"policy":"first|random"(可空),"variable":结果变量}，
 			// 见Map::ApplyChange。
 			auto object = obj["object"];
@@ -808,8 +857,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing object or variable for record_object change.\n");
 			}
 			change = new RecordObjectChange(object.AsString(), obj["kind"].AsString(), obj["policy"].AsString(), variable.AsString());
+			break;
 		}
-		else if (type == "register_door") {
+		case ChangeKind::RegisterDoor: {
 			auto name = obj["name"];
 			auto citizen = obj["citizen"];
 			if (name.IsNull() || citizen.IsNull()) {
@@ -817,10 +867,12 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			// pass省略时按true(允许通过)。
 			change = new RegisterDoorChange(name.AsString(), citizen.AsString(), obj["pass"].AsString());
+			break;
 		}
-		else {
-			// 其余变化类型的JSON分发分支等该类型被点名实现时再补，见Core/story/script.md。
+		default: {
+			// 其余种类(有类、名字表里也有，但还没写JSON解析)等该类型被点名实现时再补，见Core/story/script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");
+		}
 		}
 
 		change->SetCondition(obj["condition"].AsString());

@@ -451,7 +451,7 @@ bool Expression::Parse(const string& expr) {
 		return true;
 	}
 	catch (const exception& e) {
-		cerr << "Parse error: " << e.what() << endl;
+		debugf(DebugLevel::Warning, "Expression parse error: %s\n", e.what());
 		root = nullptr;
 		return false;
 	}
@@ -479,7 +479,7 @@ ValueType Expression::EvaluateValue(const ScriptContext& context) const {
 ValueType EvaluateExpression(const string& source, const ScriptContext& context) {
 	Expression expression;
 	if (!expression.Parse(source)) {
-		debugf("EvaluateExpression: parse failed, treated as empty: %s\n", source.c_str());
+		debugf(DebugLevel::Warning, "EvaluateExpression: parse failed, treated as empty: %s\n", source.c_str());
 	}
 	return expression.EvaluateValue(context);
 }
@@ -488,7 +488,7 @@ bool EvaluateExpressionBool(const string& source, const ScriptContext& context) 
 	Expression expression;
 	// 解析失败的条件按false处理(而不是被当成空表达式=恒成立)
 	if (!expression.Parse(source)) {
-		debugf("EvaluateExpressionBool: parse failed, treated as false: %s\n", source.c_str());
+		debugf(DebugLevel::Warning, "EvaluateExpressionBool: parse failed, treated as false: %s\n", source.c_str());
 		return false;
 	}
 	return expression.EvaluateBool(context);

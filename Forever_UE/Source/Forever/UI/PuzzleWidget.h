@@ -26,8 +26,13 @@ public:
 	// 与config.json里puzzle_mods的静态args不是一回事。
 	void StartPuzzle(const FString& puzzleId, const FString& param = FString());
 
+	// 丢弃正在进行的小游戏(不发结果事件)：一局结束时AForeverFrameworkActor::EndPlay调，Widget销毁时也调。
+	// puzzle持有mod dll里创建的实例，必须在mod dll卸载之前销毁，见CONVENTIONS.md"mod dll的生命周期"。
+	void AbortPuzzle();
+
 protected:
 	virtual void NativeConstruct() override; // 默认Collapsed，没有小游戏在跑就不显示
+	virtual void NativeDestruct() override;  // 兜底：还有没结束的小游戏就丢弃
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;

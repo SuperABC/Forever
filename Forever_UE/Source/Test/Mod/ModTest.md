@@ -22,7 +22,8 @@ mod作者手里只有这些。它把mod dll加载进来，像游戏那样注册�
 ModTest <mod.dll|目录>... [--with <mod.dll|目录>]... [--config config.json] [--seed N] [--out 目录]
 ```
 
-- `<mod.dll|目录>`：要测的mod dll。给目录就递归扫描里面的dll(跳过带`Debug`的目录段；不导出任何`GetMod<Concepts>`的dll不是mod，忽略)。
+- `<mod.dll|目录>`：要测的mod dll。给目录就递归扫描里面的dll(不导出任何`GetMod<Concepts>`的dll不是mod，调试版的dll不能和Release宿主混用，这两种都忽略，而且**不加载**——
+  只读文件判断，见`Dependence/common/mod_concepts.md`"探测")。
 - `--with`：只加载、不测的dll。它们的mod id用来解析被测mod的引用和依赖声明，也参与重名检查。
 - `--config`：从这份`config.json`的`"<concept>_mods"`数组里取每个mod的参数(没写的mod参数为空串)；没给任何dll/目录时，
   测它的`dll_paths`下的全部dll。
@@ -52,8 +53,9 @@ ModTest --config Resource\Config\config.json --out Saved\TestReports\<时间>\mo
 
 对每个被测的dll：
 
-- 能`LoadLibrary`、是mod dll(命令行直接点名的文件才报，目录里扫到的非mod dll直接忽略)。
-- 导出`BindRandomHost`(没有的话这个dll里的`GetRandom`不受种子控制，见`Dependence/common/random.h`)。
+- 是mod dll、不是调试版、能`LoadLibrary`(命令行直接点名的文件才报，并说明是哪种原因；目录里扫到的直接忽略)。
+- 导出`BindModHost`(入口cpp写`FOREVER_MOD_BIND_HOST`；没有的话这个dll里的`GetRandom`不受种子控制、`debugf`进不了宿主的日志，
+  见`Dependence/common/mod_concepts.md`"宿主绑定")。
 - 至少提供一个mod。
 - `GetModDependencies`声明的依赖：声明方必须是这个dll自己提供的id；被依赖的id必须由加载进来的某个dll提供(否则用`--with`带上)。
 - **依赖不能成环**(含自己依赖自己)：配置界面把"被某个已启用的mod依赖"的mod锁成不能取消，成环的几个mod一旦都启用就互相锁死。
@@ -103,12 +105,17 @@ ModTest --config Resource\Config\config.json --out Saved\TestReports\<时间>\mo
 
 - **只依赖Dependence**：工程只链接`Dependence.lib`，include路径没有`Core`。所以它不能用Core的`Config`/`ModLoader`/`Registry`，
   自己做了一份很小的加载：`LoadLibrary`、按`Dependence/common/mod_concepts.h`的符号表`GetProcAddress`、把随机host交给dll
-  (`BindRandomHost`)、调`RegisterMod<Concepts>`。23个Factory是ModTest自己的实例(`ModTestHost`)。
+  (`BindModHost`)、调`RegisterMod<Concepts>`。23个Factory是ModTest自己的实例(`ModTestHost`)。
 - **发现的mod一律视为启用**：ModTest把所有发现的id都放进Factory的参数表(参数来自`--config`或空串)，不受`config.json`里
   启用/禁用的影响。`--seed`参数像游戏里一样被剥掉，不传给mod的构造函数。
 - **引用按"加载进来的id集合"校验**，不是按"是否启用"：作者测单个mod时，把它引用的mod所在的dll用`--with`带上即可。
 - **引用是"收集再统一核对"**：各concept的`ValidateConcept`只管用`Refer`/`ReferScript`/`ReferDoor`把看到的id记进
   `ModOutcome::references`，`RunMod`最后由`CheckReferences`统一判"有没有dll提供"。新加一个引用字段只要多写一行`Refer`。
+- **mod的`debugf`打到标准错误**：ModTest不换输出函数，被测mod的日志带着`[Log]`/`[Warning]`/`[Error]`前缀直接出现在控制台，
+  和测试结果(标准输出)分开，可以用`2>`单独存。
+- **不知道的事不判错**：站点没有端口可能是贴路的站(贴路函数在注册时提供，实例上看不出来)；家具模型不在内置尺寸表里就只查锚点。
+- 和CoreTest共用`Source/Test/Core/test_framework.*`(`TestRun`的Check/Metric/Note和报告格式)，这个文件不依赖Core。
+- 不`FreeLibrary`：跑完进程就退出。
 
 ## 依赖关系
 

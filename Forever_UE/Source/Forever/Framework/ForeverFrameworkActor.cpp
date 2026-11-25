@@ -66,6 +66,7 @@
 #include "GameFramework/DefaultPawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/ForeverPlayerController.h"
+#include "UI/PuzzleWidget.h"
 #include "UI/FadeSubsystem.h"
 #include "HAL/PlatformTime.h"
 
@@ -140,6 +141,11 @@ void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 先等异步寻路任务跑完;不能用"派发GameThread任务再等"的方式，EndPlay本身在GameThread上会死锁。
 	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
 
+	// 还开着的小游戏持有mod实例，先丢弃(Widget本身晚于这里销毁)。
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UPuzzleWidget* puzzleWidget = playerController->GetPuzzleWidget()) puzzleWidget->AbortPuzzle();
+	}
+
 	delete player;
 	player = nullptr;
 	delete traffic;
@@ -156,6 +162,12 @@ void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	populace = nullptr;
 	delete map;
 	map = nullptr;
+
+	// mod dll只在一局期间留在进程里：各域都销毁之后注销并卸载，回到菜单时进程里没有任何mod dll，
+	// 菜单里可以随意添加/去掉/替换dll。下一局BeginPlay的RefreshMods按当时的配置重新加载。
+	// 还有mod实例活着(=泄漏)的dll不会被卸载，Registry会打警告(LogForeverCore)，见CONVENTIONS.md"mod dll的生命周期"。
+	Script::ClearCache();
+	Registry::Get().UnloadMods();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -369,17 +381,20 @@ namespace {
 void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext& context) {
 	// 所有Change自己的condition：非空且求值为假就不执行。for_range的子change、分支选项的changes、
 	// 里程碑的changes都走这个入口，所以这里统一判断一次。
-	if (change && !change->GetCondition().empty() && !EvaluateExpressionBool(change->GetCondition(), context)) return;
+	if (!change) return;
+	if (!change->GetCondition().empty() && !EvaluateExpressionBool(change->GetCondition(), context)) return;
 
 	// 脚本给自己加/删选项($$self.name)：脚本记着它的所有者，直接作用在所有者上，不按名字去各个域查找。
-	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+	if (auto* addOption = ChangeCast<AddOptionChange>(change)) {
 		if (ApplySelfOption(addOption->GetName(), addOption->GetOption(), true, context)) return;
 	}
-	else if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+	else if (auto* removeOption = ChangeCast<RemoveOptionChange>(change)) {
 		if (ApplySelfOption(removeOption->GetName(), removeOption->GetOption(), false, context)) return;
 	}
 
-	if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
+	switch (change->GetKind()) {
+	case ChangeKind::NPCNavigate: {
+		auto* nav = static_cast<const NPCNavigateChange*>(change);
 		// 按change自带的姓名/房间地址反查(NPCNavigateChange::destination是纯std::string，见change.h)。
 		// mod生成的是现成的姓名/地址;脚本里写的可能是表达式($$self.name)——先按原样查，查不到再求值后查。
 		Citizen* citizen = populace ? populace->FindCitizenByName(nav->GetName()) : nullptr;
@@ -404,7 +419,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* flee = dynamic_cast<const CitizenFleeChange*>(change)) {
+	case ChangeKind::CitizenFlee: {
+		auto* flee = static_cast<const CitizenFleeChange*>(change);
 		// name/from都是市民姓名：先按原样查，查不到再当表达式求值后查(和npc_navigate一致)。
 		auto findByName = [&](const std::string& text) -> Citizen* {
 			Citizen* found = populace ? populace->FindCitizenByName(text) : nullptr;
@@ -419,7 +435,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* assign = dynamic_cast<const AssignTaskChange*>(change)) {
+	case ChangeKind::AssignTask: {
+		auto* assign = static_cast<const AssignTaskChange*>(change);
 		// 组织派员工去某地(走路或开组织的车，单程)。只有组织脚本能发；字段都是表达式。一次尝试，派不出去给组织脚本发task_failed。
 		Organization* organization = society ? society->FindOrganizationByScript(context.self) : nullptr;
 		if (!organization || !populaceFramework) {
@@ -452,7 +469,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* globalSetting = dynamic_cast<const GlobalSettingChange*>(change)) {
+	case ChangeKind::GlobalSetting: {
+		auto* globalSetting = static_cast<const GlobalSettingChange*>(change);
 		// 目前只认time_flow_ratio(游戏时钟流速，1.0=1真实秒1游戏分钟)，和主线脚本global_settings同名。
 		const std::string setting = globalSetting->GetSetting();
 		if (setting == "time_flow_ratio") {
@@ -464,13 +482,14 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (dynamic_cast<const PlaceHolderChange*>(change)) {
+	case ChangeKind::PlaceHolder: {
 		// 只是ScriptMod::FindLabel用来定位插入位置的锚点，执行时什么都不做——不能落到下面七个域，
 		// 否则每次都会打"未实现"警告。
 		return;
 	}
 
-	if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
+	case ChangeKind::DebugPrint: {
+		auto* debugPrint = static_cast<const DebugPrintChange*>(change);
 		std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
 		if (GEngine) {
 			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, UTF8_TO_TCHAR(text.c_str()));
@@ -478,35 +497,40 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* controlChange = dynamic_cast<const ChangeControlChange*>(change)) {
+	case ChangeKind::ChangeControl: {
+		auto* controlChange = static_cast<const ChangeControlChange*>(change);
 		// 操控权切换逻辑在UForeverStoryFrameworkComponent::ApplyControlChange里。
 		if (storyFramework) storyFramework->ApplyControlChange(controlChange, context);
 		return;
 	}
 
-	if (auto* startPuzzle = dynamic_cast<const StartPuzzleChange*>(change)) {
+	case ChangeKind::StartPuzzle: {
+		auto* startPuzzle = static_cast<const StartPuzzleChange*>(change);
 		// Core不知道UMG Widget，见UForeverStoryFrameworkComponent::ApplyStartPuzzle。
 		if (storyFramework) storyFramework->ApplyStartPuzzle(startPuzzle, context);
 		return;
 	}
 
-	if (dynamic_cast<const OpenShopChange*>(change)) {
+	case ChangeKind::OpenShop: {
 		// 弹商店界面也是UMG，同start_puzzle只能转发给UE层。
 		if (storyFramework) storyFramework->ApplyOpenShop(context);
 		return;
 	}
 
-	if (auto* payWage = dynamic_cast<const PayWageChange*>(change)) {
+	case ChangeKind::PayWage: {
+		auto* payWage = static_cast<const PayWageChange*>(change);
 		if (storyFramework) storyFramework->ApplyPayWage(payWage, context);
 		return;
 	}
 
-	if (auto* spawnActor = dynamic_cast<const SpawnActorChange*>(change)) {
+	case ChangeKind::SpawnActor: {
+		auto* spawnActor = static_cast<const SpawnActorChange*>(change);
 		if (storyFramework) storyFramework->ApplySpawnActor(spawnActor, context);
 		return;
 	}
 
-	if (auto* forRange = dynamic_cast<const ForRangeChange*>(change)) {
+	case ChangeKind::ForRange: {
+		auto* forRange = static_cast<const ForRangeChange*>(change);
 		// 子Change可能是任何类型(包括UE层的)，所以循环放在这个统一入口里递归。循环变量写进当前脚本
 		// 自己的变量池：var写"floor"或"self.floor"都是$$self.floor。含两端，step省略为1；循环次数
 		// 超过kMaxForRangeIterations截断并警告。子Change的condition每轮都按当前循环变量求值。
@@ -544,7 +568,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* globalMessage = dynamic_cast<const GlobalMessageChange*>(change)) {
+	case ChangeKind::GlobalMessage: {
+		auto* globalMessage = static_cast<const GlobalMessageChange*>(change);
 		// 求出消息文本，广播一个GlobalMessageEvent给所有挂了Script的东西，见
 		// UForeverStoryFrameworkComponent::BroadcastGlobalMessage。
 		if (storyFramework) {
@@ -553,7 +578,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* teleport = dynamic_cast<const NPCTeleportChange*>(change)) {
+	case ChangeKind::NPCTeleport: {
+		auto* teleport = static_cast<const NPCTeleportChange*>(change);
 		// name/destination都是表达式；destination是房间地址，和npc_navigate同一种写法。
 		std::string name = ToString(EvaluateExpression(teleport->GetName(), context));
 		std::string destination = ToString(EvaluateExpression(teleport->GetDestination(), context));
@@ -571,86 +597,103 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	}
 
 	// 背包相关Change：需要场景里的Actor和事件分发，交给资产框架组件。
-	if (auto* pickAsset = dynamic_cast<const PickAssetChange*>(change)) {
+	case ChangeKind::PickAsset: {
+		auto* pickAsset = static_cast<const PickAssetChange*>(change);
 		if (assetFramework) assetFramework->ApplyPickAsset(pickAsset, context);
 		return;
 	}
-	if (auto* grantAsset = dynamic_cast<const GrantAssetChange*>(change)) {
+	case ChangeKind::GrantAsset: {
+		auto* grantAsset = static_cast<const GrantAssetChange*>(change);
 		if (assetFramework) assetFramework->ApplyGrantAsset(grantAsset, context);
 		return;
 	}
-	if (auto* deductAsset = dynamic_cast<const DeductAssetChange*>(change)) {
+	case ChangeKind::DeductAsset: {
+		auto* deductAsset = static_cast<const DeductAssetChange*>(change);
 		if (assetFramework) assetFramework->ApplyDeductAsset(deductAsset, context);
 		return;
 	}
-	if (auto* dropAsset = dynamic_cast<const DropAssetChange*>(change)) {
+	case ChangeKind::DropAsset: {
+		auto* dropAsset = static_cast<const DropAssetChange*>(change);
 		if (assetFramework) assetFramework->ApplyDropAsset(dropAsset, context);
 		return;
 	}
-	if (auto* spawnEffect = dynamic_cast<const SpawnEffectChange*>(change)) {
+	case ChangeKind::SpawnEffect: {
+		auto* spawnEffect = static_cast<const SpawnEffectChange*>(change);
 		if (assetFramework) assetFramework->ApplySpawnEffect(spawnEffect, context);
 		return;
 	}
-	if (auto* soundEffect = dynamic_cast<const SoundEffectChange*>(change)) {
+	case ChangeKind::SoundEffect: {
+		auto* soundEffect = static_cast<const SoundEffectChange*>(change);
 		if (assetFramework) assetFramework->ApplySoundEffect(soundEffect, context);
 		return;
 	}
-	if (auto* destroyAsset = dynamic_cast<const DestroyAssetChange*>(change)) {
+	case ChangeKind::DestroyAsset: {
+		auto* destroyAsset = static_cast<const DestroyAssetChange*>(change);
 		if (assetFramework) assetFramework->ApplyDestroyAsset(destroyAsset, context);
 		return;
 	}
-	if (auto* singleDamage = dynamic_cast<const SingleDamageChange*>(change)) {
+	case ChangeKind::SingleDamage: {
+		auto* singleDamage = static_cast<const SingleDamageChange*>(change);
 		if (assetFramework) assetFramework->ApplySingleDamage(singleDamage, context);
 		return;
 	}
-	if (auto* addSatiety = dynamic_cast<const AddSatietyChange*>(change)) {
+	case ChangeKind::AddSatiety: {
+		auto* addSatiety = static_cast<const AddSatietyChange*>(change);
 		if (assetFramework) assetFramework->ApplyAddSatiety(addSatiety, context);
 		return;
 	}
-	if (auto* areaDamage = dynamic_cast<const AreaDamageChange*>(change)) {
+	case ChangeKind::AreaDamage: {
+		auto* areaDamage = static_cast<const AreaDamageChange*>(change);
 		if (assetFramework) assetFramework->ApplyAreaDamage(areaDamage, context);
 		return;
 	}
 
-	if (auto* reviveNpc = dynamic_cast<const NPCReviveChange*>(change)) {
+	case ChangeKind::NPCRevive: {
+		auto* reviveNpc = static_cast<const NPCReviveChange*>(change);
 		ApplyReviveNpc(reviveNpc, context);
 		return;
 	}
 
-	if (auto* spawnNpc = dynamic_cast<const SpawnNpcChange*>(change)) {
+	case ChangeKind::SpawnNpc: {
+		auto* spawnNpc = static_cast<const SpawnNpcChange*>(change);
 		ApplySpawnNpc(spawnNpc, context);
 		return;
 	}
 
-	if (auto* createTimer = dynamic_cast<const CreateTimerChange*>(change)) {
+	case ChangeKind::CreateTimer: {
+		auto* createTimer = static_cast<const CreateTimerChange*>(change);
 		// 计时器的归属要按脚本的稳定键记录(可能指向别的域的对象，见story.md"计时器")，需要全部域，
 		// 交给StoryFramework处理。
 		if (storyFramework) storyFramework->ApplyCreateTimer(createTimer, context);
 		return;
 	}
 
-	if (auto* jumpTime = dynamic_cast<const JumpTimeChange*>(change)) {
+	case ChangeKind::JumpTime: {
+		auto* jumpTime = static_cast<const JumpTimeChange*>(change);
 		Time target;
 		if (storyFramework && storyFramework->ResolveJumpTarget(jumpTime, context, target)) BeginTimeSkip(target);
 		return;
 	}
 
-	if (auto* removeTimer = dynamic_cast<const RemoveTimerChange*>(change)) {
+	case ChangeKind::RemoveTimer: {
+		auto* removeTimer = static_cast<const RemoveTimerChange*>(change);
 		if (storyFramework) storyFramework->ApplyRemoveTimer(removeTimer, context);
 		return;
 	}
 
-	if (auto* vehicleCommand = dynamic_cast<const VehicleCommandChange*>(change)) {
+	case ChangeKind::VehicleCommand: {
+		auto* vehicleCommand = static_cast<const VehicleCommandChange*>(change);
 		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(vehicleCommand->GetVehicle(), context)).data());
 		const std::string& command = vehicleCommand->GetCommand();
 		if (!trafficFramework) return;
-		if (command == "run") trafficFramework->StartBusTestRun(vehicleName);
-		else if (command == "stop") trafficFramework->StopBusRun(vehicleName);
+		if (command == "run") trafficFramework->StartVehicleLineRun(vehicleName);
+		else if (command == "stop") trafficFramework->StopVehicleLineRun(vehicleName);
 		else UE_LOG(LogTemp, Warning, TEXT("vehicle_command: unknown command %s"), UTF8_TO_TCHAR(command.c_str()));
 		return;
 	}
 
-	if (auto* vehicleNavigate = dynamic_cast<const VehicleNavigateChange*>(change)) {
+	case ChangeKind::VehicleNavigate: {
+		auto* vehicleNavigate = static_cast<const VehicleNavigateChange*>(change);
 		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(vehicleNavigate->GetVehicle(), context)).data());
 		// "random"是字面量，不是表达式；其余当表达式求值，求不出来就按原文当地址。
 		std::string destination = vehicleNavigate->GetDestination();
@@ -662,12 +705,14 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* showRoute = dynamic_cast<const ShowRouteChange*>(change)) {
+	case ChangeKind::ShowRoute: {
+		auto* showRoute = static_cast<const ShowRouteChange*>(change);
 		if (trafficFramework) trafficFramework->ToggleRouteWatch(UTF8_TO_TCHAR(ToString(EvaluateExpression(showRoute->GetTarget(), context)).c_str()));
 		return;
 	}
 
-	if (auto* visualize = dynamic_cast<const VisualizeNavigationChange*>(change)) {
+	case ChangeKind::VisualizeNavigation: {
+		auto* visualize = static_cast<const VisualizeNavigationChange*>(change);
 		// 地址先按原文查，查不到再当表达式求值（和npc_navigate一致）。
 		Room* target = map ? map->LocateRoom(visualize->GetAddress()) : nullptr;
 		if (!target && map) target = map->LocateRoom(ToString(EvaluateExpression(visualize->GetAddress(), context)));
@@ -693,28 +738,35 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* enterVehicle = dynamic_cast<const EnterVehicleChange*>(change)) {
+	case ChangeKind::EnterVehicle: {
+		auto* enterVehicle = static_cast<const EnterVehicleChange*>(change);
 		// Core不认识Actor/Controller，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。
 		if (storyFramework) storyFramework->ApplyEnterVehicle(enterVehicle, context);
 		return;
 	}
 
 	// 搭乘/下车/强制下车同理，见UForeverStoryFrameworkComponent::ApplyBoardVehicle等。
-	if (auto* boardVehicle = dynamic_cast<const BoardVehicleChange*>(change)) {
+	case ChangeKind::BoardVehicle: {
+		auto* boardVehicle = static_cast<const BoardVehicleChange*>(change);
 		if (storyFramework) storyFramework->ApplyBoardVehicle(boardVehicle, context);
 		return;
 	}
-	if (auto* leaveVehicle = dynamic_cast<const LeaveVehicleChange*>(change)) {
+	case ChangeKind::LeaveVehicle: {
+		auto* leaveVehicle = static_cast<const LeaveVehicleChange*>(change);
 		if (storyFramework) storyFramework->ApplyLeaveVehicle(leaveVehicle, context);
 		return;
 	}
-	if (auto* forceLeave = dynamic_cast<const ForceLeaveChange*>(change)) {
+	case ChangeKind::ForceLeave: {
+		auto* forceLeave = static_cast<const ForceLeaveChange*>(change);
 		if (storyFramework) storyFramework->ApplyForceLeave(forceLeave, context);
 		return;
 	}
+	default:
+		break;
+	}
 
 	// 转发给七个域，谁认识就处理(同一种Change可以有多个域认识，如add_option)。都不认识才打"未实现"警告
-	// (用UE_LOG，进Forever.log;Core的debugf只走OutputDebugString)。
+	// (用UE_LOG，进Forever.log)。
 	bool handled = false;
 	if (map) handled |= map->ApplyChange(change, context);
 	if (populace) handled |= populace->ApplyChange(change, context);
@@ -730,10 +782,10 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 
 	// 交互选项变了：场景里对应的市民/车辆/门Actor刷新自己的选项快照(玩家站在旁边时连同屏幕上的
 	// 选项列表一起换)，否则要等它下次被重新生成才看得到变化。
-	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+	if (auto* addOption = ChangeCast<AddOptionChange>(change)) {
 		RefreshInteractOptions(ToString(EvaluateExpression(addOption->GetName(), context)), addOption->GetCategory());
 	}
-	else if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+	else if (auto* removeOption = ChangeCast<RemoveOptionChange>(change)) {
 		RefreshInteractOptions(ToString(EvaluateExpression(removeOption->GetName(), context)), removeOption->GetCategory());
 	}
 }

@@ -813,6 +813,6 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		}
 	}
 
-	debugf("Log: River mountain cells=%d, max accum=%.2f, threshold=%.2f, origins=%d, kept=%d, too short=%d, marked river=%d, fine cells=%d, max fine corner error=%.6f.\n",
+	debugf(DebugLevel::Log, "River mountain cells=%d, max accum=%.2f, threshold=%.2f, origins=%d, kept=%d, too short=%d, marked river=%d, fine cells=%d, max fine corner error=%.6f.\n",
 		(int)mountainIndices.size(), maxAccum, RIVER_FLOW_THRESHOLD, originCount, keptCount, shortCount, riverCount, fineCount, maxFineCornerError);
 }

@@ -1,5 +1,5 @@
 #include "building_wxdj.h"
-#include "common/random.h"
+#include "common/mod_concepts.h"
 
 #include "map/building_factory.h"
 #include "player/puzzle_factory.h"
@@ -12,8 +12,8 @@ int WxdjBuilding::count = 0;
 
 // 这个DLL只注册一个building mod(building_wxdj)，用到room_empty/component_empty。剧情没有自己的
 // ScriptMod，config.json的main_story用script_empty，逻辑全在Resource/Wxdj.script。
-// 把宿主(Core)的随机host绑进本DLL自己那份Dependence，见Dependence/common/random.md
-FOREVER_MOD_BIND_RANDOM
+// 把宿主的随机host和debugf输出函数绑进本DLL自己那份Dependence，见Dependence/common/mod_concepts.md
+FOREVER_MOD_BIND_HOST
 
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {

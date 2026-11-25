@@ -1212,7 +1212,7 @@ void Building::BuildCabins(Map& map) {
 		const ElevatorCabinSpec& spec = cabins[i];
 		int minIdx = basements + spec.minFloor, maxIdx = basements + spec.maxFloor;
 		if (spec.minFloor > spec.maxFloor || minIdx < 0 || maxIdx >= floorCount) {
-			debugf("Warning: elevator spec %d of building %s has invalid floor range [%d,%d], skipped.\n",
+			debugf(DebugLevel::Warning, "elevator spec %d of building %s has invalid floor range [%d,%d], skipped.\n",
 				static_cast<int>(i), name.c_str(), spec.minFloor, spec.maxFloor);
 			continue;
 		}
@@ -1226,7 +1226,7 @@ void Building::BuildCabins(Map& map) {
 			}
 		}
 		if (overlapped) {
-			debugf("Warning: elevator spec %d of building %s overlaps another elevator in shaft %d, skipped.\n",
+			debugf(DebugLevel::Warning, "elevator spec %d of building %s overlaps another elevator in shaft %d, skipped.\n",
 				static_cast<int>(i), name.c_str(), spec.shaftIndex);
 			continue;
 		}
@@ -1606,7 +1606,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				const NavigationEndpointTemplate& markerSide = beginIsMarker ? connTemplate.begin : connTemplate.end;
 				const NavigationEndpointTemplate& otherSide = beginIsMarker ? connTemplate.end : connTemplate.begin;
 				if (!isVehicle || !entranceNodes || !exitNodes) {
-					debugf("Warning: \"%s\" endpoint is only valid in vehicleNavigation, ignored.\n", markerSide.type.c_str());
+					debugf(DebugLevel::Warning, "\"%s\" endpoint is only valid in vehicleNavigation, ignored.\n", markerSide.type.c_str());
 					continue;
 				}
 				vector<Node*> otherNodes = resolveEndpoint(otherSide);
@@ -1618,7 +1618,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 			// outside端：行人导航专用，车行导航改用entrance/exit。
 			if (connTemplate.begin.type == "outside" || connTemplate.end.type == "outside") {
 				if (isVehicle) {
-					debugf("Warning: \"outside\" endpoint is not supported in vehicleNavigation, use \"entrance\"/\"exit\". Ignored.\n");
+					debugf(DebugLevel::Warning, "\"outside\" endpoint is not supported in vehicleNavigation, use \"entrance\"/\"exit\". Ignored.\n");
 					continue;
 				}
 				const NavigationEndpointTemplate& otherSide =

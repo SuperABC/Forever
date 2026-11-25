@@ -126,8 +126,8 @@
   `map/transit_data.h`(编辑器手工线路数据)、`polit/policy_ids.h`(可调政策id)、`player/canvas.h`
   (App/Puzzle的软件画布)。
 
-`utility.h`把`debugf`的`LPCSTR`参数改成了`const char*`并将`<windows.h>`挪进`.cpp`，避免
-头文件污染(其余均原样移植)。
+`utility.h`把`debugf`的`LPCSTR`参数改成了`const char*`、不引入`<windows.h>`，避免
+头文件污染(其余均原样移植)。`debugf`后来重做成"带级别+可替换输出函数"，见`common/utility.md`。
 
 ## 待办/后续阶段
 

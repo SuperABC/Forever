@@ -51,7 +51,7 @@ BroadcastGameStart`现场构造一个`PostImplement`传进来，见`Core/common/
 
 ## `ApplyChange`
 
-`dynamic_cast`分派，目前只有`SetValueChange`分支真正执行：变量名按`ResolveVariableName`
+按种类分派(`ChangeCast`)，目前只有`SetValueChange`分支真正执行：变量名按`ResolveVariableName`
 (和读`$$x`同一条规则)决定写到哪——`self.`前缀写`context.self`(当前脚本自己的变量)，没有前缀写
 `context.global`(全局变量)；`system.`(系统变量，只由C++写)和`local.`(事件字段)脚本不能写，忽略并打警告；值是`EvaluateExpression(setValue->GetValue(),
 context)`——`GetValue()`返回的是`std::string`（DSL源码文本，不是预先解析好的`Expression`

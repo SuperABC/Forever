@@ -13,19 +13,43 @@
 #include <regex>
 #include <cstdarg>
 #include <cstdio>
+#include <atomic>
 #include <vector>
-#include <windows.h>
 
 
 using namespace std;
 
-void debugf(const char* format, ...) {
+namespace {
+	// 默认输出：标准错误，前面带级别。控制台程序不用做任何设置就能看到。
+	void DefaultDebugSink(DebugLevel level, const char* text) {
+		const char* prefix = level == DebugLevel::Error ? "[Error] " : level == DebugLevel::Warning ? "[Warning] " : "[Log] ";
+		fprintf(stderr, "%s%s", prefix, text);
+	}
+
+	// 原子：Core里有工作线程，换输出函数和打日志可能不在同一个线程。
+	atomic<DebugSink> debugSink{ &DefaultDebugSink };
+}
+
+void SetDebugSink(DebugSink sink) {
+	debugSink.store(sink ? sink : &DefaultDebugSink);
+}
+
+DebugSink GetDebugSink() {
+	return debugSink.load();
+}
+
+void debugf(DebugLevel level, const char* format, ...) {
 	va_list args;
 	va_start(args, format);
-	int len = _vscprintf(format, args);
-	vector<char> buffer(len + 1);
-	vsprintf_s(buffer.data(), buffer.size(), format, args);
-	OutputDebugStringA(buffer.data());
+	va_list measure;
+	va_copy(measure, args);
+	const int length = vsnprintf(nullptr, 0, format, measure);
+	va_end(measure);
+	if (length >= 0) {
+		vector<char> buffer(static_cast<size_t>(length) + 1);
+		vsnprintf(buffer.data(), buffer.size(), format, args);
+		debugSink.load()(level, buffer.data());
+	}
 	va_end(args);
 }
 

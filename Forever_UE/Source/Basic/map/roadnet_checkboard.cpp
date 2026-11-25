@@ -321,7 +321,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			if (raise) {
 				for (int i = first; i <= last; i++) raised[i] = true;
 			}
-			debugf("Log: Roadnet %s mountain samples [%d,%d] max slope %.3f sea behind %d -> %s (%s).\n",
+			debugf(DebugLevel::Log, "Roadnet %s mountain samples [%d,%d] max slope %.3f sea behind %d -> %s (%s).\n",
 				name.c_str(), first, last, maxSlope, seaBehind ? 1 : 0, raise ? "raise" : "tunnel", why);
 		}
 
@@ -579,7 +579,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		}
 		int accepted = 0;
 		for (int a = 0; a < nu * nv; a++) accepted += (hLongTo[a] >= 0) + (vLongTo[a] >= 0);
-		debugf("Log: Roadnet checkboard long edges: %d candidates, %d accepted.\n", static_cast<int>(candidates.size()), accepted);
+		debugf(DebugLevel::Log, "Roadnet checkboard long edges: %d candidates, %d accepted.\n", static_cast<int>(candidates.size()), accepted);
 	}
 
 	// 度/邻接辅助。
@@ -824,7 +824,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 					mark[e.first] = 1;
 				}
 			}
-			debugf("Log: Roadnet checkboard main roads %s: %d of %d widened.\n", horizontal ? "horizontal" : "vertical",
+			debugf(DebugLevel::Log, "Roadnet checkboard main roads %s: %d of %d widened.\n", horizontal ? "horizontal" : "vertical",
 				static_cast<int>(widened), static_cast<int>(runs.size()));
 		}
 	}
@@ -1003,7 +1003,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	// 所有路的车道都配好之后统一写路口缩进。
 	AssignJunctionSetbacks(roads, intersections);
 
-	debugf("Log: Roadnet checkboard %d nodes, %d roads, %d lots (%d big), theta %.3f.\n",
+	debugf(DebugLevel::Log, "Roadnet checkboard %d nodes, %d roads, %d lots (%d big), theta %.3f.\n",
 		static_cast<int>(intersections.size()), static_cast<int>(roads.size()), static_cast<int>(lots.size()),
 		static_cast<int>(bigLots.size()), theta);
 }

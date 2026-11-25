@@ -346,7 +346,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			Route* route = new Route(&traffic->routeFactory, modId, name);
 			traffic->routes[name] = route;
 			route->SilenceInitialStopEvents(); // 读档后第一次Update只记录停靠状态，不补发enter_stop
-			if (!SaveRefs::ReadModState(route->mod, r)) debugf("Warning: failed to parse saved state of route mod %s.\n", modId.c_str());
+			if (!SaveRefs::ReadModState(route->mod, r)) debugf(DebugLevel::Warning, "failed to parse saved state of route mod %s.\n", modId.c_str());
 
 			uint32_t stopCount = r.U32();
 			for (uint32_t k = 0; k < stopCount && !r.Failed(); k++) route->stopStations.push_back(stationByName(r.Str()));
@@ -423,7 +423,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 
 			Vehicle* vehicle = new Vehicle(&traffic->vehicleFactory, &traffic->scriptFactory, modId, name);
 			if (!vehicle->IsValid()) {
-				debugf("Warning: vehicle mod %s is not available, vehicle %s dropped.\n", modId.c_str(), name.c_str());
+				debugf(DebugLevel::Warning, "vehicle mod %s is not available, vehicle %s dropped.\n", modId.c_str(), name.c_str());
 				delete vehicle;
 				continue;
 			}

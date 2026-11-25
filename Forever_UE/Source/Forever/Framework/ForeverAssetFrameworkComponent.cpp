@@ -279,6 +279,21 @@ void UForeverAssetFrameworkComponent::ApplyGrantAsset(const GrantAssetChange* ch
 	// 多个作为一个堆叠整体：放不下就整体失败，不会只给一部分。
 	asset->SetCount(amount);
 
+	// 指定了slot：只放那个位置(肩膀/背/手/容器路径)，放不了就失败，不退回自动放置。
+	if (!change->GetSlot().empty()) {
+		const std::string slot = ToString(EvaluateExpression(change->GetSlot(), context));
+		if (player->AddByPath(slot, asset)) {
+			story->StartAssetScript(asset);
+			story->NotifyAssetEvent(asset, /*bGet=*/true, "success", sender);
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("grant_asset: cannot put \"%s\" into slot \"%s\"."), UTF8_TO_TCHAR(type.c_str()), UTF8_TO_TCHAR(slot.c_str()));
+			story->NotifyAssetEvent(asset, /*bGet=*/true, "fail", sender);
+			player->DestroyAsset(asset);
+		}
+		return;
+	}
+
 	const Player::StoreResult stored = player->StoreAsset(asset);
 	if (stored == Player::StoreResult::Merged) {
 		story->NotifyAssetEvent(asset, /*bGet=*/true, "success", sender);

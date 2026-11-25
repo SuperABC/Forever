@@ -69,12 +69,23 @@ lambda内部完成到基类指针的隐式转换。
 
 除了每个concept的这三个函数，dll还要：
 
-- 在入口cpp里写一行`FOREVER_MOD_BIND_RANDOM`(导出`BindRandomHost`)，否则dll里的`GetRandom`不受种子控制，见`Dependence/common/random.h`。
+- 在入口cpp里`#include "common/mod_concepts.h"`并写一行`FOREVER_MOD_BIND_HOST`(导出`BindModHost`)。宿主靠它把随机流和日志输出交给你的dll：
+  没有的话dll里的`GetRandom`不受种子控制，`debugf`打的日志也进不了游戏的`Forever.log`。见`Dependence/common/mod_concepts.md`"宿主绑定"。
+- 打日志用`debugf(DebugLevel::Warning, "...\n", ...)`(`common/utility.h`，级别`Log`/`Warning`/`Error`)：游戏里进`Forever.log`(类别`LogForeverCore`)，
+  ModTest里打到标准错误。
 - 导出`GetModDependencies`，声明自己每个mod id依赖哪些mod id(配置界面据此联动启用：启用了你的mod，它依赖的mod也必须启用)，
   写法照`Empty/Cpp/Empty/mod_empty.cpp`。依赖按语义写——"没有它我这个mod就没意义/不能工作"：楼依赖它用到的房间、组件和脚本，
   组织依赖岗位，线路依赖站点和载具；只能从别的mod里生成的(挂在楼上的站点、房间里的仓库和工坊)依赖它的宿主。
   会建脚本但没填`scriptModName`时游戏用默认的`script_empty`，要把它列进依赖。
   **依赖不能成环**：A依赖B、B又依赖A，两个都启用后在配置界面里互相锁死，哪个都关不掉。
+
+## dll的生命周期
+
+你的dll**只在一局游戏期间留在进程里**:开局时加载,一局结束、回到菜单时卸载;下一局重新加载。所以:
+
+- **`static`状态每局都会重置**(命名计数器、缓存等),不要指望它跨局保留。需要跨局的数据走存档(`SaveState`/`LoadState`)。
+- **不能留下会在卸载后被调用的东西**:不要开线程,不要向系统或别的库注册回调。
+- 你`new`出来交给游戏的对象(比如脚本mod造的`Change`)归创建它的mod实例所有,随实例一起销毁,不要让它活过实例。
 
 ## mod id和提交前自测(ModTest)
 

@@ -183,68 +183,10 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 	// AIController占有（市民导航测试）不是玩家操控：不发初始装备、不开武器可视化。
 	if (!Cast<APlayerController>(NewController)) return;
 
-	// 初始装备只在Player的肩膀/背包槽位全空时(开局第一次占有)发：这些槽位挂在Player身上跟着玩家走，
-	// 每次占有都重建会让子弹回满、覆盖读档恢复的背包。内容见md。
+	// 这里不发装备：开局给什么由剧情脚本用grant_asset决定(肩膀/背包槽位挂在Player身上，跟着玩家走)。
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (Player* player = framework->GetPlayer()) {
-			bool bHasLoadout = player->GetByPath("leftShoulder") || player->GetByPath("rightShoulder") || player->GetByPath("back");
-			if (!bHasLoadout) {
-				if (Asset* pistolAsset = player->CreateAsset("asset_pistol")) {
-					player->AddByPath("leftShoulder", pistolAsset);
-				}
-				if (Asset* rifleAsset = player->CreateAsset("asset_rifle")) {
-					player->AddByPath("rightShoulder", rifleAsset);
-				}
-
-				if (Asset* bag = player->CreateAsset("asset_container")) {
-					player->AddByPath("back", bag);
-					if (Asset* pistolAmmo = player->CreateAsset("asset_ammo_pistol")) {
-						pistolAmmo->SetCount(120);
-						bag->AddContent(pistolAmmo);
-					}
-					if (Asset* rifleAmmo = player->CreateAsset("asset_ammo_rifle")) {
-						rifleAmmo->SetCount(120);
-						bag->AddContent(rifleAmmo);
-					}
-					// 霰弹枪、狙击枪放在背包里(不挂肩膀)，各配120发子弹；要用的话从背包拖到肩膀上激活。
-					if (Asset* shotgun = player->CreateAsset("asset_shotgun")) {
-						bag->AddContent(shotgun);
-					}
-					if (Asset* shotgunAmmo = player->CreateAsset("asset_ammo_shotgun")) {
-						shotgunAmmo->SetCount(120);
-						bag->AddContent(shotgunAmmo);
-					}
-					if (Asset* sniper = player->CreateAsset("asset_sniper")) {
-						bag->AddContent(sniper);
-					}
-					if (Asset* sniperAmmo = player->CreateAsset("asset_ammo_sniper")) {
-						sniperAmmo->SetCount(120);
-						bag->AddContent(sniperAmmo);
-					}
-					// 火箭筒：放背包里(不挂肩膀)，配10发火箭弹；从背包拖到肩膀上激活，开火的火箭弹由脚本spawn_actor放出。
-					if (Asset* rpg = player->CreateAsset("asset_rpg")) {
-						bag->AddContent(rpg);
-					}
-					if (Asset* rpgAmmo = player->CreateAsset("asset_ammo_rpg")) {
-						rpgAmmo->SetCount(10);
-						bag->AddContent(rpgAmmo);
-					}
-					// 相机：不用弹药，同样放背包里，从背包拖到肩膀上激活后右键瞄准。
-					if (Asset* camera = player->CreateAsset("asset_camera")) {
-						bag->AddContent(camera);
-					}
-					// 投掷物：手雷、烟雾弹各10个(各一个count=10的堆叠)，按3切换，见ForeverThrowableComponent.md。
-					if (Asset* grenade = player->CreateAsset("asset_grenade")) {
-						grenade->SetCount(10);
-						bag->AddContent(grenade);
-					}
-					if (Asset* smokeGrenade = player->CreateAsset("asset_smoke_grenade")) {
-						smokeGrenade->SetCount(10);
-						bag->AddContent(smokeGrenade);
-					}
-				}
-			}
 			// 武器可视化先开始显示，ActivateShoulderWeapon才能通知它手上武器由哪个Asset装备。
 			if (weaponVisualComponent) weaponVisualComponent->BeginShowing();
 

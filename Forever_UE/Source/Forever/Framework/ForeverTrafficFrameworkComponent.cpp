@@ -948,86 +948,26 @@ void UForeverTrafficFrameworkComponent::RerouteOrVanishVehicle(Vehicle* other, R
 	UE_LOG(LogTemp, Log, TEXT("车辆 %s 的目的车位被玩家的车占了且同房间没有空位，已从地图上消失"), *name);
 }
 
-void UForeverTrafficFrameworkComponent::GetRouteDebugTarget(const FString& stationType,
-	UProceduralMeshComponent*& outMesh, UMaterialInstanceDynamic*& outMaterial) {
-	if (stationType == TEXT("bus")) {
-		outMesh = busRouteMesh;
-		outMaterial = busRouteMaterial;
-	} else if (stationType == TEXT("train")) {
-		outMesh = trainRouteMesh;
-		outMaterial = trainRouteMaterial;
-	} else if (stationType == TEXT("plane")) {
-		outMesh = planeRouteMesh;
-		outMaterial = planeRouteMaterial;
-	} else {
-		outMesh = otherRouteMesh;
-		outMaterial = otherRouteMaterial;
-	}
-}
-
 void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 	if (!traffic) return;
 
 	AActor* owner = GetOwner();
 	if (!owner) return;
 
-	// 四个类别各一个UProceduralMeshComponent，创建方式同ForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh。
-	auto ensureMesh = [&](TObjectPtr<UProceduralMeshComponent>& mesh, const TCHAR* debugName) {
-		if (!mesh) {
-			mesh = NewObject<UProceduralMeshComponent>(owner, debugName);
-			mesh->SetupAttachment(owner->GetRootComponent());
-			mesh->RegisterComponent();
-			owner->AddInstanceComponent(mesh);
-		}
-	};
-	ensureMesh(busRouteMesh, TEXT("BusRouteDebug"));
-	ensureMesh(trainRouteMesh, TEXT("TrainRouteDebug"));
-	ensureMesh(planeRouteMesh, TEXT("PlaneRouteDebug"));
-	ensureMesh(otherRouteMesh, TEXT("OtherRouteDebug"));
-
 	if (!bShowRouteDebug) {
-		busRouteMesh->ClearMeshSection(0);
-		trainRouteMesh->ClearMeshSection(0);
-		planeRouteMesh->ClearMeshSection(0);
-		otherRouteMesh->ClearMeshSection(0);
+		for (auto& [type, mesh] : routeDebugMeshes) if (mesh) mesh->ClearMeshSection(0);
 		return;
 	}
 
-	if (pureBaseMaterial) {
-		if (!busRouteMaterial) {
-			busRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
-			busRouteMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Green);
-		}
-		if (!trainRouteMaterial) {
-			trainRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
-			trainRouteMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Blue);
-		}
-		if (!planeRouteMaterial) {
-			planeRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
-			planeRouteMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Red);
-		}
-		if (!otherRouteMaterial) {
-			otherRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
-		}
-	}
-
-	TArray<FVector> busVertices, trainVertices, planeVertices, otherVertices;
-	TArray<int32> busTriangles, trainTriangles, planeTriangles, otherTriangles;
-
-	auto targetArrays = [&](const FString& stationType, TArray<FVector>*& outVertices, TArray<int32>*& outTriangles) {
-		if (stationType == TEXT("bus")) { outVertices = &busVertices; outTriangles = &busTriangles; }
-		else if (stationType == TEXT("train")) { outVertices = &trainVertices; outTriangles = &trainTriangles; }
-		else if (stationType == TEXT("plane")) { outVertices = &planeVertices; outTriangles = &planeTriangles; }
-		else { outVertices = &otherVertices; outTriangles = &otherTriangles; }
-	};
+	// 每种stationType一组几何，不认识任何具体类型。
+	struct FRouteGeometry { TArray<FVector> vertices; TArray<int32> triangles; };
+	TMap<FString, FRouteGeometry> geometry;
 
 	for (auto& [routeName, route] : traffic->GetRoutes()) {
 		if (!route) continue;
-		FString stationType = UTF8_TO_TCHAR(route->GetStationType().c_str());
-
-		TArray<FVector>* vertices;
-		TArray<int32>* triangles;
-		targetArrays(stationType, vertices, triangles);
+		FRouteGeometry& target = geometry.FindOrAdd(UTF8_TO_TCHAR(route->GetStationType().c_str()));
+		TArray<FVector>* vertices = &target.vertices;
+		TArray<int32>* triangles = &target.triangles;
 
 		// 多条线路共用同一段路径只画一次。
 		TSet<const TrackPath*> drawn;
@@ -1050,11 +990,9 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 
 	for (auto& [stationName, station] : traffic->GetStations()) {
 		if (!station) continue;
-		FString stationType = UTF8_TO_TCHAR(station->GetStationType().c_str());
-
-		TArray<FVector>* vertices;
-		TArray<int32>* triangles;
-		targetArrays(stationType, vertices, triangles);
+		FRouteGeometry& target = geometry.FindOrAdd(UTF8_TO_TCHAR(station->GetStationType().c_str()));
+		TArray<FVector>* vertices = &target.vertices;
+		TArray<int32>* triangles = &target.triangles;
 
 		for (const vector<StationPort>* ports : { &station->GetInlets(), &station->GetOutlets(), &station->GetStops() }) {
 			for (const StationPort& port : *ports) {
@@ -1065,18 +1003,31 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 		}
 	}
 
-	auto applySection = [](UProceduralMeshComponent* mesh, UMaterialInstanceDynamic* material,
-		const TArray<FVector>& vertices, const TArray<int32>& triangles) {
+	// 上次画过、这次没有的类型清掉。
+	for (auto& [type, mesh] : routeDebugMeshes) if (mesh && !geometry.Contains(type)) mesh->ClearMeshSection(0);
+
+	for (auto& [type, data] : geometry) {
+		// 创建方式同ForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh。
+		TObjectPtr<UProceduralMeshComponent>& mesh = routeDebugMeshes.FindOrAdd(type);
+		if (!mesh) {
+			mesh = NewObject<UProceduralMeshComponent>(owner);
+			mesh->SetupAttachment(owner->GetRootComponent());
+			mesh->RegisterComponent();
+			owner->AddInstanceComponent(mesh);
+		}
+		// 颜色按类型名哈希取色相：同一个类型每次都是同一个颜色，不同类型大概率分得开。pureBaseMaterial缺失时不上材质。
+		TObjectPtr<UMaterialInstanceDynamic>& material = routeDebugMaterials.FindOrAdd(type);
+		if (!material && pureBaseMaterial) {
+			material = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+			const uint8 hue = static_cast<uint8>(FCrc::StrCrc32(*type) % 256);
+			material->SetVectorParameterValue(TEXT("Color"), FLinearColor::MakeFromHSV8(hue, 255, 255));
+		}
 		mesh->ClearMeshSection(0);
-		if (triangles.Num() == 0) return;
-		mesh->CreateMeshSection(0, vertices, triangles,
+		if (data.triangles.Num() == 0) continue;
+		mesh->CreateMeshSection(0, data.vertices, data.triangles,
 			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
 		if (material) mesh->SetMaterial(0, material);
-	};
-	applySection(busRouteMesh, busRouteMaterial, busVertices, busTriangles);
-	applySection(trainRouteMesh, trainRouteMaterial, trainVertices, trainTriangles);
-	applySection(planeRouteMesh, planeRouteMaterial, planeVertices, planeTriangles);
-	applySection(otherRouteMesh, otherRouteMaterial, otherVertices, otherTriangles);
+	}
 }
 
 void UForeverTrafficFrameworkComponent::ClearTestNavigationLine() {
@@ -1299,7 +1250,7 @@ UInstancedStaticMeshComponent* UForeverTrafficFrameworkComponent::GetOrCreateTra
 
 	UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, *key);
 	if (!mesh) {
-		debugf("UForeverTrafficFrameworkComponent::GetOrCreateTrackISM: failed to load track mesh %s.\n", meshPath.c_str());
+		debugf(DebugLevel::Warning, "UForeverTrafficFrameworkComponent::GetOrCreateTrackISM: failed to load track mesh %s.\n", meshPath.c_str());
 		return nullptr;
 	}
 
@@ -1359,7 +1310,7 @@ void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 				}
 			}
 		}
-		debugf("UForeverTrafficFrameworkComponent::BuildTracks: route %s laid %d track instance(s).\n",
+		debugf(DebugLevel::Log, "UForeverTrafficFrameworkComponent::BuildTracks: route %s laid %d track instance(s).\n",
 			route->GetName().c_str(), instanceCount);
 	}
 }
@@ -1394,7 +1345,7 @@ void UForeverTrafficFrameworkComponent::BuildPiers(Map* map, Traffic* traffic) {
 			pierCount++;
 		}
 		if (pierCount > 0) {
-			debugf("UForeverTrafficFrameworkComponent::BuildPiers: route %s placed %d pier instance(s).\n", route->GetName().c_str(), pierCount);
+			debugf(DebugLevel::Log, "UForeverTrafficFrameworkComponent::BuildPiers: route %s placed %d pier instance(s).\n", route->GetName().c_str(), pierCount);
 		}
 	}
 }
@@ -1724,10 +1675,10 @@ void UForeverTrafficFrameworkComponent::ResyncBusesAfterTimeSkip() {
 	}
 }
 
-void UForeverTrafficFrameworkComponent::StartBusTestRun(const FString& vehicleName) {
+void UForeverTrafficFrameworkComponent::StartVehicleLineRun(const FString& vehicleName) {
 	AVehicleElement* element = IsSwitchableRouteBus(vehicleName) ? EnsureBusPhysicsElement(vehicleName) : FindOrSpawnVehicle(vehicleName);
 	if (!element) {
-		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartBusTestRun: 找不到车辆 %s"), *vehicleName);
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartVehicleLineRun: 找不到车辆 %s"), *vehicleName);
 		return;
 	}
 	FBusState* state = FindOrAddBusState(vehicleName);
@@ -1737,7 +1688,7 @@ void UForeverTrafficFrameworkComponent::StartBusTestRun(const FString& vehicleNa
 	TArray<TArray<int32>> loops;
 	CollectBusLoops(loops);
 	if (loops.Num() == 0) {
-		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartBusTestRun: 没有可用的公交环线"));
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartVehicleLineRun: 没有可用的公交环线"));
 		return;
 	}
 	ABusController* controller = GetOrCreateBusController(*state);
@@ -2446,7 +2397,7 @@ void UForeverTrafficFrameworkComponent::ProcessNavResults() {
 	}
 }
 
-void UForeverTrafficFrameworkComponent::StopBusRun(const FString& vehicleName) {
+void UForeverTrafficFrameworkComponent::StopVehicleLineRun(const FString& vehicleName) {
 	FBusState* state = busStates.Find(vehicleName);
 	if (!state) return;
 	if (state->bRouteBus) {

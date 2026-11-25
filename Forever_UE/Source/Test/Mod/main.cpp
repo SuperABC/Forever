@@ -44,7 +44,7 @@ namespace {
 		bool explicitFile = false;                 // 命令行里直接点名的文件(不是从目录里扫出来的)
 		vector<pair<string, string>> ids;          // (conceptKey, modId)
 		vector<pair<string, vector<string>>> dependencies; // GetModDependencies
-		bool exportsBindRandomHost = false;
+		bool exportsBindModHost = false;
 	};
 
 	string ToForwardSlashes(string path) {
@@ -73,9 +73,6 @@ namespace {
 		for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end; !ec && it != end; it.increment(ec)) {
 			if (!it->is_regular_file(ec)) continue;
 			if (LowerCase(it->path().extension().string()) != ".dll") continue;
-			bool underDebug = false;
-			for (const auto& part : it->path()) if (LowerCase(part.string()) == "debug") underDebug = true;
-			if (underDebug) continue;
 			found.push_back(ToForwardSlashes(fs::absolute(it->path()).string()));
 		}
 		sort(found.begin(), found.end());
@@ -195,9 +192,21 @@ namespace {
 				dll.path = path;
 				dll.tested = tested;
 				dll.explicitFile = explicitFile;
+				// 先只读文件探测(ProbeModDll，不加载、不执行)：不是mod的dll、调试版的dll都不加载。
+				// 目录里扫到的这类dll直接忽略(依赖库等)；命令行点名的文件才报。
+				const ModDllProbe probe = ProbeModDll(path);
+				if (!probe.isMod || probe.isDebug) {
+					if (explicitFile) {
+						const string reason = !probe.readable ? "it is not a readable 64-bit dll"
+							: probe.isDebug ? "it is a Debug build (imports the debug CRT); build it in Release"
+							: "it exports none of the GetMod<Concepts> functions";
+						run.Check(false, "dll is a mod dll: " + path, reason);
+					}
+					continue;
+				}
 				dll.handle = LoadLibraryA(path.c_str());
 				if (!dll.handle) {
-					// 目录里扫到的dll可能根本不是mod(依赖库等)，加载不了不算错；点名的文件加载不了才报。
+					// 通过了探测却加载不了(缺依赖的dll等)：点名的文件才报。
 					if (explicitFile) run.Check(false, "dll loads: " + path, "LoadLibrary failed, error " + to_string(GetLastError()));
 					continue;
 				}
@@ -218,10 +227,11 @@ namespace {
 				if (auto getDependencies = reinterpret_cast<void* (*)()>(GetProcAddress(dll.handle, kModDependenciesSymbol))) {
 					if (void* raw = getDependencies()) dll.dependencies = *static_cast<vector<pair<string, vector<string>>>*>(raw);
 				}
-				// 把宿主的随机host交给它(和游戏里ModLoader做的一样)，mod里的GetRandom才走受种子控制的流。
-				if (auto bind = reinterpret_cast<void(*)(RandomHost*)>(GetProcAddress(dll.handle, kBindRandomHostSymbol))) {
-					dll.exportsBindRandomHost = true;
-					bind(GetRandomHost());
+				// 把宿主的随机host和debugf输出函数交给它(和游戏里ModLoader做的一样)，mod里的GetRandom才走受种子控制的流。
+				if (auto bind = reinterpret_cast<void(*)(const ModHostBinding*)>(GetProcAddress(dll.handle, kBindModHostSymbol))) {
+					dll.exportsBindModHost = true;
+					const ModHostBinding binding = CurrentModHostBinding();
+					bind(&binding);
 				}
 				dlls.push_back(std::move(dll));
 			}
@@ -263,8 +273,8 @@ namespace {
 		for (const LoadedDll& dll : dlls) {
 			if (!dll.tested) continue;
 			const string dllName = fs::path(dll.path).filename().string();
-			run.Check(dll.exportsBindRandomHost, "dll exports BindRandomHost: " + dllName,
-				"without it GetRandom inside this dll is not controlled by the seed (see Dependence/common/random.h)");
+			run.Check(dll.exportsBindModHost, "dll exports BindModHost: " + dllName,
+				"add FOREVER_MOD_BIND_HOST to the dll entry file; without it GetRandom inside this dll ignores the seed and its debugf does not reach the host log");
 			run.Check(!dll.ids.empty(), "dll provides at least one mod: " + dllName);
 			set<string> ownIds;
 			for (const auto& [conceptKey, id] : dll.ids) ownIds.insert(id);

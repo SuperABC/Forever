@@ -14,8 +14,10 @@ RoadnetMod* RoadnetFactory::CreateRoadnet(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
+	if (!IsEnabled(id)) return nullptr;
+
 	auto argsIt = configuredArgs.find(id);
-	RoadnetMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
+	RoadnetMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -40,12 +42,13 @@ void RoadnetFactory::DestroyRoadnet(RoadnetMod* instance) {
 }
 
 bool RoadnetFactory::CheckRegistered(const string& id) const {
-	return registries.find(id) != registries.end();
+	return IsEnabled(id);
 }
 
 vector<string> RoadnetFactory::GetRegisteredIds() const {
 	vector<string> ids;
 	for (const auto& [id, entry] : registries) {
+		if (configuredArgs.find(id) == configuredArgs.end()) continue;
 		ids.push_back(id);
 	}
 	return ids;
@@ -55,15 +58,21 @@ void RoadnetFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
 }
 
-void RoadnetFactory::SetConfig(const string& id, bool enabled) {
-	enabledConfig[id] = enabled;
+int RoadnetFactory::UnregisterExcept(const unordered_set<string>& keepIds) {
+	int removed = 0;
+	for (auto it = registries.begin(); it != registries.end();) {
+		if (keepIds.count(it->first)) {
+			++it;
+			continue;
+		}
+		it = registries.erase(it);
+		removed++;
+	}
+	return removed;
 }
 
-string RoadnetFactory::GetRoadnet() const {
-	for (const auto& [id, enabled] : enabledConfig) {
-		if (enabled) return id;
-	}
-	return string();
+bool RoadnetFactory::IsEnabled(const string& id) const {
+	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }
 
 vector<pair<string, RoadnetMod*>> RoadnetFactory::GetLiveInstances() const {

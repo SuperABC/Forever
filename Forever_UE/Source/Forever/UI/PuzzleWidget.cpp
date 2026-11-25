@@ -48,6 +48,18 @@ void UPuzzleWidget::NativeConstruct() {
 	SetIsFocusable(true);
 }
 
+void UPuzzleWidget::AbortPuzzle() {
+	if (!puzzle) return;
+	delete puzzle;
+	puzzle = nullptr;
+	SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UPuzzleWidget::NativeDestruct() {
+	AbortPuzzle();
+	Super::NativeDestruct();
+}
+
 void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
 	// 先创建新的这局：puzzle id没注册/没在config"puzzle_mods"里启用时Puzzle构造会抛NullPointerException，
 	// 不能让它一路抛出去崩游戏——打日志、静默不执行，正在进行的上一局(如果有)原样保留。

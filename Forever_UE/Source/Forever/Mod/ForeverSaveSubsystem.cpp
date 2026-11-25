@@ -18,6 +18,8 @@
 #include "traffic/traffic_save.h"
 #include "story/story.h"
 #include "story/script_save.h"
+#include "story/script.h"
+#include "common/registry.h"
 #include "common/json.h"
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
@@ -278,6 +280,12 @@ bool UForeverSaveSubsystem::RequestLoad(const FString& Path, FString& OutError) 
 	if (errors.empty()) errors = SaveGame::ValidateModStateVersions(load->manifest);
 	if (!errors.empty()) {
 		SaveGame::RestoreConfig(snapshot);
+		// 上面的校验为了看mod状态版本把dll加载进来了。在菜单里(没有正在进行的游戏)校验失败就不会进游戏，
+		// 要卸载回去，保持"菜单里进程里没有mod dll"；游戏进行中发起的读档不能卸载(dll正在用)。
+		if (!FindFramework(GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)) {
+			Script::ClearCache();
+			Registry::Get().UnloadMods();
+		}
 		OutError = TEXT("无法加载存档：\n") + JoinErrors(errors);
 		return false;
 	}

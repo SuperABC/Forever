@@ -162,19 +162,19 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 	lampTags.clear();
 
 	if (path.empty()) {
-		debugf("Warning: FileRoadnet has no --path, roadnet left empty.\n");
+		debugf(DebugLevel::Warning, "FileRoadnet has no --path, roadnet left empty.\n");
 		return;
 	}
 	ifstream file(path, ios::binary);
 	if (!file) {
-		debugf("Warning: FileRoadnet cannot open %s, roadnet left empty.\n", path.c_str());
+		debugf(DebugLevel::Warning, "FileRoadnet cannot open %s, roadnet left empty.\n", path.c_str());
 		return;
 	}
 	string text((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
 	JsonValue root;
 	JsonReader reader;
 	if (!reader.Parse(text, root, false) || !root.IsObject() || !root["output"].IsObject()) {
-		debugf("Warning: FileRoadnet %s is not a valid .roadnet file: %s\n", path.c_str(), reader.GetErrorMessages().c_str());
+		debugf(DebugLevel::Warning, "FileRoadnet %s is not a valid .roadnet file: %s\n", path.c_str(), reader.GetErrorMessages().c_str());
 		return;
 	}
 	const JsonValue& output = root["output"];
@@ -217,7 +217,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		auto fromIt = nodes.find(entry["from"].AsString());
 		auto toIt = nodes.find(entry["to"].AsString());
 		if (fromIt == nodes.end() || toIt == nodes.end()) {
-			debugf("Warning: FileRoadnet road %u references an unknown node, skipped.\n", i);
+			debugf(DebugLevel::Warning, "FileRoadnet road %u references an unknown node, skipped.\n", i);
 			continue;
 		}
 		int lanes[6] = { 1, 0, 1, 1, 0, 1 };
@@ -328,7 +328,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 			lotOfOutput[i] = static_cast<int>(lots.size()) - 1;
 		}
 		catch (...) {
-			debugf("Warning: FileRoadnet lot %u is not a valid rectangle, skipped.\n", i);
+			debugf(DebugLevel::Warning, "FileRoadnet lot %u is not a valid rectangle, skipped.\n", i);
 		}
 	}
 
@@ -368,7 +368,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		if (!entry["lot"].IsNumeric() || !entry["direction"].IsNumeric() || !rect.IsArray() || rect.size() != 4) continue;
 		int outputLot = entry["lot"].AsInt();
 		if (outputLot < 0 || outputLot >= static_cast<int>(lotOfOutput.size()) || lotOfOutput[outputLot] < 0) {
-			debugf("Warning: FileRoadnet preset %u refers to a missing lot, skipped.\n", i);
+			debugf(DebugLevel::Warning, "FileRoadnet preset %u refers to a missing lot, skipped.\n", i);
 			continue;
 		}
 		int direction = entry["direction"].AsInt();
@@ -444,7 +444,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 				if (!stop["road"].IsNumeric() || !stop["station"].IsString()) continue;
 				TransitData::RoadStop parsed;
 				parsed.road = stop["road"].AsInt();
-				if (parsed.road < 0 || parsed.road >= static_cast<int>(roads.size())) { debugf("Warning: FileRoadnet bus line %u stop %u references road %d out of range, skipped.\n", i, k, parsed.road); continue; }
+				if (parsed.road < 0 || parsed.road >= static_cast<int>(roads.size())) { debugf(DebugLevel::Warning, "FileRoadnet bus line %u stop %u references road %d out of range, skipped.\n", i, k, parsed.road); continue; }
 				parsed.x = NumberOr(stop["x"], 0.f); parsed.y = NumberOr(stop["y"], 0.f);
 				parsed.rightSide = !(stop["side"].IsNumeric() && stop["side"].AsInt() == 1);
 				parsed.station = stop["station"].AsString();
@@ -455,7 +455,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 	}
 
 	AssignJunctionSetbacks(roads, intersections);
-	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens, transit %d nodes/%d conns/%d loops/%d bus lines.\n", path.c_str(),
+	debugf(DebugLevel::Log, "FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens, transit %d nodes/%d conns/%d loops/%d bus lines.\n", path.c_str(),
 		static_cast<int>(roads.size()), static_cast<int>(intersections.size()), static_cast<int>(lots.size()), static_cast<int>(greens.size()),
 		static_cast<int>(transit.nodes.size()), static_cast<int>(transit.conns.size()), static_cast<int>(transit.loops.size()), static_cast<int>(transit.roadLines.size()));
 }
@@ -507,7 +507,7 @@ void FileRoadnet::LayoutRows(const vector<Road*>& hostRoads, const vector<string
 		if (road->GetStart().GetId() != roads[index].GetStart().GetId()) continue;
 		float spacing = 0.f, sidewalkRatio = 0.f;
 		if (!style(tag, spacing, sidewalkRatio)) {
-			if (warned.insert(tag).second) debugf("Warning: FileRoadnet unknown tree/lamp tag \"%s\", skipped.\n", tag.c_str());
+			if (warned.insert(tag).second) debugf(DebugLevel::Warning, "FileRoadnet unknown tree/lamp tag \"%s\", skipped.\n", tag.c_str());
 			continue;
 		}
 		// 不按路的类型/高度筛：tag是编辑器里这条路自己指定的(隧道/桥/隧道口也可以指定)，指定放什么就放什么。

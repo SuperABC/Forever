@@ -2,12 +2,12 @@
 
 ## 职责
 
-`RoadnetFactory`是`RoadnetMod`的注册表/工厂，在通用骨架(`registries`/`liveInstances`/`configuredArgs`)之上多了`SetConfig`/`GetRoadnet`，支撑"单选"语义。
+`RoadnetFactory`是`RoadnetMod`的注册表/工厂，和其它Factory同一套通用骨架(`registries`/`liveInstances`/`configuredArgs`)。
 
 ## 关键设计
 
-- **`SetConfig(id, enabled)`+`GetRoadnet()`是单选机制**，不是Terrain那种多mod叠加分发——一次只应该有一个路网布局方案生效。`GetRoadnet()`遍历`enabledConfig`返回第一个`enabled==true`的id，找不到返回空字符串。`Map::InitRoadnet()`对`Config::GetConceptMods("roadnet_mods")`解析出的每个id调一次`SetConfig(id, true)`；按约定这个数组只配一个roadnet mod id，多配了不会崩，但`GetRoadnet()`取到哪一个不保证(使用方约定，Factory不校验)。
-- **和其它Factory不同，没有`IsEnabled`门槛**：`CreateRoadnet`/`CheckRegistered`/`GetRegisteredIds`只看是否已注册，不看`configuredArgs`；`CreateRoadnet`在`configuredArgs`里找不到参数时传空字符串给`creator`。"启用"由`SetConfig`单独表达。
+- **单选concept(Roadnets/Names)和其它Factory用同一套"启用"语义**(2026-11-25统一)：启用=已注册且id在`configuredArgs`里，`Create`/`CheckRegistered`/`GetRegisteredIds`都只认启用的。"单选"不是Factory的事——一次只应该有一个路网布局方案生效(不是Terrain那种多mod叠加分发)，"用哪一个"由Core从`Config::GetUniqueConceptMod("Roadnets")`取，见`Source/Core/common/config.md`。以前这里另有`SetConfig`/`GetRoadnet`和一张启用标记表，和`configuredArgs`是两份"是否启用"的记录，还要调用方每局手动清空再填，已经删掉。
+- **有`IsEnabled`门槛，和其它Factory一样**：没启用的id`CreateRoadnet`返回nullptr、`CheckRegistered`为false、不出现在`GetRegisteredIds`里。
 - 其余(全部公开方法`virtual`、`creator`/`deleter`用裸函数指针、`DestroyRoadnet`走注册时的`deleter`、`GetLiveInstances`、`SetModArgs`)与`building_factory.md`同一套理由，不重复展开。
 
 ## 依赖关系

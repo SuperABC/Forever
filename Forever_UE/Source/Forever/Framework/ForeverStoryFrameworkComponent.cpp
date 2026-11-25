@@ -755,7 +755,7 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 
 	ACitizenElement* target = populaceFramework->FindOrSpawnCitizenByName(name);
 	if (!target) {
-		debugf("Warning: ChangeControlChange target citizen not found: %s.\n", TCHAR_TO_UTF8(*name));
+		debugf(DebugLevel::Warning, "ChangeControlChange target citizen not found: %s.\n", TCHAR_TO_UTF8(*name));
 		return;
 	}
 

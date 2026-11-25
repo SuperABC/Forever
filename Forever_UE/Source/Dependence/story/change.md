@@ -2,9 +2,29 @@
 
 ## 职责
 
-`Change`是纯数据类——没有`Apply`之类的虚方法，执行逻辑在调用方按`GetType()`/`dynamic_cast`分派。基类只有
-`GetType()`纯虚 + `condition`（控制条件，`std::string`，`GetCondition`/`SetCondition`）。目前共56个具体子类，
-每个子类只有字段 + getter/setter，`GetType()`返回的snake_case字符串就是JSON里的`type`。
+`Change`是纯数据类——没有`Apply`之类的虚方法，执行逻辑在调用方按**种类**(`GetKind()`)分派。基类有
+`kind`（`ChangeKind`，构造时由子类传入、之后不变）+ `condition`（控制条件，`std::string`，`GetCondition`/`SetCondition`）。
+目前共65个具体子类，每个子类只有字段 + getter/setter + 一个静态常量`Kind`。`GetType()`返回的snake_case字符串就是JSON里的`type`，
+由种类查表得到。
+
+## 种类(`ChangeKind`，2026-11-25)
+
+- **为什么**：以前执行处是一条`dynamic_cast`的if链(UE那边39种，后面再过Core七个域)，一个Change最坏要试五十多次；
+  `dynamic_cast`每次都要查运行时类型信息，对象来自别的dll时(mod可以自己`new` Change)还会退化成比较类型名字符串。
+  现在每个对象带一个整数标签，执行处`switch (change->GetKind())`，编译器编成跳转表，一步到位。
+- **怎么带**：`enum class ChangeKind`在`change.h`开头，每个子类一个，顺序和类的声明顺序一致。子类写
+  `static constexpr ChangeKind Kind = ChangeKind::X;`，构造函数的初始化列表第一项是`Change(Kind)`。标签和类在这里绑死，
+  所以执行处`case ChangeKind::X:`之后`static_cast<const XChange*>`是安全的。
+- **名字表只有一张**：`change.cpp`的`kChangeKindNames`，下标就是枚举数值。`GetType()`=`ChangeKindName(kind)`(不再是虚函数，
+  65个子类各自的`GetType`都删了)；解析时`FindChangeKind(name, kind)`把JSON的`type`换成种类。个数由`static_assert`核对，
+  **顺序要自己保证和枚举一致**(新种类加在两边的末尾)。
+- **两种用法**：要处理多种的地方用`switch`(`AForeverFrameworkActor::ApplyChange`、`Map`/`Player`/`Populace`/`Traffic`的
+  `ApplyChange`、`Script::BuildChanges`)；只认一两种的地方用`ChangeCast<XChange>(change)`(种类对得上返回子类指针，否则nullptr，
+  用法同`dynamic_cast`但只比较一个整数)。
+- **枚举数值不稳定**(中间插入新种类后面的都会变)，不要写进存档；需要持久化的地方用`GetType()`的名字。
+- **新增一种Change**：①`change.h`枚举末尾加一个值、加类(带`Kind`)；②`change.cpp`名字表末尾加名字、写构造函数(`Change(Kind), ...`)；
+  ③`Core/story/script.cpp`的`BuildChanges`加一个`case`解析JSON；④执行处(`AForeverFrameworkActor::ApplyChange`或某个域的
+  `ApplyChange`)加一个`case`。
 
 ## 执行分派（谁来执行哪个Change）
 
@@ -93,13 +113,13 @@
   （`UForeverTrafficFrameworkComponent::ApplyBoardVehicle`）。
 - `leave_vehicle`(vehicle)：玩家下车(驾驶和搭乘都行)；驾驶者要过下车点遮挡判定，搭乘者不判定。vehicle非空时只在玩家正在这辆里才执行。
 - `force_leave`(vehicle，可空)：强制下车(比如公交收班)，驾驶和搭乘都生效，不做遮挡判定；留空=玩家当前所在的任何载具。
-- `vehicle_command`(vehicle, command)：`"run"`=随机选一条公交环线的随机站，先导航过去再开始循环；`"stop"`=刹停并保持，线路公交同时退出
-  时刻表（`StartBusTestRun`/`StopBusRun`）。
+- `vehicle_command`(vehicle, command)：`"run"`=随机选一条环线的随机站，先导航过去再沿环线循环；`"stop"`=刹停并保持，本来挂在线路上的载具同时退出
+  时刻表（`StartVehicleLineRun`/`StopVehicleLineRun`）。
 - `vehicle_navigate`(vehicle, destination)：让载具由Controller开到`destination`（房间地址表达式；字面量`"random"`=随机一个有车行节点的地下室房间，目前只有工厂）。
   到达后给这辆车自己的script发`vehicle_arrive`事件，在该事件里再发`vehicle_navigate`就是连续随机导航（可用来写随机导航压力测试）。
   UE层`UForeverTrafficFrameworkComponent::NavigateVehicle`执行：请求入队、每帧按`maxVehicleSpawnsPerFrame`处理，必要时生成车辆Actor。
 - `visualize_navigation`(address)：给玩家显示到某个房间(目前只支持房间地址，表达式)的导航线。玩家步行按人行道画，开车按车道画（车到不了的房间画到该建筑1楼外部连接点附近的车道），其它Pawn（公交乘客等）不画；切换操控自动刷新，玩家进入目标房间后消失。UE层`UForeverTrafficFrameworkComponent::StartGuide`执行。
-- 以上全部只能在UE层执行，`AForeverFrameworkActor::ApplyChange`里`dynamic_cast`转发给对应Component。
+- 以上全部只能在UE层执行，`AForeverFrameworkActor::ApplyChange`里按种类`switch`转发给对应Component。
 - **注意**：同名的`enter_vehicle`/`leave_vehicle`也是事件类型（见`event.md`），事件是"发生了"的通知，Change是"去做"的指令，
   `BuildEvent`/`BuildChanges`各自识别，互不冲突。
 
@@ -116,7 +136,7 @@
 - `pick_asset`(asset可选，缺省=执行脚本所属的资产，即`$$self.name`)：捡起地上(房间根/室外)的资产。顺序：没背包且它可背
   (`GetBackpack`、Object、count==1)就背上；有背包且放得下(size*count，堆叠整体算)放包里；否则右手空放右手、再左手(手只收count==1的单件)；
   都不行失败，资产保持原状。堆叠资产整体考虑，不会只捡一部分。
-- `grant_asset`(asset_type、count缺省1)：凭空给资产（没有场景里的Actor要删），放置顺序同上，多个作为一个堆叠整体，放不下整体失败。
+- `grant_asset`(asset_type、count缺省1、slot可省略)：凭空给资产（没有场景里的Actor要删），放置顺序同上，多个作为一个堆叠整体，放不下整体失败。`slot`(表达式，2026-11-25加)指定放到哪——`Player::AddByPath`认的路径：`"leftShoulder"`/`"rightShoulder"`(只收武器)、`"back"`(只收背包)、`"left"`/`"right"`(手，单件)或容器路径；那个位置放不了就失败，不退回自动放置。开局装备就是用它发的(先给背包、武器挂肩膀，其余不写slot自动进背包)。
 - `deduct_asset`(asset_type、count)：递归左右手和背包(不含肩膀)里指定类型够数才扣并销毁，否则整体失败。
 - `drop_asset`(asset_type、count)：同样判定，够数就把它们放到玩家附近地面(在房间里进房间，否则进`Player::worldAssets`)，否则整体失败。
 - 结果通过`get_asset`/`lose_asset`事件发回执行Change的脚本，见`event.md`。
@@ -164,7 +184,7 @@
 - 依赖：`common/utility.h`、`common/error.h`、`expression.h`（`EvaluateExpression`/`EvaluateExpressionBool`——字段本身是`std::string`，
   只有求值那一刻才用得到`Expression`）。
 - 被谁依赖：`Core/story/milestone.h`（`Milestone::changes`）、`Core/story/script.h`（`Script::BuildChanges`）、各域`ApplyChange`、
-  `dialog.h`（`Option::changes`）、`script_mod.h`（`FindLabel`按`dynamic_cast<const PlaceHolderChange*>`查找）、
+  `dialog.h`（`Option::changes`）、`script_mod.h`（`FindLabel`按`ChangeCast<PlaceHolderChange>`查找）、
   `Forever/Framework/ForeverFrameworkActor.cpp`及各Component（UE层执行）、`Basic/society/job_warehouse_keeper.cpp`（构造`NPCNavigateChange`）、
   `Forever_Mod/Empty/Cpp/Empty/empty_mods.h`（`EmptyScript`持有`ChangeControlChange`）。
 

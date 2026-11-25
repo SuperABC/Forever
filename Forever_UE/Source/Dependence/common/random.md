@@ -4,7 +4,7 @@
 
 ## 结构
 - `RandomStream`：xoshiro256**，POD、无堆分配(Core分配，各DLL里的GetRandom也直接操作它，所以不能有std容器)。
-- `RandomHost{current, unscopedDraws}`：当前流的共享槽。**每个DLL静态链接各自一份Dependence**，看不到Core的全局，所以Core加载DLL时通过DLL导出的`BindRandomHost(RandomHost*)`把自己的host交给它(每个mod DLL入口cpp写一行`FOREVER_MOD_BIND_RANDOM`；没导出的DLL退回不可控随机，不崩)。
+- `RandomHost{current, unscopedDraws}`：当前流的共享槽。**每个DLL静态链接各自一份Dependence**，看不到Core的全局，所以Core加载DLL时通过DLL导出的`BindModHost`把自己的host交给它(每个mod DLL入口cpp写一行`FOREVER_MOD_BIND_HOST`，见`mod_concepts.md`"宿主绑定"；没导出的DLL退回不可控随机，不崩)。
 - `RandomScope`：局部对象，构造时把当前流设成某条流，析构自动还原(栈式，可嵌套；传空指针=什么也不做)。
 - `RandomRegistry`(宿主Core那份用)：mod流按mod id、Core域流按域名；`Reset/SetGlobalSeed/SetModSeed/GetModStream/GetDomainStream/Snapshot/Restore/ExtractSeed/BindInstance...`。
 

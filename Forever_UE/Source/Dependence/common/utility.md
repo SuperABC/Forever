@@ -10,9 +10,7 @@
 
 ## 关键设计
 
-- **头文件不`#include <windows.h>`/`<strsafe.h>`**——`debugf`签名是
-  `debugf(const char* format, ...)`，`<windows.h>`（`OutputDebugStringA`实现用）只在
-  `utility.cpp`里出现。这个头文件会被`expression.h`/`general_geometry.h`间接include，进而被
+- **头文件不`#include <windows.h>`/`<strsafe.h>`**(`.cpp`现在也不用了)。这个头文件会被`expression.h`/`general_geometry.h`间接include，进而被
   `script_mod.h`等Dependence层Mod接口headers传递依赖，最终被`Forever_Mod`下的Mod DLL和
   UE侧`Forever`模块都间接include——和`Core/common/loader.md`"头文件不
   `#include <windows.h>`，句柄只在.cpp里出现"的约定一致，避免和UE的`CoreMinimal.h`宏
@@ -30,10 +28,17 @@
   （`MM/DD/YYYY`）及纯时间等多种字符串格式，供story脚本里写时间字面量时随意选一种熟悉的格式。中文格式年份允许1~4位，
   时间部分既可以是`HH:MM:SS`也可以是`H时M分S秒`，所以`0年1月1日0时0分4秒`可以表示相对时长（`create_timer`用）；
   所有格式都不匹配时抛异常。`operator+`/`operator-`是各字段分别加减再归一化，不是日历意义的时间差。
-- **`debugf`用`OutputDebugStringA`实现，只有附加调试器时才能看到，不会写进
-  `Saved/Logs/Forever.log`**——Dependence/Core/Basic层的`debugf`输出对着PIE日志文件读是
-  看不到的，只有Forever UE模块层的`UE_LOG`才会写进日志文件。诊断需要玩家可见、或者免调
-  试器确认的信息时要在Forever层用`UE_LOG`，不能指望`debugf`。
+- **`debugf`(2026-11-25重做)**：`debugf(DebugLevel level, const char* format, ...)`，级别是`Log`/`Warning`/`Error`。
+  它只负责格式化，文本交给当前的**输出函数**(`DebugSink`，普通函数指针`void(*)(DebugLevel, const char*)`)：
+  - **默认写标准错误**，前面带`[Log]`/`[Warning]`/`[Error]`。CoreTest/ModTest/ModHost这类不带UE的控制台程序不用做任何设置
+    就能看到Core和mod的日志——这是`debugf`存在的目的。
+  - 宿主用`SetDebugSink`换掉：UE的Forever模块在`StartupModule`里换成打`UE_LOG(LogForeverCore, ...)`的函数，日志进`Forever.log`。
+    传`nullptr`恢复默认。指针是`atomic`，换和调用可以不在同一个线程。
+  - **每个mod dll各有一份自己的`debugf`和输出函数指针**(Dependence是静态库)。宿主加载dll后通过`BindModHost`把自己的
+    输出函数交过去(`common/mod_concepts.h`)，mod里的`debugf`才进宿主的日志；没绑的dll走默认的标准错误。
+  - 调用方的格式串习惯以`\n`结尾，消息文本里不再写`Warning:`/`Log:`前缀(级别是参数)。输出函数可能在任意线程、
+    从任意dll被调用，只能做线程安全的事。
+  - 以前是`OutputDebugStringA`，只有挂调试器才看得到，控制台程序和`Forever.log`里都没有。
 - **`Time::DifferenceInSeconds`的符号方向**：`this`比`other`早时必须返回正数——唯一
   调用方`Traffic::Tick`里`if (delta > 0.0) elapsedSeconds += delta;`依赖这个方向，符号
   反了会导致`elapsedSeconds`永远停在初始值不动，表现为"公交车/火车/飞机生成之后位置再也
@@ -46,7 +51,7 @@
 ## 依赖关系
 
 - 依赖：`error.h`（`THROW_EXCEPTION`，`Time`字段校验失败时抛`OutOfRangeException`/
-  `InvalidArgumentException`）。`.cpp`额外依赖`<windows.h>`（`OutputDebugStringA`）。
+  `InvalidArgumentException`）。`.cpp`只用标准库。
 - 被谁依赖：`story/condition.h`（`ValueType`）、`map/general_geometry.h`（`OBJECT_HOLDER`宏、
   `GetRandom`）、Core层各domain代码（`Time`常被城市模拟里的日程/日历系统使用）。
 

@@ -73,14 +73,14 @@ void FileTerrain::DistributeTerrain(int width, int height,
 	const function<bool(int, int, const float*)>& setFineHeights) const {
 
 	if (path.empty()) {
-		debugf("Warning: FileTerrain has no --path, terrain left untouched.\n");
+		debugf(DebugLevel::Warning, "FileTerrain has no --path, terrain left untouched.\n");
 		return;
 	}
 	vector<char> data;
 	{
 		ifstream file(path, ios::binary);
 		if (!file) {
-			debugf("Warning: FileTerrain cannot open %s, terrain left untouched.\n", path.c_str());
+			debugf(DebugLevel::Warning, "FileTerrain cannot open %s, terrain left untouched.\n", path.c_str());
 			return;
 		}
 		data.assign(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
@@ -90,7 +90,7 @@ void FileTerrain::DistributeTerrain(int width, int height,
 	Reader reader(data);
 	string magic = reader.ReadString(4);
 	if (!reader.ok || magic != "FTRN") {
-		debugf("Warning: FileTerrain %s is not a .terrain file, terrain left untouched.\n", path.c_str());
+		debugf(DebugLevel::Warning, "FileTerrain %s is not a .terrain file, terrain left untouched.\n", path.c_str());
 		return;
 	}
 	uint32_t fileWidth = reader.Read<uint32_t>();
@@ -104,7 +104,7 @@ void FileTerrain::DistributeTerrain(int width, int height,
 	size_t cellCount = static_cast<size_t>(fileWidth) * fileHeight;
 	size_t expected = reader.offset + cellCount * (sizeof(uint16_t) + 2 * sizeof(float));
 	if (!reader.ok || palette.empty() || fileWidth == 0 || fileHeight == 0 || expected > data.size()) {
-		debugf("Warning: FileTerrain %s is truncated, terrain left untouched.\n", path.c_str());
+		debugf(DebugLevel::Warning, "FileTerrain %s is truncated, terrain left untouched.\n", path.c_str());
 		return;
 	}
 	const char* indices = data.data() + reader.offset;
@@ -112,7 +112,7 @@ void FileTerrain::DistributeTerrain(int width, int height,
 	const char* waters = heights + cellCount * sizeof(float);
 
 	if (static_cast<int>(fileWidth) != width || static_cast<int>(fileHeight) != height)
-		debugf("Warning: FileTerrain size %ux%u differs from map %dx%d, clipping/padding with plain.\n", fileWidth, fileHeight, width, height);
+		debugf(DebugLevel::Warning, "FileTerrain size %ux%u differs from map %dx%d, clipping/padding with plain.\n", fileWidth, fileHeight, width, height);
 
 	int copyWidth = min(width, static_cast<int>(fileWidth));
 	int copyHeight = min(height, static_cast<int>(fileHeight));
@@ -132,5 +132,5 @@ void FileTerrain::DistributeTerrain(int width, int height,
 			if (!std::isnan(elementWater)) setWater(x, y, true, elementWater);
 		}
 	}
-	debugf("Log: FileTerrain loaded %s (%ux%u).\n", path.c_str(), fileWidth, fileHeight);
+	debugf(DebugLevel::Log, "FileTerrain loaded %s (%ux%u).\n", path.c_str(), fileWidth, fileHeight);
 }

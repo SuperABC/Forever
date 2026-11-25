@@ -58,7 +58,7 @@ public:
 		const std::vector<ScriptAction>& top = actionStack.back();
 		for (size_t i = 0; i < top.size(); i++) {
 			if (auto changePtr = std::get_if<const Change*>(&top[i])) {
-				if (auto placeholder = dynamic_cast<const PlaceHolderChange*>(*changePtr)) {
+				if (auto placeholder = ChangeCast<PlaceHolderChange>(*changePtr)) {
 					if (ToString(EvaluateExpression(placeholder->GetLabel(), context)) == label) {
 						return static_cast<int>(i);
 					}

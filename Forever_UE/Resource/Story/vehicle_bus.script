@@ -8,7 +8,7 @@
 	//   - on_route=0(停车场里的公交)：提供"驾驶"和"测试运行"选项，驾驶行为同vehicle_basic；
 	//   - on_route=1(线路上的公交)：不提供驾驶，只在停站时提供"上车"/"下车"，并提供"停止运行"。
 	// 测试运行：公交的Controller先导航到随机一条公交环线的随机站，再开始循环（vehicle_command Change，
-	// 见UForeverTrafficFrameworkComponent::StartBusTestRun）；运行期间没有"驾驶"选项，玩家不能开车。
+	// 见UForeverTrafficFrameworkComponent::StartVehicleLineRun）；运行期间没有"驾驶"选项，玩家不能开车。
 	// 停止运行：Controller刹停（停站中补发leave_stop），恢复"驾驶"和"测试运行"。脚本变量running=是否在运行。
 	// 停站事件由C++在公交停稳(enter_stop)/启动离站(leave_stop)时只发给这辆车自己的脚本；进出载具
 	// 事件(enter_vehicle/leave_vehicle，mode=ride搭乘/drive驾驶)同样只发给被进出的这辆车。

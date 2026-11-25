@@ -1,15 +1,112 @@
 #include "change.h"
 
+#include <unordered_map>
+
 
 using namespace std;
 
-Change::Change() :
-	condition() {
+namespace {
+	// 种类 -> 脚本里的类型名，下标就是ChangeKind的数值，顺序必须和change.h的枚举一致(下面有static_assert查个数)。
+	const string kChangeKindNames[] = {
+		"for_range",
+		"place_holder",
+		"global_message",
+		"debug_print",
+		"game_end",
+		"set_value",
+		"global_setting",
+		"remove_value",
+		"deactivate_milestone",
+		"add_option",
+		"remove_option",
+		"spawn_npc",
+		"remove_npc",
+		"npc_revive",
+		"npc_teleport",
+		"npc_navigate",
+		"assign_task",
+		"teleport_player",
+		"open_shop",
+		"start_puzzle",
+		"pay_wage",
+		"enter_vehicle",
+		"show_route",
+		"visualize_navigation",
+		"vehicle_command",
+		"vehicle_navigate",
+		"leave_vehicle",
+		"board_vehicle",
+		"force_leave",
+		"set_door",
+		"record_object",
+		"register_door",
+		"jump_time",
+		"create_timer",
+		"remove_timer",
+		"launch_elevator",
+		"play_video",
+		"play_bgm",
+		"stop_bgm",
+		"bank_transaction",
+		"give_estate",
+		"remove_estate",
+		"give_vehicle",
+		"remove_vehicle",
+		"player_injured",
+		"player_cured",
+		"player_ill",
+		"player_recover",
+		"player_sleep",
+		"change_time",
+		"change_wanted",
+		"change_weather",
+		"change_control",
+		"pick_asset",
+		"grant_asset",
+		"deduct_asset",
+		"drop_asset",
+		"spawn_effect",
+		"sound_effect",
+		"spawn_actor",
+		"destroy_asset",
+		"single_damage",
+		"add_satiety",
+		"area_damage",
+		"citizen_flee",
+	};
+	constexpr int kChangeKindCount = static_cast<int>(sizeof(kChangeKindNames) / sizeof(kChangeKindNames[0]));
+	static_assert(kChangeKindCount == static_cast<int>(ChangeKind::CitizenFlee) + 1, "kChangeKindNames must list every ChangeKind");
+}
+
+const string& ChangeKindName(ChangeKind kind) {
+	static const string unknown;
+	const int index = static_cast<int>(kind);
+	return index >= 0 && index < kChangeKindCount ? kChangeKindNames[index] : unknown;
+}
+
+bool FindChangeKind(const string& name, ChangeKind& outKind) {
+	static const unordered_map<string, ChangeKind> kinds = [] {
+		unordered_map<string, ChangeKind> map;
+		for (int i = 0; i < kChangeKindCount; i++) map.emplace(kChangeKindNames[i], static_cast<ChangeKind>(i));
+		return map;
+	}();
+	auto it = kinds.find(name);
+	if (it == kinds.end()) return false;
+	outKind = it->second;
+	return true;
+}
+
+Change::Change(ChangeKind kind) :
+	kind(kind), condition() {
 
 }
 
 Change::~Change() {
 
+}
+
+const std::string& Change::GetType() const {
+	return ChangeKindName(kind);
 }
 
 const std::string& Change::GetCondition() const {
@@ -22,18 +119,13 @@ void Change::SetCondition(const std::string& condition) {
 
 ForRangeChange::ForRangeChange(string var, std::string from, std::string to, std::string step,
 	vector<const Change*> changes) :
-	var(move(var)), from(move(from)), to(move(to)), step(move(step)), changes(move(changes)) {
+	Change(Kind), var(move(var)), from(move(from)), to(move(to)), step(move(step)), changes(move(changes)) {
 
 }
 
 ForRangeChange::~ForRangeChange() {
 	// 子Change归for_range自己持有(Script::BuildChanges解析"do"时new出来的)。
 	for (const Change* change : changes) delete change;
-}
-
-const string& ForRangeChange::GetType() const {
-	static const string type = "for_range";
-	return type;
 }
 
 string ForRangeChange::GetVar() const {
@@ -57,22 +149,17 @@ const vector<const Change*>& ForRangeChange::GetChanges() const {
 }
 
 PlaceHolderChange::PlaceHolderChange() :
-	label() {
+	Change(Kind), label() {
 
 }
 
 PlaceHolderChange::PlaceHolderChange(std::string label) :
-	label(move(label)) {
+	Change(Kind), label(move(label)) {
 
 }
 
 PlaceHolderChange::~PlaceHolderChange() {
 
-}
-
-const string& PlaceHolderChange::GetType() const {
-	static const string type = "place_holder";
-	return type;
 }
 
 void PlaceHolderChange::SetLabel(std::string label) {
@@ -84,22 +171,17 @@ const std::string& PlaceHolderChange::GetLabel() const {
 }
 
 GlobalMessageChange::GlobalMessageChange() :
-	message() {
+	Change(Kind), message() {
 
 }
 
 GlobalMessageChange::GlobalMessageChange(std::string message, std::string category) :
-	message(move(message)), category(move(category)) {
+	Change(Kind), message(move(message)), category(move(category)) {
 
 }
 
 GlobalMessageChange::~GlobalMessageChange() {
 
-}
-
-const string& GlobalMessageChange::GetType() const {
-	static const string type = "global_message";
-	return type;
 }
 
 void GlobalMessageChange::SetMessage(std::string message) {
@@ -119,22 +201,17 @@ const std::string& GlobalMessageChange::GetCategory() const {
 }
 
 DebugPrintChange::DebugPrintChange() :
-	message() {
+	Change(Kind), message() {
 
 }
 
 DebugPrintChange::DebugPrintChange(std::string message) :
-	message(move(message)) {
+	Change(Kind), message(move(message)) {
 
 }
 
 DebugPrintChange::~DebugPrintChange() {
 
-}
-
-const string& DebugPrintChange::GetType() const {
-	static const string type = "debug_print";
-	return type;
 }
 
 void DebugPrintChange::SetMessage(std::string message) {
@@ -145,7 +222,8 @@ const std::string& DebugPrintChange::GetMessage() const {
 	return message;
 }
 
-GameEndChange::GameEndChange() {
+GameEndChange::GameEndChange() :
+	Change(Kind) {
 
 }
 
@@ -153,28 +231,18 @@ GameEndChange::~GameEndChange() {
 
 }
 
-const string& GameEndChange::GetType() const {
-	static const string type = "game_end";
-	return type;
-}
-
 SetValueChange::SetValueChange() :
-	variable(), value() {
+	Change(Kind), variable(), value() {
 
 }
 
 SetValueChange::SetValueChange(string variable, std::string value) :
-	variable(move(variable)), value(move(value)) {
+	Change(Kind), variable(move(variable)), value(move(value)) {
 
 }
 
 SetValueChange::~SetValueChange() {
 
-}
-
-const string& SetValueChange::GetType() const {
-	static const string type = "set_value";
-	return type;
 }
 
 void SetValueChange::SetVariable(string variable) {
@@ -194,22 +262,17 @@ const std::string& SetValueChange::GetValue() const {
 }
 
 GlobalSettingChange::GlobalSettingChange() :
-	setting(), value() {
+	Change(Kind), setting(), value() {
 
 }
 
 GlobalSettingChange::GlobalSettingChange(string setting, std::string value) :
-	setting(move(setting)), value(move(value)) {
+	Change(Kind), setting(move(setting)), value(move(value)) {
 
 }
 
 GlobalSettingChange::~GlobalSettingChange() {
 
-}
-
-const string& GlobalSettingChange::GetType() const {
-	static const string type = "global_setting";
-	return type;
 }
 
 void GlobalSettingChange::SetSetting(string setting) {
@@ -229,22 +292,17 @@ const std::string& GlobalSettingChange::GetValue() const {
 }
 
 RemoveValueChange::RemoveValueChange() :
-	variable() {
+	Change(Kind), variable() {
 
 }
 
 RemoveValueChange::RemoveValueChange(string variable) :
-	variable(move(variable)) {
+	Change(Kind), variable(move(variable)) {
 
 }
 
 RemoveValueChange::~RemoveValueChange() {
 
-}
-
-const string& RemoveValueChange::GetType() const {
-	static const string type = "remove_value";
-	return type;
 }
 
 void RemoveValueChange::SetVariable(string variable) {
@@ -256,22 +314,17 @@ string RemoveValueChange::GetVariable() const {
 }
 
 DeactivateMilestoneChange::DeactivateMilestoneChange() :
-	milestone() {
+	Change(Kind), milestone() {
 
 }
 
 DeactivateMilestoneChange::DeactivateMilestoneChange(string milestone) :
-	milestone(move(milestone)) {
+	Change(Kind), milestone(move(milestone)) {
 
 }
 
 DeactivateMilestoneChange::~DeactivateMilestoneChange() {
 
-}
-
-const string& DeactivateMilestoneChange::GetType() const {
-	static const string type = "deactivate_milestone";
-	return type;
 }
 
 void DeactivateMilestoneChange::SetMilestone(string milestone) {
@@ -283,22 +336,17 @@ string DeactivateMilestoneChange::GetMilestone() const {
 }
 
 AddOptionChange::AddOptionChange() :
-	name(), option() {
+	Change(Kind), name(), option() {
 
 }
 
 AddOptionChange::AddOptionChange(std::string name, std::string option, std::string category) :
-	name(move(name)), option(move(option)), category(move(category)) {
+	Change(Kind), name(move(name)), option(move(option)), category(move(category)) {
 
 }
 
 AddOptionChange::~AddOptionChange() {
 
-}
-
-const string& AddOptionChange::GetType() const {
-	static const string type = "add_option";
-	return type;
 }
 
 void AddOptionChange::SetName(std::string name) {
@@ -326,22 +374,17 @@ const std::string& AddOptionChange::GetCategory() const {
 }
 
 RemoveOptionChange::RemoveOptionChange() :
-	name(), option() {
+	Change(Kind), name(), option() {
 
 }
 
 RemoveOptionChange::RemoveOptionChange(std::string name, std::string option, std::string category) :
-	name(move(name)), option(move(option)), category(move(category)) {
+	Change(Kind), name(move(name)), option(move(option)), category(move(category)) {
 
 }
 
 RemoveOptionChange::~RemoveOptionChange() {
 
-}
-
-const string& RemoveOptionChange::GetType() const {
-	static const string type = "remove_option";
-	return type;
 }
 
 void RemoveOptionChange::SetName(std::string name) {
@@ -369,7 +412,7 @@ const std::string& RemoveOptionChange::GetCategory() const {
 }
 
 SpawnNpcChange::SpawnNpcChange() :
-	avatar(), name(), gender(), birthday(), height(), weight(),
+	Change(Kind), avatar(), name(), gender(), birthday(), height(), weight(),
 	nick(), deposit(), phone(), home(), jobs(), scheduler(), economy() {
 
 }
@@ -377,18 +420,13 @@ SpawnNpcChange::SpawnNpcChange() :
 SpawnNpcChange::SpawnNpcChange(std::string avatar, std::string name, std::string gender, std::string birthday, std::string height, std::string weight,
 	std::string nick, std::string deposit, std::string phone, std::string home, vector<std::string> jobs, std::string scheduler,
 	std::string economy) :
-	avatar(move(avatar)), name(move(name)), gender(move(gender)), birthday(move(birthday)), height(move(height)), weight(move(weight)),
+	Change(Kind), avatar(move(avatar)), name(move(name)), gender(move(gender)), birthday(move(birthday)), height(move(height)), weight(move(weight)),
 	nick(move(nick)), deposit(move(deposit)), phone(move(phone)), home(move(home)), jobs(move(jobs)), scheduler(move(scheduler)), economy(move(economy)) {
 
 }
 
 SpawnNpcChange::~SpawnNpcChange() {
 
-}
-
-const string& SpawnNpcChange::GetType() const {
-	static const string type = "spawn_npc";
-	return type;
 }
 
 void SpawnNpcChange::SetAvatar(std::string avatar) {
@@ -496,22 +534,17 @@ const std::string& SpawnNpcChange::GetEconomy() const {
 }
 
 RemoveNpcChange::RemoveNpcChange() :
-	name() {
+	Change(Kind), name() {
 
 }
 
 RemoveNpcChange::RemoveNpcChange(std::string name) :
-	name(move(name)) {
+	Change(Kind), name(move(name)) {
 
 }
 
 RemoveNpcChange::~RemoveNpcChange() {
 
-}
-
-const string& RemoveNpcChange::GetType() const {
-	static const string type = "remove_npc";
-	return type;
 }
 
 void RemoveNpcChange::SetName(std::string name) {
@@ -523,22 +556,17 @@ const std::string& RemoveNpcChange::GetName() const {
 }
 
 NPCReviveChange::NPCReviveChange() :
-	name(), health() {
+	Change(Kind), name(), health() {
 
 }
 
 NPCReviveChange::NPCReviveChange(std::string name, std::string health) :
-	name(move(name)), health(move(health)) {
+	Change(Kind), name(move(name)), health(move(health)) {
 
 }
 
 NPCReviveChange::~NPCReviveChange() {
 
-}
-
-const string& NPCReviveChange::GetType() const {
-	static const string type = "npc_revive";
-	return type;
 }
 
 void NPCReviveChange::SetName(std::string name) {
@@ -558,22 +586,17 @@ const std::string& NPCReviveChange::GetHealth() const {
 }
 
 NPCTeleportChange::NPCTeleportChange() :
-	name(), destination() {
+	Change(Kind), name(), destination() {
 
 }
 
 NPCTeleportChange::NPCTeleportChange(std::string name, std::string destination) :
-	name(move(name)), destination(move(destination)) {
+	Change(Kind), name(move(name)), destination(move(destination)) {
 
 }
 
 NPCTeleportChange::~NPCTeleportChange() {
 
-}
-
-const string& NPCTeleportChange::GetType() const {
-	static const string type = "npc_teleport";
-	return type;
 }
 
 void NPCTeleportChange::SetName(std::string name) {
@@ -593,22 +616,17 @@ const std::string& NPCTeleportChange::GetDestination() const {
 }
 
 NPCNavigateChange::NPCNavigateChange() :
-	name(), destination(), speed() {
+	Change(Kind), name(), destination(), speed() {
 
 }
 
 NPCNavigateChange::NPCNavigateChange(string name, string destination, string speed) :
-	name(move(name)), destination(move(destination)), speed(move(speed)) {
+	Change(Kind), name(move(name)), destination(move(destination)), speed(move(speed)) {
 
 }
 
 NPCNavigateChange::~NPCNavigateChange() {
 
-}
-
-const string& NPCNavigateChange::GetType() const {
-	static const string type = "npc_navigate";
-	return type;
 }
 
 void NPCNavigateChange::SetName(string name) {
@@ -632,22 +650,17 @@ const string& NPCNavigateChange::GetSpeed() const {
 }
 
 AssignTaskChange::AssignTaskChange() :
-	task(), destination(), vehicles(), worker(), speed() {
+	Change(Kind), task(), destination(), vehicles(), worker(), speed() {
 
 }
 
 AssignTaskChange::AssignTaskChange(string task, string destination, vector<string> vehicles, string worker, string speed) :
-	task(move(task)), destination(move(destination)), vehicles(move(vehicles)), worker(move(worker)), speed(move(speed)) {
+	Change(Kind), task(move(task)), destination(move(destination)), vehicles(move(vehicles)), worker(move(worker)), speed(move(speed)) {
 
 }
 
 AssignTaskChange::~AssignTaskChange() {
 
-}
-
-const string& AssignTaskChange::GetType() const {
-	static const string type = "assign_task";
-	return type;
 }
 
 const string& AssignTaskChange::GetTask() const {
@@ -671,22 +684,17 @@ const string& AssignTaskChange::GetSpeed() const {
 }
 
 TeleportPlayerChange::TeleportPlayerChange() :
-	destination() {
+	Change(Kind), destination() {
 
 }
 
 TeleportPlayerChange::TeleportPlayerChange(std::string destination) :
-	destination(move(destination)) {
+	Change(Kind), destination(move(destination)) {
 
 }
 
 TeleportPlayerChange::~TeleportPlayerChange() {
 
-}
-
-const string& TeleportPlayerChange::GetType() const {
-	static const string type = "teleport_player";
-	return type;
 }
 
 void TeleportPlayerChange::SetDestination(std::string destination) {
@@ -698,22 +706,17 @@ const std::string& TeleportPlayerChange::GetDestination() const {
 }
 
 OpenShopChange::OpenShopChange() :
-	saler() {
+	Change(Kind), saler() {
 
 }
 
 OpenShopChange::OpenShopChange(std::string saler) :
-	saler(move(saler)) {
+	Change(Kind), saler(move(saler)) {
 
 }
 
 OpenShopChange::~OpenShopChange() {
 
-}
-
-const string& OpenShopChange::GetType() const {
-	static const string type = "open_shop";
-	return type;
 }
 
 void OpenShopChange::SetSaler(std::string saler) {
@@ -725,30 +728,25 @@ const std::string& OpenShopChange::GetSaler() const {
 }
 
 StartPuzzleChange::StartPuzzleChange() :
-	puzzle(),
+	Change(Kind), puzzle(),
 	param() {
 
 }
 
 StartPuzzleChange::StartPuzzleChange(std::string puzzle) :
-	puzzle(move(puzzle)),
+	Change(Kind), puzzle(move(puzzle)),
 	param() {
 
 }
 
 StartPuzzleChange::StartPuzzleChange(std::string puzzle, std::string param) :
-	puzzle(move(puzzle)),
+	Change(Kind), puzzle(move(puzzle)),
 	param(move(param)) {
 
 }
 
 StartPuzzleChange::~StartPuzzleChange() {
 
-}
-
-const string& StartPuzzleChange::GetType() const {
-	static const string type = "start_puzzle";
-	return type;
 }
 
 void StartPuzzleChange::SetPuzzle(std::string puzzle) {
@@ -768,22 +766,17 @@ const std::string& StartPuzzleChange::GetParam() const {
 }
 
 PayWageChange::PayWageChange() :
-	amount() {
+	Change(Kind), amount() {
 
 }
 
 PayWageChange::PayWageChange(std::string amount) :
-	amount(move(amount)) {
+	Change(Kind), amount(move(amount)) {
 
 }
 
 PayWageChange::~PayWageChange() {
 
-}
-
-const string& PayWageChange::GetType() const {
-	static const string type = "pay_wage";
-	return type;
 }
 
 void PayWageChange::SetAmount(std::string amount) {
@@ -795,22 +788,17 @@ const std::string& PayWageChange::GetAmount() const {
 }
 
 EnterVehicleChange::EnterVehicleChange() :
-	vehicle() {
+	Change(Kind), vehicle() {
 
 }
 
 EnterVehicleChange::EnterVehicleChange(std::string vehicle) :
-	vehicle(move(vehicle)) {
+	Change(Kind), vehicle(move(vehicle)) {
 
 }
 
 EnterVehicleChange::~EnterVehicleChange() {
 
-}
-
-const string& EnterVehicleChange::GetType() const {
-	static const string type = "enter_vehicle";
-	return type;
 }
 
 void EnterVehicleChange::SetVehicle(std::string vehicle) {
@@ -821,11 +809,13 @@ const std::string& EnterVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
-ShowRouteChange::ShowRouteChange() : target() {
+ShowRouteChange::ShowRouteChange() :
+	Change(Kind), target() {
 
 }
 
-ShowRouteChange::ShowRouteChange(std::string target) : target(move(target)) {
+ShowRouteChange::ShowRouteChange(std::string target) :
+	Change(Kind), target(move(target)) {
 
 }
 
@@ -833,32 +823,22 @@ ShowRouteChange::~ShowRouteChange() {
 
 }
 
-const string& ShowRouteChange::GetType() const {
-	static const string type = "show_route";
-	return type;
-}
-
 const std::string& ShowRouteChange::GetTarget() const {
 	return target;
 }
 
 VisualizeNavigationChange::VisualizeNavigationChange() :
-	address() {
+	Change(Kind), address() {
 
 }
 
 VisualizeNavigationChange::VisualizeNavigationChange(std::string address) :
-	address(move(address)) {
+	Change(Kind), address(move(address)) {
 
 }
 
 VisualizeNavigationChange::~VisualizeNavigationChange() {
 
-}
-
-const string& VisualizeNavigationChange::GetType() const {
-	static const string type = "visualize_navigation";
-	return type;
 }
 
 void VisualizeNavigationChange::SetAddress(std::string address) {
@@ -870,22 +850,17 @@ const std::string& VisualizeNavigationChange::GetAddress() const {
 }
 
 VehicleCommandChange::VehicleCommandChange() :
-	vehicle(), command() {
+	Change(Kind), vehicle(), command() {
 
 }
 
 VehicleCommandChange::VehicleCommandChange(std::string vehicle, std::string command) :
-	vehicle(move(vehicle)), command(move(command)) {
+	Change(Kind), vehicle(move(vehicle)), command(move(command)) {
 
 }
 
 VehicleCommandChange::~VehicleCommandChange() {
 
-}
-
-const string& VehicleCommandChange::GetType() const {
-	static const string type = "vehicle_command";
-	return type;
 }
 
 void VehicleCommandChange::SetVehicle(std::string vehicle) {
@@ -905,22 +880,17 @@ const std::string& VehicleCommandChange::GetCommand() const {
 }
 
 VehicleNavigateChange::VehicleNavigateChange() :
-	vehicle(), destination() {
+	Change(Kind), vehicle(), destination() {
 
 }
 
 VehicleNavigateChange::VehicleNavigateChange(std::string vehicle, std::string destination) :
-	vehicle(move(vehicle)), destination(move(destination)) {
+	Change(Kind), vehicle(move(vehicle)), destination(move(destination)) {
 
 }
 
 VehicleNavigateChange::~VehicleNavigateChange() {
 
-}
-
-const string& VehicleNavigateChange::GetType() const {
-	static const string type = "vehicle_navigate";
-	return type;
 }
 
 void VehicleNavigateChange::SetVehicle(std::string vehicle) {
@@ -940,22 +910,17 @@ const std::string& VehicleNavigateChange::GetDestination() const {
 }
 
 LeaveVehicleChange::LeaveVehicleChange() :
-	vehicle() {
+	Change(Kind), vehicle() {
 
 }
 
 LeaveVehicleChange::LeaveVehicleChange(std::string vehicle) :
-	vehicle(move(vehicle)) {
+	Change(Kind), vehicle(move(vehicle)) {
 
 }
 
 LeaveVehicleChange::~LeaveVehicleChange() {
 
-}
-
-const string& LeaveVehicleChange::GetType() const {
-	static const string type = "leave_vehicle";
-	return type;
 }
 
 void LeaveVehicleChange::SetVehicle(std::string vehicle) {
@@ -967,22 +932,17 @@ const std::string& LeaveVehicleChange::GetVehicle() const {
 }
 
 BoardVehicleChange::BoardVehicleChange() :
-	vehicle() {
+	Change(Kind), vehicle() {
 
 }
 
 BoardVehicleChange::BoardVehicleChange(std::string vehicle) :
-	vehicle(move(vehicle)) {
+	Change(Kind), vehicle(move(vehicle)) {
 
 }
 
 BoardVehicleChange::~BoardVehicleChange() {
 
-}
-
-const string& BoardVehicleChange::GetType() const {
-	static const string type = "board_vehicle";
-	return type;
 }
 
 void BoardVehicleChange::SetVehicle(std::string vehicle) {
@@ -994,22 +954,17 @@ const std::string& BoardVehicleChange::GetVehicle() const {
 }
 
 ForceLeaveChange::ForceLeaveChange() :
-	vehicle() {
+	Change(Kind), vehicle() {
 
 }
 
 ForceLeaveChange::ForceLeaveChange(std::string vehicle) :
-	vehicle(move(vehicle)) {
+	Change(Kind), vehicle(move(vehicle)) {
 
 }
 
 ForceLeaveChange::~ForceLeaveChange() {
 
-}
-
-const string& ForceLeaveChange::GetType() const {
-	static const string type = "force_leave";
-	return type;
 }
 
 void ForceLeaveChange::SetVehicle(std::string vehicle) {
@@ -1021,22 +976,17 @@ const std::string& ForceLeaveChange::GetVehicle() const {
 }
 
 SetDoorChange::SetDoorChange() :
-	name(), access() {
+	Change(Kind), name(), access() {
 
 }
 
 SetDoorChange::SetDoorChange(std::string name, std::string access) :
-	name(move(name)), access(move(access)) {
+	Change(Kind), name(move(name)), access(move(access)) {
 
 }
 
 SetDoorChange::~SetDoorChange() {
 
-}
-
-const string& SetDoorChange::GetType() const {
-	static const string type = "set_door";
-	return type;
 }
 
 void SetDoorChange::SetName(std::string name) {
@@ -1056,22 +1006,17 @@ const std::string& SetDoorChange::GetAccess() const {
 }
 
 RecordObjectChange::RecordObjectChange() :
-	object(), kind(), policy(), variable() {
+	Change(Kind), object(), kind(), policy(), variable() {
 
 }
 
 RecordObjectChange::RecordObjectChange(std::string object, std::string kind, std::string policy, std::string variable) :
-	object(move(object)), kind(move(kind)), policy(move(policy)), variable(move(variable)) {
+	Change(Kind), object(move(object)), kind(move(kind)), policy(move(policy)), variable(move(variable)) {
 
 }
 
 RecordObjectChange::~RecordObjectChange() {
 
-}
-
-const string& RecordObjectChange::GetType() const {
-	static const string type = "record_object";
-	return type;
 }
 
 void RecordObjectChange::SetObject(std::string object) { this->object = move(object); }
@@ -1084,22 +1029,17 @@ void RecordObjectChange::SetVariable(std::string variable) { this->variable = mo
 const std::string& RecordObjectChange::GetVariable() const { return variable; }
 
 RegisterDoorChange::RegisterDoorChange() :
-	name(), citizen(), pass() {
+	Change(Kind), name(), citizen(), pass() {
 
 }
 
 RegisterDoorChange::RegisterDoorChange(std::string name, std::string citizen, std::string pass) :
-	name(move(name)), citizen(move(citizen)), pass(move(pass)) {
+	Change(Kind), name(move(name)), citizen(move(citizen)), pass(move(pass)) {
 
 }
 
 RegisterDoorChange::~RegisterDoorChange() {
 
-}
-
-const string& RegisterDoorChange::GetType() const {
-	static const string type = "register_door";
-	return type;
 }
 
 void RegisterDoorChange::SetName(std::string name) {
@@ -1127,22 +1067,17 @@ const std::string& RegisterDoorChange::GetPass() const {
 }
 
 JumpTimeChange::JumpTimeChange() :
-	time(), mode() {
+	Change(Kind), time(), mode() {
 
 }
 
 JumpTimeChange::JumpTimeChange(std::string time, std::string mode) :
-	time(move(time)), mode(move(mode)) {
+	Change(Kind), time(move(time)), mode(move(mode)) {
 
 }
 
 JumpTimeChange::~JumpTimeChange() {
 
-}
-
-const string& JumpTimeChange::GetType() const {
-	static const string type = "jump_time";
-	return type;
 }
 
 void JumpTimeChange::SetTime(std::string time) {
@@ -1162,23 +1097,18 @@ const std::string& JumpTimeChange::GetMode() const {
 }
 
 CreateTimerChange::CreateTimerChange() :
-	name(), time(), category(), label(), mode() {
+	Change(Kind), name(), time(), category(), label(), mode() {
 
 }
 
 CreateTimerChange::CreateTimerChange(std::string name, std::string time, std::string category, std::string label,
 	std::string mode) :
-	name(move(name)), time(move(time)), category(move(category)), label(move(label)), mode(move(mode)) {
+	Change(Kind), name(move(name)), time(move(time)), category(move(category)), label(move(label)), mode(move(mode)) {
 
 }
 
 CreateTimerChange::~CreateTimerChange() {
 
-}
-
-const string& CreateTimerChange::GetType() const {
-	static const string type = "create_timer";
-	return type;
 }
 
 void CreateTimerChange::SetMode(std::string mode) {
@@ -1222,22 +1152,17 @@ const std::string& CreateTimerChange::GetLabel() const {
 }
 
 RemoveTimerChange::RemoveTimerChange() :
-	name() {
+	Change(Kind), name() {
 
 }
 
 RemoveTimerChange::RemoveTimerChange(std::string name) :
-	name(move(name)) {
+	Change(Kind), name(move(name)) {
 
 }
 
 RemoveTimerChange::~RemoveTimerChange() {
 
-}
-
-const string& RemoveTimerChange::GetType() const {
-	static const string type = "remove_timer";
-	return type;
 }
 
 void RemoveTimerChange::SetName(std::string name) {
@@ -1249,22 +1174,17 @@ const std::string& RemoveTimerChange::GetName() const {
 }
 
 LaunchElevatorChange::LaunchElevatorChange() :
-	building(), elevator(), command() {
+	Change(Kind), building(), elevator(), command() {
 
 }
 
 LaunchElevatorChange::LaunchElevatorChange(std::string building, std::string elevator, std::string command) :
-	building(move(building)), elevator(move(elevator)), command(move(command)) {
+	Change(Kind), building(move(building)), elevator(move(elevator)), command(move(command)) {
 
 }
 
 LaunchElevatorChange::~LaunchElevatorChange() {
 
-}
-
-const string& LaunchElevatorChange::GetType() const {
-	static const string type = "launch_elevator";
-	return type;
 }
 
 void LaunchElevatorChange::SetBuilding(std::string building) {
@@ -1292,22 +1212,17 @@ const std::string& LaunchElevatorChange::GetCommand() const {
 }
 
 PlayVideoChange::PlayVideoChange() :
-	path() {
+	Change(Kind), path() {
 
 }
 
 PlayVideoChange::PlayVideoChange(std::string path) :
-	path(move(path)) {
+	Change(Kind), path(move(path)) {
 
 }
 
 PlayVideoChange::~PlayVideoChange() {
 
-}
-
-const string& PlayVideoChange::GetType() const {
-	static const string type = "play_video";
-	return type;
 }
 
 void PlayVideoChange::SetPath(std::string path) {
@@ -1319,22 +1234,17 @@ const std::string& PlayVideoChange::GetPath() const {
 }
 
 PlayBgmChange::PlayBgmChange() :
-	bgm(), loop() {
+	Change(Kind), bgm(), loop() {
 
 }
 
 PlayBgmChange::PlayBgmChange(std::string bgm, std::string loop) :
-	bgm(move(bgm)), loop(move(loop)) {
+	Change(Kind), bgm(move(bgm)), loop(move(loop)) {
 
 }
 
 PlayBgmChange::~PlayBgmChange() {
 
-}
-
-const string& PlayBgmChange::GetType() const {
-	static const string type = "play_bgm";
-	return type;
 }
 
 void PlayBgmChange::SetBgm(std::string bgm) {
@@ -1353,7 +1263,8 @@ const std::string& PlayBgmChange::GetLoop() const {
 	return loop;
 }
 
-StopBgmChange::StopBgmChange() {
+StopBgmChange::StopBgmChange() :
+	Change(Kind) {
 
 }
 
@@ -1361,28 +1272,18 @@ StopBgmChange::~StopBgmChange() {
 
 }
 
-const string& StopBgmChange::GetType() const {
-	static const string type = "stop_bgm";
-	return type;
-}
-
 BankTransactionChange::BankTransactionChange() :
-	name(), amount() {
+	Change(Kind), name(), amount() {
 
 }
 
 BankTransactionChange::BankTransactionChange(std::string name, std::string amount) :
-	name(move(name)), amount(move(amount)) {
+	Change(Kind), name(move(name)), amount(move(amount)) {
 
 }
 
 BankTransactionChange::~BankTransactionChange() {
 
-}
-
-const string& BankTransactionChange::GetType() const {
-	static const string type = "bank_transaction";
-	return type;
 }
 
 void BankTransactionChange::SetName(std::string name) {
@@ -1402,22 +1303,17 @@ const std::string& BankTransactionChange::GetAmount() const {
 }
 
 GiveEstateChange::GiveEstateChange() :
-	estate(), name(), force() {
+	Change(Kind), estate(), name(), force() {
 
 }
 
 GiveEstateChange::GiveEstateChange(std::string estate, std::string name, std::string force) :
-	estate(move(estate)), name(move(name)), force(move(force)) {
+	Change(Kind), estate(move(estate)), name(move(name)), force(move(force)) {
 
 }
 
 GiveEstateChange::~GiveEstateChange() {
 
-}
-
-const string& GiveEstateChange::GetType() const {
-	static const string type = "give_estate";
-	return type;
 }
 
 void GiveEstateChange::SetEstate(std::string estate) {
@@ -1445,22 +1341,17 @@ const std::string& GiveEstateChange::GetForce() const {
 }
 
 RemoveEstateChange::RemoveEstateChange() :
-	estate(), name() {
+	Change(Kind), estate(), name() {
 
 }
 
 RemoveEstateChange::RemoveEstateChange(std::string estate, std::string name) :
-	estate(move(estate)), name(move(name)) {
+	Change(Kind), estate(move(estate)), name(move(name)) {
 
 }
 
 RemoveEstateChange::~RemoveEstateChange() {
 
-}
-
-const string& RemoveEstateChange::GetType() const {
-	static const string type = "remove_estate";
-	return type;
 }
 
 void RemoveEstateChange::SetEstate(std::string estate) {
@@ -1480,22 +1371,17 @@ const std::string& RemoveEstateChange::GetName() const {
 }
 
 GiveVehicleChange::GiveVehicleChange() :
-	vehicle(), name(), force() {
+	Change(Kind), vehicle(), name(), force() {
 
 }
 
 GiveVehicleChange::GiveVehicleChange(std::string vehicle, std::string name, std::string force) :
-	vehicle(move(vehicle)), name(move(name)), force(move(force)) {
+	Change(Kind), vehicle(move(vehicle)), name(move(name)), force(move(force)) {
 
 }
 
 GiveVehicleChange::~GiveVehicleChange() {
 
-}
-
-const string& GiveVehicleChange::GetType() const {
-	static const string type = "give_vehicle";
-	return type;
 }
 
 void GiveVehicleChange::SetVehicle(std::string vehicle) {
@@ -1523,22 +1409,17 @@ const std::string& GiveVehicleChange::GetForce() const {
 }
 
 RemoveVehicleChange::RemoveVehicleChange() :
-	vehicle(), name() {
+	Change(Kind), vehicle(), name() {
 
 }
 
 RemoveVehicleChange::RemoveVehicleChange(std::string vehicle, std::string name) :
-	vehicle(move(vehicle)), name(move(name)) {
+	Change(Kind), vehicle(move(vehicle)), name(move(name)) {
 
 }
 
 RemoveVehicleChange::~RemoveVehicleChange() {
 
-}
-
-const string& RemoveVehicleChange::GetType() const {
-	static const string type = "remove_vehicle";
-	return type;
 }
 
 void RemoveVehicleChange::SetVehicle(std::string vehicle) {
@@ -1558,22 +1439,17 @@ const std::string& RemoveVehicleChange::GetName() const {
 }
 
 PlayerInjuredChange::PlayerInjuredChange() :
-	wound() {
+	Change(Kind), wound() {
 
 }
 
 PlayerInjuredChange::PlayerInjuredChange(std::string wound) :
-	wound(move(wound)) {
+	Change(Kind), wound(move(wound)) {
 
 }
 
 PlayerInjuredChange::~PlayerInjuredChange() {
 
-}
-
-const string& PlayerInjuredChange::GetType() const {
-	static const string type = "player_injured";
-	return type;
 }
 
 void PlayerInjuredChange::SetWound(std::string wound) {
@@ -1585,22 +1461,17 @@ const std::string& PlayerInjuredChange::GetWound() const {
 }
 
 PlayerCuredChange::PlayerCuredChange() :
-	wound() {
+	Change(Kind), wound() {
 
 }
 
 PlayerCuredChange::PlayerCuredChange(std::string wound) :
-	wound(move(wound)) {
+	Change(Kind), wound(move(wound)) {
 
 }
 
 PlayerCuredChange::~PlayerCuredChange() {
 
-}
-
-const string& PlayerCuredChange::GetType() const {
-	static const string type = "player_cured";
-	return type;
 }
 
 void PlayerCuredChange::SetWound(std::string wound) {
@@ -1612,22 +1483,17 @@ const std::string& PlayerCuredChange::GetWound() const {
 }
 
 PlayerIllChange::PlayerIllChange() :
-	illness() {
+	Change(Kind), illness() {
 
 }
 
 PlayerIllChange::PlayerIllChange(std::string illness) :
-	illness(move(illness)) {
+	Change(Kind), illness(move(illness)) {
 
 }
 
 PlayerIllChange::~PlayerIllChange() {
 
-}
-
-const string& PlayerIllChange::GetType() const {
-	static const string type = "player_ill";
-	return type;
 }
 
 void PlayerIllChange::SetIllness(std::string illness) {
@@ -1639,22 +1505,17 @@ const std::string& PlayerIllChange::GetIllness() const {
 }
 
 PlayerRecoverChange::PlayerRecoverChange() :
-	illness() {
+	Change(Kind), illness() {
 
 }
 
 PlayerRecoverChange::PlayerRecoverChange(std::string illness) :
-	illness(move(illness)) {
+	Change(Kind), illness(move(illness)) {
 
 }
 
 PlayerRecoverChange::~PlayerRecoverChange() {
 
-}
-
-const string& PlayerRecoverChange::GetType() const {
-	static const string type = "player_recover";
-	return type;
 }
 
 void PlayerRecoverChange::SetIllness(std::string illness) {
@@ -1666,22 +1527,17 @@ const std::string& PlayerRecoverChange::GetIllness() const {
 }
 
 PlayerSleepChange::PlayerSleepChange() :
-	hour() {
+	Change(Kind), hour() {
 
 }
 
 PlayerSleepChange::PlayerSleepChange(std::string hour) :
-	hour(move(hour)) {
+	Change(Kind), hour(move(hour)) {
 
 }
 
 PlayerSleepChange::~PlayerSleepChange() {
 
-}
-
-const string& PlayerSleepChange::GetType() const {
-	static const string type = "player_sleep";
-	return type;
 }
 
 void PlayerSleepChange::SetHour(std::string hour) {
@@ -1693,22 +1549,17 @@ const std::string& PlayerSleepChange::GetHour() const {
 }
 
 ChangeTimeChange::ChangeTimeChange() :
-	delta() {
+	Change(Kind), delta() {
 
 }
 
 ChangeTimeChange::ChangeTimeChange(std::string delta) :
-	delta(move(delta)) {
+	Change(Kind), delta(move(delta)) {
 
 }
 
 ChangeTimeChange::~ChangeTimeChange() {
 
-}
-
-const string& ChangeTimeChange::GetType() const {
-	static const string type = "change_time";
-	return type;
 }
 
 void ChangeTimeChange::SetDelta(std::string delta) {
@@ -1720,22 +1571,17 @@ const std::string& ChangeTimeChange::GetDelta() const {
 }
 
 ChangeWantedChange::ChangeWantedChange() :
-	reason(), level() {
+	Change(Kind), reason(), level() {
 
 }
 
 ChangeWantedChange::ChangeWantedChange(std::string reason, std::string level) :
-	reason(move(reason)), level(move(level)) {
+	Change(Kind), reason(move(reason)), level(move(level)) {
 
 }
 
 ChangeWantedChange::~ChangeWantedChange() {
 
-}
-
-const string& ChangeWantedChange::GetType() const {
-	static const string type = "change_wanted";
-	return type;
 }
 
 void ChangeWantedChange::SetReason(std::string reason) {
@@ -1755,22 +1601,17 @@ const std::string& ChangeWantedChange::GetLevel() const {
 }
 
 ChangeWeatherChange::ChangeWeatherChange() :
-	weather() {
+	Change(Kind), weather() {
 
 }
 
 ChangeWeatherChange::ChangeWeatherChange(std::string weather) :
-	weather(move(weather)) {
+	Change(Kind), weather(move(weather)) {
 
 }
 
 ChangeWeatherChange::~ChangeWeatherChange() {
 
-}
-
-const string& ChangeWeatherChange::GetType() const {
-	static const string type = "change_weather";
-	return type;
 }
 
 void ChangeWeatherChange::SetWeather(std::string weather) {
@@ -1782,22 +1623,17 @@ const std::string& ChangeWeatherChange::GetWeather() const {
 }
 
 ChangeControlChange::ChangeControlChange() :
-	name() {
+	Change(Kind), name() {
 
 }
 
 ChangeControlChange::ChangeControlChange(std::string name) :
-	name(move(name)) {
+	Change(Kind), name(move(name)) {
 
 }
 
 ChangeControlChange::~ChangeControlChange() {
 
-}
-
-const string& ChangeControlChange::GetType() const {
-	static const string type = "change_control";
-	return type;
 }
 
 void ChangeControlChange::SetName(std::string name) {
@@ -1809,22 +1645,17 @@ const std::string& ChangeControlChange::GetName() const {
 }
 
 PickAssetChange::PickAssetChange() :
-	asset() {
+	Change(Kind), asset() {
 
 }
 
 PickAssetChange::PickAssetChange(std::string asset) :
-	asset(move(asset)) {
+	Change(Kind), asset(move(asset)) {
 
 }
 
 PickAssetChange::~PickAssetChange() {
 
-}
-
-const string& PickAssetChange::GetType() const {
-	static const string type = "pick_asset";
-	return type;
 }
 
 void PickAssetChange::SetAsset(std::string asset) {
@@ -1836,22 +1667,17 @@ const std::string& PickAssetChange::GetAsset() const {
 }
 
 GrantAssetChange::GrantAssetChange() :
-	type(), count() {
+	Change(Kind), type(), count(), slot() {
 
 }
 
-GrantAssetChange::GrantAssetChange(std::string type, std::string count) :
-	type(move(type)), count(move(count)) {
+GrantAssetChange::GrantAssetChange(std::string type, std::string count, std::string slot) :
+	Change(Kind), type(move(type)), count(move(count)), slot(move(slot)) {
 
 }
 
 GrantAssetChange::~GrantAssetChange() {
 
-}
-
-const string& GrantAssetChange::GetType() const {
-	static const string type = "grant_asset";
-	return type;
 }
 
 void GrantAssetChange::SetAssetType(std::string type) {
@@ -1870,23 +1696,26 @@ const std::string& GrantAssetChange::GetCount() const {
 	return count;
 }
 
+void GrantAssetChange::SetSlot(std::string slot) {
+	this->slot = move(slot);
+}
+
+const std::string& GrantAssetChange::GetSlot() const {
+	return slot;
+}
+
 DeductAssetChange::DeductAssetChange() :
-	type(), count() {
+	Change(Kind), type(), count() {
 
 }
 
 DeductAssetChange::DeductAssetChange(std::string type, std::string count) :
-	type(move(type)), count(move(count)) {
+	Change(Kind), type(move(type)), count(move(count)) {
 
 }
 
 DeductAssetChange::~DeductAssetChange() {
 
-}
-
-const string& DeductAssetChange::GetType() const {
-	static const string type = "deduct_asset";
-	return type;
 }
 
 void DeductAssetChange::SetAssetType(std::string type) {
@@ -1906,22 +1735,17 @@ const std::string& DeductAssetChange::GetCount() const {
 }
 
 DropAssetChange::DropAssetChange() :
-	type(), count() {
+	Change(Kind), type(), count() {
 
 }
 
 DropAssetChange::DropAssetChange(std::string type, std::string count) :
-	type(move(type)), count(move(count)) {
+	Change(Kind), type(move(type)), count(move(count)) {
 
 }
 
 DropAssetChange::~DropAssetChange() {
 
-}
-
-const string& DropAssetChange::GetType() const {
-	static const string type = "drop_asset";
-	return type;
 }
 
 void DropAssetChange::SetAssetType(std::string type) {
@@ -1942,23 +1766,18 @@ const std::string& DropAssetChange::GetCount() const {
 
 
 SpawnEffectChange::SpawnEffectChange() :
-	effect(), scale(), asset() {
+	Change(Kind), effect(), scale(), asset() {
 
 }
 
 SpawnEffectChange::SpawnEffectChange(std::string effect, std::string scale, std::string asset, std::string position,
 	std::string normal) :
-	effect(move(effect)), scale(move(scale)), asset(move(asset)), position(move(position)), normal(move(normal)) {
+	Change(Kind), effect(move(effect)), scale(move(scale)), asset(move(asset)), position(move(position)), normal(move(normal)) {
 
 }
 
 SpawnEffectChange::~SpawnEffectChange() {
 
-}
-
-const string& SpawnEffectChange::GetType() const {
-	static const string type = "spawn_effect";
-	return type;
 }
 
 void SpawnEffectChange::SetEffect(std::string effect) {
@@ -2002,23 +1821,18 @@ const std::string& SpawnEffectChange::GetNormal() const {
 }
 
 SoundEffectChange::SoundEffectChange() :
-	sound(), position(), asset(), volume(), pitch() {
+	Change(Kind), sound(), position(), asset(), volume(), pitch() {
 
 }
 
 SoundEffectChange::SoundEffectChange(std::string sound, std::string position, std::string asset, std::string volume,
 	std::string pitch) :
-	sound(move(sound)), position(move(position)), asset(move(asset)), volume(move(volume)), pitch(move(pitch)) {
+	Change(Kind), sound(move(sound)), position(move(position)), asset(move(asset)), volume(move(volume)), pitch(move(pitch)) {
 
 }
 
 SoundEffectChange::~SoundEffectChange() {
 
-}
-
-const string& SoundEffectChange::GetType() const {
-	static const string type = "sound_effect";
-	return type;
 }
 
 void SoundEffectChange::SetSound(std::string sound) {
@@ -2062,22 +1876,17 @@ const std::string& SoundEffectChange::GetPitch() const {
 }
 
 SpawnActorChange::SpawnActorChange() :
-	actor(), position(), direction(), scale() {
+	Change(Kind), actor(), position(), direction(), scale() {
 
 }
 
 SpawnActorChange::SpawnActorChange(std::string actor, std::string position, std::string direction, std::string scale) :
-	actor(move(actor)), position(move(position)), direction(move(direction)), scale(move(scale)) {
+	Change(Kind), actor(move(actor)), position(move(position)), direction(move(direction)), scale(move(scale)) {
 
 }
 
 SpawnActorChange::~SpawnActorChange() {
 
-}
-
-const string& SpawnActorChange::GetType() const {
-	static const string type = "spawn_actor";
-	return type;
 }
 
 void SpawnActorChange::SetActor(std::string actor) {
@@ -2113,22 +1922,17 @@ const std::string& SpawnActorChange::GetScale() const {
 }
 
 DestroyAssetChange::DestroyAssetChange() :
-	asset() {
+	Change(Kind), asset() {
 
 }
 
 DestroyAssetChange::DestroyAssetChange(std::string asset) :
-	asset(move(asset)) {
+	Change(Kind), asset(move(asset)) {
 
 }
 
 DestroyAssetChange::~DestroyAssetChange() {
 
-}
-
-const string& DestroyAssetChange::GetType() const {
-	static const string type = "destroy_asset";
-	return type;
 }
 
 void DestroyAssetChange::SetAsset(std::string asset) {
@@ -2140,22 +1944,17 @@ const std::string& DestroyAssetChange::GetAsset() const {
 }
 
 SingleDamageChange::SingleDamageChange() :
-	target(), damage(), source(), weapon(), part() {
+	Change(Kind), target(), damage(), source(), weapon(), part() {
 
 }
 
 SingleDamageChange::SingleDamageChange(std::string target, std::string damage, std::string source, std::string weapon, std::string part) :
-	target(move(target)), damage(move(damage)), source(move(source)), weapon(move(weapon)), part(move(part)) {
+	Change(Kind), target(move(target)), damage(move(damage)), source(move(source)), weapon(move(weapon)), part(move(part)) {
 
 }
 
 SingleDamageChange::~SingleDamageChange() {
 
-}
-
-const string& SingleDamageChange::GetType() const {
-	static const string type = "single_damage";
-	return type;
 }
 
 void SingleDamageChange::SetTarget(std::string target) {
@@ -2199,24 +1998,19 @@ const std::string& SingleDamageChange::GetPart() const {
 }
 
 AreaDamageChange::AreaDamageChange() :
-	position(), radius(), damage(), occlusion(), power(), source(), weapon() {
+	Change(Kind), position(), radius(), damage(), occlusion(), power(), source(), weapon() {
 
 }
 
 AreaDamageChange::AreaDamageChange(std::string position, std::string radius, std::string damage, std::string occlusion,
 	std::string power, std::string source, std::string weapon) :
-	position(move(position)), radius(move(radius)), damage(move(damage)), occlusion(move(occlusion)), power(move(power)),
+	Change(Kind), position(move(position)), radius(move(radius)), damage(move(damage)), occlusion(move(occlusion)), power(move(power)),
 	source(move(source)), weapon(move(weapon)) {
 
 }
 
 AreaDamageChange::~AreaDamageChange() {
 
-}
-
-const string& AreaDamageChange::GetType() const {
-	static const string type = "area_damage";
-	return type;
 }
 
 void AreaDamageChange::SetPosition(std::string position) {
@@ -2276,22 +2070,17 @@ const std::string& AreaDamageChange::GetWeapon() const {
 }
 
 AddSatietyChange::AddSatietyChange() :
-	target(), amount() {
+	Change(Kind), target(), amount() {
 
 }
 
 AddSatietyChange::AddSatietyChange(std::string target, std::string amount) :
-	target(move(target)), amount(move(amount)) {
+	Change(Kind), target(move(target)), amount(move(amount)) {
 
 }
 
 AddSatietyChange::~AddSatietyChange() {
 
-}
-
-const string& AddSatietyChange::GetType() const {
-	static const string type = "add_satiety";
-	return type;
 }
 
 void AddSatietyChange::SetTarget(std::string target) {
@@ -2311,22 +2100,17 @@ const std::string& AddSatietyChange::GetAmount() const {
 }
 
 CitizenFleeChange::CitizenFleeChange() :
-	name(), from() {
+	Change(Kind), name(), from() {
 
 }
 
 CitizenFleeChange::CitizenFleeChange(string name, string from) :
-	name(move(name)), from(move(from)) {
+	Change(Kind), name(move(name)), from(move(from)) {
 
 }
 
 CitizenFleeChange::~CitizenFleeChange() {
 
-}
-
-const string& CitizenFleeChange::GetType() const {
-	static const string type = "citizen_flee";
-	return type;
 }
 
 const string& CitizenFleeChange::GetName() const {

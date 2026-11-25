@@ -230,7 +230,7 @@ Node Connection::GetEnd() const {
 
 Node Connection::GetPoint(float f) const {
 	if (f < 0.f || f > 1.f) {
-		debugf("Warning: Bizier query position out of [0, 1].\n");
+		debugf(DebugLevel::Warning, "Bizier query position out of [0, 1].\n");
 		if (f < 0.f) f = 0.f;
 		if (f > 1.f) f = 1.f;
 	}
@@ -283,7 +283,7 @@ Node Connection::GetPoint(float f) const {
 
 void Connection::GetTangent(float f, float& dx, float& dy, float& dz) const {
 	if (f < 0.f || f > 1.f) {
-		debugf("Warning: Bizier query position out of [0, 1].\n");
+		debugf(DebugLevel::Warning, "Bizier query position out of [0, 1].\n");
 		if (f < 0.f) f = 0.f;
 		if (f > 1.f) f = 1.f;
 	}

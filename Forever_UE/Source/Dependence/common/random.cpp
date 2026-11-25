@@ -76,7 +76,7 @@ RandomStream* RandomRegistry::GetModStream(const string& modId) {
 	auto configured = registry.modSeeds.find(modId);
 	const bool fixed = configured != registry.modSeeds.end() && configured->second.first;
 	stream->Seed(fixed ? configured->second.second : RandomSeed());
-	debugf("Random: mod %s seed=%llu (%s)\n", modId.c_str(), static_cast<unsigned long long>(stream->seed), fixed ? "fixed" : "random");
+	debugf(DebugLevel::Log, "Random: mod %s seed=%llu (%s)\n", modId.c_str(), static_cast<unsigned long long>(stream->seed), fixed ? "fixed" : "random");
 	RandomStream* raw = stream.get();
 	registry.mods[modId] = move(stream);
 	return raw;
@@ -88,7 +88,7 @@ RandomStream* RandomRegistry::GetDomainStream(const string& domain) {
 	if (it != registry.domains.end()) return it->second.get();
 	auto stream = make_unique<RandomStream>();
 	stream->Seed(registry.hasGlobalSeed ? HashDomain(registry.globalSeed, domain) : RandomSeed());
-	debugf("Random: domain %s seed=%llu (%s)\n", domain.c_str(), static_cast<unsigned long long>(stream->seed),
+	debugf(DebugLevel::Log, "Random: domain %s seed=%llu (%s)\n", domain.c_str(), static_cast<unsigned long long>(stream->seed),
 		registry.hasGlobalSeed ? "derived" : "random");
 	RandomStream* raw = stream.get();
 	registry.domains[domain] = move(stream);

@@ -48,13 +48,13 @@ void AForeverPlayerController::TestNavigate() {
 	UForeverTrafficFrameworkComponent* traffic = framework ? framework->GetTrafficFramework() : nullptr;
 	if (!map || !traffic) return;
 
-	// 所有green_park绿化区里取一个有活动圆的，再随机一个圆、圆内随机一点，显示导航线；找不到就跳过(理论上总能找到)。
+	// 所有带活动圆的绿化区(不看是哪个绿化mod)里随机取一个，再随机一个圆、圆内随机一点，显示导航线；找不到就跳过。
 	TArray<Green*> candidates;
 	for (Green* green : map->GetGreens()) {
-		if (green && green->GetType() == "green_park" && !green->GetCircles().empty()) candidates.Add(green);
+		if (green && !green->GetCircles().empty()) candidates.Add(green);
 	}
 	if (candidates.Num() == 0) {
-		UE_LOG(LogTemp, Warning, TEXT("TestNavigate: 没有带活动圆的green_park绿化区，跳过"));
+		UE_LOG(LogTemp, Warning, TEXT("TestNavigate: 没有带活动圆的绿化区，跳过"));
 		return;
 	}
 	Green* target = candidates[FMath::RandRange(0, candidates.Num() - 1)];

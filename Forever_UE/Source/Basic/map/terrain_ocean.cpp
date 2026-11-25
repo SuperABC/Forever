@@ -103,7 +103,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 	if (coastMask & 1) {
 		int coastDepth = width / 16 + GetRandom(width / 16);
 		float coastOffset = 0.0f, coastSlope = 0.0f;
-		debugf("Log: Sea in the west %d.\n", coastDepth);
+		debugf(DebugLevel::Log, "Sea in the west %d.\n", coastDepth);
 		for (int y = 0; y < height; y++) {
 			int coastLimit = coastDepth + static_cast<int>(coastOffset);
 			if (coastLimit > width)
@@ -131,7 +131,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 	if (coastMask & 2) {
 		int coastDepth = width / 16 + GetRandom(width / 16);
 		float coastOffset = 0.0f, coastSlope = 0.0f;
-		debugf("Log: Sea in the east %d.\n", coastDepth);
+		debugf(DebugLevel::Log, "Sea in the east %d.\n", coastDepth);
 		for (int y = 0; y < height; y++) {
 			int coastStart = width - coastDepth - static_cast<int>(coastOffset);
 			if (coastStart < 0)
@@ -158,7 +158,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 	if (coastMask & 4) {
 		int coastDepth = height / 16 + GetRandom(height / 16);
 		float coastOffset = 0.0f, coastSlope = 0.0f;
-		debugf("Log: Sea in the north %d.\n", coastDepth);
+		debugf(DebugLevel::Log, "Sea in the north %d.\n", coastDepth);
 		for (int x = 0; x < width; x++) {
 			int coastLimit = coastDepth + static_cast<int>(coastOffset);
 			if (coastLimit > height)
@@ -185,7 +185,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 	if (coastMask & 8) {
 		int coastDepth = height / 16 + GetRandom(height / 16);
 		float coastOffset = 0.0f, coastSlope = 0.0f;
-		debugf("Log: Sea in the south %d.\n", coastDepth);
+		debugf(DebugLevel::Log, "Sea in the south %d.\n", coastDepth);
 		for (int x = 0; x < width; x++) {
 			int coastStart = height - coastDepth - static_cast<int>(coastOffset);
 			if (coastStart < 0)
