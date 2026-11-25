@@ -164,9 +164,9 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static vector<pair<string, vector<string>>> dependencies = {
 		{ RiverTerrain::GetId(), { MountainTerrain::GetId() } }, // 河从山体里流出来
 
-		{ ResidenceHighZone::GetId(), { ResidenceHighBuilding::GetId() } },
-		{ ResidenceMiddleZone::GetId(), { ResidenceMiddleBuilding::GetId() } },
-		{ ResidenceLowZone::GetId(), { ResidenceLowBuilding::GetId() } },
+		{ ResidenceHighZone::GetId(), { ResidenceHighBuilding::GetId(), kScriptEmpty } }, // 内部建筑；园区脚本
+		{ ResidenceMiddleZone::GetId(), { ResidenceMiddleBuilding::GetId(), kScriptEmpty } }, // 内部建筑；园区脚本
+		{ ResidenceLowZone::GetId(), { ResidenceLowBuilding::GetId(), kScriptEmpty } }, // 内部建筑；园区脚本
 
 		{ ResidenceHighBuilding::GetId(), { ResidenceComponent::GetId(), RestaurantComponent::GetId(), MeetingComponent::GetId(), ResidenceRoom::GetId(), RestaurantRoom::GetId(), MeetingRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 电梯脚本；地下室停车库；twin的1/2楼single是党派会议室
 		{ ResidenceMiddleBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
@@ -180,12 +180,13 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ OfficeHighBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), ParkingRoom::GetId(), kRoomEmpty } }, // 地下室停车库；占位房间槽
 		{ OfficeMiddleBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
-		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), kScriptEmpty } }, // 电梯脚本
+		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 占位房间槽；电梯脚本
 		{ AirportBuilding::GetId(), { AirportComponent::GetId(), kRoomEmpty, kScriptEmpty } }, // 房间先全是空房(room_airport暂不用)；电梯脚本
 		{ PortBuilding::GetId(), { PortComponent::GetId(), kRoomEmpty, kScriptEmpty } }, // 港口：一间小空房，船位见building_port.cpp
 		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
 
 		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本
+		{ ResidenceRoom::GetId(), { kScriptEmpty } }, // 房间脚本
 
 		{ SchedulerBasic::GetId(), { kScriptEmpty } },
 		{ ShopSalerJob::GetId(), { kScriptEmpty } },
@@ -195,9 +196,10 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ ShopOrganization::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } }, // 按component/room类型生成岗位
 		{ RestaurantOrganization::GetId(), { RestaurantComponent::GetId(), RestaurantRoom::GetId(), RestaurantWaiterJob::GetId(), kScriptEmpty } },
 		{ VideoCompanyOrganization::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), VideoMakerJob::GetId(), kScriptEmpty } },
-		{ ManufactureOrganization::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId() } },
+		{ ManufactureOrganization::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId(), kScriptEmpty } },
 
 		// 托管型：Manufacture只从房间的manufactureTypes生成、Storage只从房间的storageType生成，没有房间就不会出现，所以它们依赖房间。
+		// 房间不反过来依赖它们(房间用字段点名了它们，但缺了只是少条产线/少个仓库，而且两边都声明会成环)。
 		{ FarmManufacture::GetId(), { FarmRoom::GetId(), WheatProduct::GetId() } },
 		{ RanchManufacture::GetId(), { RanchRoom::GetId(), BeefProduct::GetId() } },
 		{ FoodFactoryManufacture::GetId(), { FoodFactoryRoom::GetId(), BurgerProduct::GetId() } },
@@ -224,17 +226,18 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ PlaneVehicle::GetId(), { kScriptEmpty } },
 		{ BoatVehicle::GetId(), { kScriptEmpty } },
 
-		{ BurgerAsset::GetId(), { BurgerProduct::GetId() } }, // productType：商店零售价
-		{ PistolWeapon::GetId(), { PistolAmmoAsset::GetId() } }, // 换弹消耗的备弹
-		{ RifleWeapon::GetId(), { RifleAmmoAsset::GetId() } },
-		{ ShotgunWeapon::GetId(), { ShotgunAmmoAsset::GetId() } },
-		{ SniperWeapon::GetId(), { SniperAmmoAsset::GetId() } },
-		{ RpgWeapon::GetId(), { RpgAmmoAsset::GetId() } },
-		{ PistolWeaponAsset::GetId(), { PistolWeapon::GetId() } }, // 在肩膀上激活时装备的武器(AssetMod::weaponType)
-		{ RifleWeaponAsset::GetId(), { RifleWeapon::GetId() } },
-		{ ShotgunWeaponAsset::GetId(), { ShotgunWeapon::GetId() } },
-		{ SniperWeaponAsset::GetId(), { SniperWeapon::GetId() } },
-		{ RpgWeaponAsset::GetId(), { RpgWeapon::GetId() } },
+		{ BurgerAsset::GetId(), { BurgerProduct::GetId(), kScriptEmpty } }, // productType：商店零售价；资产脚本
+		{ GrenadeAsset::GetId(), { kScriptEmpty } }, // 资产脚本(只填了milestoneNames，Core用默认ScriptMod)
+		{ PistolWeapon::GetId(), { PistolAmmoAsset::GetId(), kScriptEmpty } }, // 换弹消耗的备弹
+		{ RifleWeapon::GetId(), { RifleAmmoAsset::GetId(), kScriptEmpty } },
+		{ ShotgunWeapon::GetId(), { ShotgunAmmoAsset::GetId(), kScriptEmpty } },
+		{ SniperWeapon::GetId(), { SniperAmmoAsset::GetId(), kScriptEmpty } },
+		{ RpgWeapon::GetId(), { RpgAmmoAsset::GetId(), kScriptEmpty } },
+		{ PistolWeaponAsset::GetId(), { PistolWeapon::GetId(), kScriptEmpty } }, // 在肩膀上激活时装备的武器(AssetMod::weaponType)
+		{ RifleWeaponAsset::GetId(), { RifleWeapon::GetId(), kScriptEmpty } },
+		{ ShotgunWeaponAsset::GetId(), { ShotgunWeapon::GetId(), kScriptEmpty } },
+		{ SniperWeaponAsset::GetId(), { SniperWeapon::GetId(), kScriptEmpty } },
+		{ RpgWeaponAsset::GetId(), { RpgWeapon::GetId(), kScriptEmpty } },
 		{ CameraWeaponAsset::GetId(), { CameraWeapon::GetId() } }, // 相机不用弹药，没有对应的弹药资产依赖
 	};
 	return (void*)&dependencies;

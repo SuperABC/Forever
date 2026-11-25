@@ -409,6 +409,12 @@
     <ClCompile Include="map\component_meeting.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="player\puzzle_common.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\bus_stop_name.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\building_airport.h">

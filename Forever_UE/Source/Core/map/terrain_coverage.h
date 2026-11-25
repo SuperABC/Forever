@@ -4,7 +4,7 @@
 #include <vector>
 
 
-// 地形覆盖图烘焙(纯CPU、只依赖标准库)，详见terrain.md"覆盖图"一节。
+// 地形覆盖图烘焙(纯CPU、只依赖标准库)，详见terrain_coverage.md。
 // 输入：每个element的地形种类下标(0..typeCount-1)。输出：每种地形一张"覆盖度"图，4种地形打包成一个RGBA8切片。
 // 做法：每个element展开成texelsPerElement^2个texel的one-hot掩码 -> 可分离高斯模糊(sigma以element为单位)。
 //   模糊把"一格一格"的阶梯边界磨成圆滑曲线(含斜线边界)，各种地形的覆盖度之和始终为1(量化前)。

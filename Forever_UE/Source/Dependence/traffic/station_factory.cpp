@@ -1,4 +1,5 @@
 #include "station_factory.h"
+
 #include "common/random.h"
 
 

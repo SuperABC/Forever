@@ -27,7 +27,7 @@ Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(
 - **网格必须居中**：布局把家具当"原点居中的矩形"，`make_furniture.py`的`build_catalog`末尾对每件`recenter()`(X/Y包围盒居中)，否则不对称的件(马桶水箱在背面、水龙头在台面一侧)靠墙时会有一部分穿出墙外。
 - **随机性**：整体镜像(门窗镜像后布局，再把结果镜回来，保证和真实门窗一致)、功能区顺序、每类家具的款式变体(`Variant`)、沿墙位置、可选件概率。全走`GetRandom`(mod流，`--seed`可复现)。摆不下就丢件，不报错。
 - **可调项**：文件顶部的`#define`(`ROOM_MARGIN`/`ROOM_DOOR_CLEAR_*`/`ROOM_WINDOW_DEPTH`/`ROOM_WINDOW_SIDE`/`ROOM_WALL_CABINET_Z`/`ROOM_TWO_BAND_*`/`ROOM_ZONE_SHRINK`)，以及`ZoneWeight`/`ZoneMin`和各区概率。
-- **验证**：`Source/Test/Core/suite_mods.cpp`的`CheckRoomLayouts`(12种尺寸×8次)断言：在房间内、非吊柜/地毯互不重叠、吊柜之间互不重叠、不堵门、不压窗前禁放区(`blocks a window`)、yaw只有0/±90/180、>=20㎡至少5件。环境变量`FURNITURE_DUMP=<路径>.json`时把`room_residence`的布局导出，用`Tools/Furniture/make_preview_data.py`生成俯视预览页看。
+- **验证**：ModTest(`Source/Test/Mod/mod_checks.cpp`)的`CheckRoomLayouts`(12种尺寸×8次)断言：在房间内、非吊柜/地毯互不重叠、吊柜之间互不重叠、不堵门、不压窗前禁放区(`blocks a window`)、yaw只有0/±90/180、>=20㎡至少5件。环境变量`FURNITURE_DUMP=<路径>.json`时把`room_residence`的布局导出，用`Tools/Furniture/make_preview_data.py`生成俯视预览页看。
 - **局限**：没有隔墙(开放式摆放)；家具碰撞是每件一个包围盒(UE侧，见`BuildingElement.md`)；市民寻路不感知家具；预览页只是俯视方块，真实观感要进游戏看。
 
 ## 依赖关系

@@ -1,24 +1,13 @@
 #pragma once
 
+#include "common/mod_concepts.h"
+
 #include <string>
 #include <vector>
 #include <unordered_map>
 
 
-// 23个concept的DLL导出符号名(concept->domain对照表见loader.md)
-struct ModConceptDescriptor {
-	const char* conceptKey;
-	const char* getModSymbol;
-	const char* registerModSymbol;
-	const char* finishModSymbol;
-};
-
-const std::vector<ModConceptDescriptor>& GetModConceptDescriptors();
-
-// 整个DLL只有一份的导出符号，返回这个DLL里每个mod id各自的依赖列表(vector<pair<modId, vector<depId>>>)，
-// 静态对象指针、调用方只读不释放；不在GetModConceptDescriptors表里(表的行是3个per-concept符号)
-inline constexpr const char* kModDependenciesSymbol = "GetModDependencies";
-
+// 23个concept的导出符号表(GetModConceptDescriptors/kModDependenciesSymbol)在Dependence的common/mod_concepts.h。
 // 不include windows.h避免和UE宏冲突，句柄一律存成void*。mod参数不经过ModLoader，见loader.md
 class ModLoader {
 public:

@@ -27,7 +27,7 @@
 整段同步生成会卡死主线程几十秒，开局黑屏上的进度条没机会重绘，所以`BeginPlay`只登记一串阶段(`generationStages`)，`Tick`每帧执行一个。`BeginPlay`先调
 `AForeverPlayerController::InitializeOnce`(打包版里本Actor的BeginPlay先于Controller的，game_start里的小游戏/对话要用Widget)。
 
-阶段顺序(新游戏/读档同一套)：加载模组(`Registry::RefreshMods`+`ValidateMainStoryDependencies`) → 预热截屏(`UForeverWeaponComponent::WarmUpScreenshot`，相机拍照第一次GPU回读约0.5s卡顿，趁加载界面先偷偷截一张丢掉) → 构建地形 → 路网 → 园区 → 建筑 → 栽种植被 → 布置路灯 →
+阶段顺序(新游戏/读档同一套)：加载模组(`Registry::RefreshMods`+`Script::ClearCache`清脚本解析缓存+新开局`SaveGame::ResetInstanceCounters`把mod命名计数器清零+`ValidateMainStoryDependencies`) → 预热截屏(`UForeverWeaponComponent::WarmUpScreenshot`，相机拍照第一次GPU回读约0.5s卡顿，趁加载界面先偷偷截一张丢掉) → 构建地形 → 路网 → 园区 → 建筑 → 栽种植被 → 布置路灯 →
 构建交通 → 生成地形/道路/园区/建筑/植被/路灯模型 → 构建人口 → 构建社会与产业(Society+Player+Industry，最后`EnsureAssetsGenerated`：重建不动产资产+给政府；新游戏`Traffic::AssignVehicles`按人分配载具、读档`ResolveVehicleAssets`按存档恢复所有者) → 执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) →
 构建载具(读档：恢复载具与玩家，含`RestoreControlledPawn`/`RestoreWorldAssets`) → 预热车辆(`UForeverTrafficFrameworkComponent::WarmVehicleClasses`，停车位车辆蓝图提前加载并临时生成销毁一次，免得第一次走近船/飞机等大模型卡2-3秒) → 预热交通(`UForeverTrafficFrameworkComponent::GetJunctionTraffic`) → (进图后)构建场景。
 
@@ -112,7 +112,7 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
    (`HasDueTimers`)→`DrainExpiredTimers`(story计时器)。
 3. `FinishTimeSkip`：结束跳时间模式、`ResyncBusesAfterTimeSkip`(公交物理车收回，以时刻表为准)、解锁输入、`ReleaseHold`渐隐。
 进度：`GetTimeSkipProgress`(已推进游戏秒/总秒)，黑屏进度条直接用。跳期间再触发jump_time被忽略。
-局限：走路用瞬移代替；`Traffic::elapsedSeconds`是float，超长跳(>约190天)精度下降；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
+局限：走路用瞬移代替；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
 `StepWorld`/`TickPopulaceDomain`/`TickSocietyDomain`是从原Tick里抽出来的，顺序不能变。
 
 ## 政治域(2026-11-21)

@@ -11,8 +11,6 @@
 #include <unordered_map>
 #include <vector>
 
-class Script;
-class Vehicle;
 
 // 房间里的一个停车位：由Building::Layout按BuildingMod::AssignParking把layout的停车位矩形分割而来，设计见room.md。
 // 坐标是建筑局部坐标(和Room::GetPosX/GetPosY同一套，原点楼体左下角，未旋转)。

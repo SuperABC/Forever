@@ -1,4 +1,5 @@
 #include "society/investor.h"
+
 #include "common/random.h"
 
 #include "society/society.h"

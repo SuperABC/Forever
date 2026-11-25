@@ -1,4 +1,5 @@
 #include "society/economy.h"
+
 #include "common/random.h"
 
 #include "society/society.h"

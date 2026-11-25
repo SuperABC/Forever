@@ -196,5 +196,5 @@ private:
 
 	bool hasLastTickTime = false;
 	Time lastTickTime;
-	float elapsedSeconds = 0.f;
+	double elapsedSeconds = 0.0; // 游戏总秒数，一直累加：必须是double(float到2^24秒≈194游戏天后每帧的增量加不进去)
 };

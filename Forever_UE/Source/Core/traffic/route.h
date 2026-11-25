@@ -106,7 +106,7 @@ public:
 	// 哪个位置/停靠在哪个站，直接调vehicle->SetTransform(...)写回——纯函数式实现
 	// (只读elapsedSeconds，不在Route自己身上累积任何状态)，同一个elapsedSeconds重复调用
 	// 结果完全一致，见route.md"时刻表"一节。
-	void Update(float elapsedSeconds);
+	void Update(double elapsedSeconds);
 
 	// 停站/离站事件：载具进入/离开停靠状态的边沿。Update()每次算完一辆车的相位后，和上一次
 	// 记下的状态比较——上次不在站这次在某个站=entering，上次在站这次不在=leaving，上次在站A这次
@@ -128,7 +128,8 @@ public:
 	// 不改变任何状态。载具不在这条Route的任何线路上 -> valid=false。
 	//   line：线路下标；legIndex：正在行驶/刚到达的那一段(run)；dwelling：正停靠在run终点站里，
 	//   dwellRemainingSeconds是剩余停靠时间（真实秒）；speedMapPerRealSecond：巡航速度（地图单位/真实秒，
-	//   缓动阶段的瞬时速度不精确，仅供给物理车一个初速度）。
+	//   缓动阶段的瞬时速度不精确，仅供给物理车一个初速度）。时刻表本身按游戏秒算，这两个真实秒的量按调用方
+	//   传入的gameSecondsPerRealSecond(=60*Player::GetTimeFlowRatio()，当前实际倍率)换算。
 	struct ScheduleState {
 		bool valid = false;
 		int line = -1;
@@ -137,7 +138,7 @@ public:
 		float dwellRemainingSeconds = 0.f;
 		float speedMapPerRealSecond = 0.f;
 	};
-	ScheduleState QueryVehicleState(const Vehicle* vehicle) const;
+	ScheduleState QueryVehicleState(const Vehicle* vehicle, double gameSecondsPerRealSecond) const;
 
 	// 载具从物理段交还时刻表前调用：把它在时刻表上的进度对齐到实车当前位置，之后时刻表从这里接着走，
 	// 不会因为物理车比名义速度慢而一交还就瞬移到"早该跑完一圈"的位置。做法是给这辆车记一个相位修正量，
@@ -215,5 +216,5 @@ private:
 	float GetPhaseAdjust(const Vehicle* vehicle) const;
 	std::vector<StopEvent> pendingStopEvents;
 	bool silentInitialStopState = false;
-	float lastElapsedSeconds = 0.f; // 最近一次Update()的elapsedSeconds，QueryVehicleState用
+	double lastElapsedSeconds = 0.0; // 最近一次Update()的elapsedSeconds，QueryVehicleState用
 };

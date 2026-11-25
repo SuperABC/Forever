@@ -65,6 +65,10 @@ public:
 	// 读取并缓存一份.script文件(已缓存则不重复读盘)。
 	static void ReadScript(const std::string& path);
 
+	// 清空.script文件缓存(释放解析出的Milestone)，下次ReadScript重新读盘——每局开始调一次，改过的脚本才会生效。
+	// 还有Script实例活着时(它们引用着缓存里的Milestone)什么都不做并返回false。
+	static bool ClearCache();
+
 	void ReadMilestones(const std::string& path);
 
 	// 以下三个静态查询(内部先ReadScript)不需要任何Script实例，字段缺失/文件不存在返回空，见script.md。
@@ -106,6 +110,8 @@ private:
 
 	// 脚本缓存：文件路径 -> 该文件解析出的全部内容（本体持有者）
 	static std::unordered_map<std::string, FileCache> caches;
+	// 当前存活的Script实例数，ClearCache据此判断能不能安全释放Milestone。
+	static int liveCount;
 
 	std::unordered_map<std::string, MilestoneNode> milestones; // Milestone*引用缓存，不持有所有权
 	std::vector<MilestoneNode*> actives; // 活动里程碑

@@ -1,9 +1,10 @@
 #include "society/organization.h"
+
 #include "common/random.h"
+#include "story/script_factory.h"
 
 #include "society/job.h"
 #include "story/script.h"
-#include "story/script_factory.h"
 #include "common/config.h"
 #include "map/component.h"
 #include "map/room.h"

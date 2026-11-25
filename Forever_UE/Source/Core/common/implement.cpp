@@ -1,9 +1,9 @@
 #include "common/implement.h"
+
 #include "common/random.h"
-
 #include "common/utility.h"
-#include "common/config.h"
 
+#include "common/config.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "player/player.h"

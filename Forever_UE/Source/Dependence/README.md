@@ -95,8 +95,7 @@
 - 依赖：无(纯C++，不依赖UE、不依赖Core内容)。
 - 被谁依赖：`Source/Core`(`common/registry.h`的`Registry`单例持有全部23个Factory，各域管理类通过
   它取引用)、`Source/Basic/<domain>/<mod id>.h`(内置mod，每个mod一组以id命名的文件，继承
-  `<Concept>Mod`)、`Source/Forever/Mod/ForeverModSubsystem.cpp`(开局时为其中16个concept各构造一个
-  局部Factory、逐个创建实例验证注册结果)、`Forever_Mod/`下的各外部Mod(继承`<Concept>Mod`、调用
+  `<Concept>Mod`)、`Source/Test/Mod`(ModTest：只链接`Dependence.lib`，逐个创建mod跑`UnitTest`和字段检查)、`Forever_Mod/`下的各外部Mod(继承`<Concept>Mod`、调用
   `<Concept>Factory::Register<Concept>`)。
 - Mod可扩展点：任何Mod DLL，只要`#include`对应`<domain>/<concept>_mod.h`+
   `<domain>/<concept>_factory.h`、链接`Dependence.lib`，就能实现自己的`<Concept>Mod`

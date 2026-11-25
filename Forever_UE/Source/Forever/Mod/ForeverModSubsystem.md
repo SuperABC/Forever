@@ -1,26 +1,26 @@
 # ForeverModSubsystem
 
 ## 职责
-负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`缺失时回退扫描`../Forever_Mod`,`resource_paths`不回退，没配置就是没有),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。`ReadConfig`对缺失/无效文件只留空状态不报错,所以回退按"结果为空"判定;`Config`内部的警告走`std::cerr`,不一定进`Forever.log`,这里另用`UE_LOG`打印诊断。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,可以重复调用（退出游戏回菜单后再开始游戏）：已挂载过的Plugin/Pak按挂载点（`mountedMountPoints`）跳过，校验每次用当前config重新跑；长期持有的mod dll由`Registry::RefreshMods()`增量加载。
+负责mod的发现和mod自带UE内容(Plugin/Pak)的挂载。**不负责mod dll的加载和Factory注册**——那是Core的`Registry`单例的事(每局开始`Registry::RefreshMods()`，见`Source/Core/common/registry.md`)。
+
+- `Initialize()`在GameInstance启动时只做纯发现：读取`Resource/Config/config.json`，`dll_paths`缺失时回退扫描`../Forever_Mod`(`resource_paths`不回退，没配置就是没有)，把结果写进`Config`静态状态供配置界面UI展示，不做任何挂载。`ReadConfig`对缺失/无效文件只留空状态不报错，所以回退按"结果为空"判定；`Config`内部的警告走`std::cerr`，不一定进`Forever.log`，这里另用`UE_LOG`打印诊断。
+- `MountModContent()`挂载mod自带的UE内容，由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用，读档时`UForeverSaveSubsystem::RequestLoad`应用存档的mod集合后也调一次。可以重复调用(退出游戏回菜单后再开始游戏)：已挂载过的Plugin/Pak按挂载点(`mountedMountPoints`)跳过。
 
 ## 关键设计
-- **挂载mod自己的UE资产Plugin**(`EnsureModsRegistered()`开头):按`WITH_EDITOR`分两条路径:
-  - Editor/PIE:对每个`.uplugin`算出`Content`目录,`FPackageName::RegisterMountPoint(TEXT("/")+pluginName+TEXT("/"), contentDir)`+`IAssetRegistry::ScanPathsSynchronous`,不需要cook/pak,不需要在主`.uproject`的`Plugins`列表里启用。
-  - 打包/Shipping:对每个`.pak`用`FCoreDelegates::MountPaksEx`挂载,再`RegisterMountPoint`到固定写死的`"../../../"+pluginName+"/Content/"`(`UnrealPak`打包内部路径约定,mod自己的`pak.bat`生成filelist时必须对得上),外加`FShaderCodeLibrary::OpenLibrary`。**`RegisterMountPoint`不能靠`MountPaksEx.Execute()`的返回值gate**——pak挂载成功时这个返回值仍可能是`false`,`RegisterMountPoint`本身是幂等的纯注册操作,挂完就应该紧接着做。
-  - 为什么必须是Plugin而不是普通文件夹:UE资产只能通过已注册的挂载点访问,原始文件夹不是合法的挂载对象。详见`Source/Core/common/config.md`"GetPlugins/GetPakFiles"一节。
-- **`Initialize()`和`EnsureModsRegistered()`拆成两阶段**:前者只读取/回退扫描,给配置界面(Story/Mod/Resource三screen)立刻有数据可展示;后者才是真正有副作用的挂载/注册,推迟到用户在配置界面点"开始游戏"、`UForeverConfigBridgeSubsystem::ValidateAndStartGame`的依赖校验全部通过之后才执行,校验失败不会触碰任何真实状态。
-- **用`UGameInstanceSubsystem`而不是塞进`AForeverPlayerGameMode::BeginPlay`**:参照`UForeverKeyBindingSubsystem`的既定模式,生命周期覆盖菜单关卡→`OpenLevel`切到`World.World`的整个过程,不受关卡切换影响。
-- **`EnsureModsRegistered()`不持有任何成员对象**:`ModLoader`和16个`<Concept>Factory`全部是函数内的局部变量,注册+校验完就在同一次调用里`modLoader.UnloadAll()`卸载所有dll句柄。这里的Factory只用于开局前的注册校验(逐个id创建一个临时实例打日志);游戏真正使用的23个Factory由`Source/Core/common/registry.h`的`Registry`单例持有,dll也由它常驻加载。Terrain/Roadnet/Zone/Green/Building/Weapon/Party这7个concept没有在这里校验。
-- **`ValidateFactory`是模板辅助函数,用lambda传入create/destroy**:16个`<Concept>Factory`的`Create<Concept>`/`Destroy<Concept>`方法名各不相同,没有共同基类可以多态调用,用lambda参数化"怎么创建/怎么销毁"避免写16份几乎相同的校验循环。
-- **每个concept块在`RegisterConcept`之前先调用`factory.SetModArgs(...)`**:参数来自`Config::GetConceptMods("<concept>_mods")`,经`ToArgsMap`转成`id->参数`表后传给Factory;mod调用`RegisterX(id, ...)`时Factory按id查表、把参数存进注册项,`CreateX(id)`创建实例时把参数字符串传给注册的creator函数。详见`Source/Dependence/README.md`和`Source/Core/common/config.md`。
+- **挂载mod自己的UE资产Plugin**(`MountModContent()`)：按`WITH_EDITOR`分两条路径：
+  - Editor/PIE：对每个`.uplugin`算出`Content`目录，`FPackageName::RegisterMountPoint(TEXT("/")+pluginName+TEXT("/"), contentDir)`+`IAssetRegistry::ScanPathsSynchronous`，不需要cook/pak，不需要在主`.uproject`的`Plugins`列表里启用。
+  - 打包/Shipping：对每个`.pak`用`FCoreDelegates::MountPaksEx`挂载，再`RegisterMountPoint`到固定写死的`"../../../"+pluginName+"/Content/"`(`UnrealPak`打包内部路径约定，mod自己的`pak.bat`生成filelist时必须对得上)，外加`FShaderCodeLibrary::OpenLibrary`。**`RegisterMountPoint`不能靠`MountPaksEx.Execute()`的返回值gate**——pak挂载成功时这个返回值仍可能是`false`，`RegisterMountPoint`本身是幂等的纯注册操作，挂完就应该紧接着做。
+  - 为什么必须是Plugin而不是普通文件夹：UE资产只能通过已注册的挂载点访问，原始文件夹不是合法的挂载对象。详见`Source/Core/common/config.md`"GetPlugins/GetPakFiles"一节。
+- **`Initialize()`和`MountModContent()`拆成两阶段**：前者只读取/回退扫描，给配置界面(Story/Mod/Resource三screen)立刻有数据可展示；后者才有副作用，推迟到用户在配置界面点"开始游戏"、`ValidateAndStartGame`的依赖校验全部通过之后才执行，校验失败不会触碰任何真实状态。
+- **用`UGameInstanceSubsystem`而不是塞进`AForeverPlayerGameMode::BeginPlay`**：参照`UForeverKeyBindingSubsystem`的既定模式，生命周期覆盖菜单关卡→`OpenLevel`切到`World.World`的整个过程，不受关卡切换影响。
+- **这里不创建任何Factory、不创建mod实例**：mod能不能注册、参数能不能传到，由ModTest(`Source/Test/Mod`，枚举全部23个concept的mod、逐个创建实例跑`UnitTest`)和CoreTest的mods套件(Core的`Registry`认不认得)覆盖。在UE里重复做一遍只会让每个mod的命名计数器多走一格。
 
 ## 依赖关系
-- 依赖:`Source/Core/common/config.h`(`Config::ReadConfig`/`GetMods`/`AddDllPath`/`GetConceptMods`等)、`Source/Core/common/loader.h`(`ModLoader::RegisterConcept`/`UnloadAll`)、16个`<domain>/<concept>_factory.h`(Component/Room/Asset/App/Puzzle/Name/Scheduler/Job/Organization/Script/Product/Storage/Manufacture/Route/Station/Vehicle)。
-- 被谁依赖:`UForeverConfigBridgeSubsystem::ValidateAndStartGame`(依赖校验通过后调用`EnsureModsRegistered()`,再`OpenLevel`)、`UForeverSaveSubsystem::RequestLoad`(读档时应用存档的mod集合后调用)。UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`,`Initialize()`不需要手动触发。
+- 依赖：`Source/Core/common/config.h`(`Config::ReadConfig`/`GetMods`/`AddDllPath`/`GetPlugins`/`GetPakFiles`等)。
+- 被谁依赖：`UForeverConfigBridgeSubsystem::ValidateAndStartGame`(依赖校验通过后调用`MountModContent()`，再`OpenLevel`)、`UForeverSaveSubsystem::RequestLoad`(读档时应用存档的mod集合后调用)。UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`，`Initialize()`不需要手动触发。
 
 ## 待办/后续阶段
-- 这套局部Factory校验和`Registry`重复:同一批dll被注册两遍,且每个id多创建一个临时实例(mod的命名计数器`static count`会多走一格)。可以改成直接对`Registry`里的Factory做校验,并补齐没覆盖的7个concept。
-- 回菜单后再开始游戏：新增的dll路径会被`Registry::RefreshMods()`补加载，从配置里移除的dll不卸载（保持加载、因不在启用表而被禁用）。
+- 回菜单后再开始游戏：新增的dll路径会被`Registry::RefreshMods()`补加载，从配置里移除的dll不卸载(保持加载、因不在启用表而被禁用)。
 
 ## ReloadConfigFrom(path)
 

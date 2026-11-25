@@ -24,6 +24,7 @@
     <ClCompile Include="suite_presets.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_transit.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_polit.cpp"><Filter>suites</Filter></ClCompile>
+    <ClCompile Include="econ_report.cpp"><Filter>framework</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_framework.h"><Filter>framework</Filter></ClInclude>
@@ -32,5 +33,6 @@
     <ClInclude Include="child_world.h"><Filter>framework</Filter></ClInclude>
     <ClInclude Include="test_options.h"><Filter>framework</Filter></ClInclude>
     <ClInclude Include="suites.h"><Filter>suites</Filter></ClInclude>
+    <ClInclude Include="econ_report.h"><Filter>framework</Filter></ClInclude>
   </ItemGroup>
 </Project>

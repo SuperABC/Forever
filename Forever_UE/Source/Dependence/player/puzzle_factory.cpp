@@ -1,4 +1,5 @@
 #include "puzzle_factory.h"
+
 #include "common/random.h"
 
 

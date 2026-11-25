@@ -1,7 +1,9 @@
 #include "populace/populace.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/utility.h"
+#include "common/error.h"
+#include "story/change.h"
 
 #include "populace/citizen.h"
 #include "populace/name.h"
@@ -10,10 +12,8 @@
 #include "populace/school.h"
 #include "common/registry.h"
 #include "common/config.h"
-#include "common/error.h"
 #include "society/job.h"
 #include "story/script.h"
-#include "story/change.h"
 
 #include <cmath>
 #include <algorithm>

@@ -76,7 +76,7 @@ private:
 	RandomStream* previous;
 };
 
-// 由宿主(Core)维护的流表：mod流按mod id(id都带concept前缀，全局唯一)，Core域流按域名("core.map"等)。
+// 由宿主(Core)维护的流表：mod流按mod id(只用id做键，不带concept：两个concept注册了同名id会共用一条流)，Core域流按域名("core.map"等)。
 // 只有宿主模块(Core所在)那份会被用到——Factory/Core都在宿主里调它，mod DLL不碰。
 class RandomRegistry {
 public:

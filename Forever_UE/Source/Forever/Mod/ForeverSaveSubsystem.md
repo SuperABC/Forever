@@ -10,8 +10,9 @@
 - **文件格式**：外层头 = `"FEVR"` + `SAVE_FILE_VERSION`(u32) + 未压缩长度(u64)，后面是 `FCompression`(zlib) 压缩的
   `SaveArchive`。扩展名 `.fsav`，对话框过滤器 `Forever Save (*.fsav)|*.fsav`。读的时候先查 magic 和文件版本
   （比当前新、比最低可读旧都拒绝），再解压、解析分段容器。
+- **写文件**：先写到同目录的 `<路径>.tmp`，写完整了再改名覆盖目标文件；写临时文件或改名失败都会删掉临时文件、原存档不动。直接写目标文件的话，写到一半失败会毁掉原来的存档。
 - **`RequestLoad` 的顺序**：读文件 → `SaveGame::ValidateArchive`（不改状态）→ `ApplyManifestConfig` 把存档的 mod
-  集合设成当前配置 → `EnsureModsRegistered` → `ValidateModsRegistered` + `ValidateModStateVersions`。任何一步失败
+  集合设成当前配置 → `MountModContent`(挂载mod的UE内容) → `ValidateModsRegistered` + `ValidateModStateVersions`。任何一步失败
   都恢复原配置、返回 false 和中文/英文的错误列表；全部通过才登记 `pendingLoad` 并 `OpenLevel(World)`。菜单和
   游戏内加载都走这一个函数。
 - **做成 GameInstance 子系统**：读档要跨一次 `OpenLevel`，`pendingLoad` 必须活过关卡切换；

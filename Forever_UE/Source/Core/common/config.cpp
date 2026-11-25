@@ -1,10 +1,10 @@
-#include <set>
 #include "config.h"
 
 #include "json.h"
 
 #include "loader.h"
 
+#include <set>
 #include <fstream>
 #include <iostream>
 #include <unordered_set>
@@ -83,17 +83,7 @@ void Config::PruneUndiscoveredMods() {
 }
 
 string Config::ConceptKeyToJsonKey(const string& conceptKey) {
-	// 去复数：Parties -> Party(以ies结尾改y)，其余去末字符(Terrains -> Terrain)。
-	string singular;
-	if (conceptKey.size() > 3 && conceptKey.compare(conceptKey.size() - 3, 3, "ies") == 0) {
-		singular = conceptKey.substr(0, conceptKey.size() - 3) + "y";
-	} else {
-		singular = conceptKey.empty() ? conceptKey : conceptKey.substr(0, conceptKey.size() - 1);
-	}
-	for (char& c : singular) {
-		c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-	}
-	return singular + "_mods";
+	return ModConceptJsonKey(conceptKey);
 }
 
 namespace {

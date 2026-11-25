@@ -3,7 +3,7 @@ setlocal
 
 rem Usage: run_tests.bat [quick^|full] [core^|ue^|package^|all]
 rem   quick (default): small map, few seeds, 3 months, 10s perf sample. full: 1024 map, more seeds, 24 months, 30s perf sample.
-rem   core: CoreTest.exe (no rendering).
+rem   core: ModTest.exe on every mod dll under the config's dll_paths (unit tests, field checks, duplicate mod ids), then CoreTest.exe (no rendering).
 rem   ue:   Source/Test/UE module via -ForeverTest. Headless suites run with -nullrhi; perf and commute run in a window.
 rem   package: pak.bat (BuildCookRun: build+cook+stage+pak), then the packaged Forever.exe runs boot,components. Part of "all" in full mode only (slow).
 rem   Build first: build.bat (or MSBuild Source\Framework.sln /t:CoreTest + UBT ForeverEditor)
@@ -18,8 +18,8 @@ set "ENGINE_GUI=C:\Workspace\UE5\Engine\UE_5.7\Engine\Binaries\Win64\UnrealEdito
 set "PERFSEC=10"
 if "%MODE%"=="full" set "PERFSEC=30"
 set "RESULT=0"
-set "STAMP=%DATE:~0,4%%DATE:~5,2%%DATE:~8,2%_%TIME:~0,2%%TIME:~3,2%%TIME:~6,2%"
-set "STAMP=%STAMP: =0%"
+rem %DATE% depends on the regional format (it can start with the weekday), so take the timestamp from PowerShell.
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set "STAMP=%%i"
 set "RUNDIR=%ROOT%\Saved\TestReports\%STAMP%"
 set "OUT=%RUNDIR%\core"
 mkdir "%RUNDIR%" 2>nul
@@ -31,6 +31,15 @@ if not exist "%ROOT%\x64\Release\CoreTest.exe" (
 	echo CoreTest.exe not found, build Framework.sln first.
 	exit /b 2
 )
+if not exist "%ROOT%\x64\Release\ModTest.exe" (
+	echo ModTest.exe not found, build Framework.sln first.
+	exit /b 2
+)
+echo ==== Mod pipeline: ModTest on all configured mod dlls ====
+pushd "%ROOT%"
+x64\Release\ModTest.exe --config Resource\Config\config.json --out "%RUNDIR%\mod"
+if errorlevel 1 set "RESULT=1"
+popd
 echo ==== Core pipeline (%MODE%) ====
 pushd "%ROOT%"
 x64\Release\CoreTest.exe Resource\Config\config.json --suite all --%MODE% --out "%OUT%"

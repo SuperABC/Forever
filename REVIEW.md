@@ -1,16 +1,15 @@
 # 全项目 Review（2026-11-25）
 
-基于提交 `7731158`（Design small map and fix bugs）。每一项前面的 `[ ]` 留给你逐项过的时候打勾/批注。
+初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）和第四轮（引用检查）都在 `29b82f6`（Review whole project）之上，尚未提交。每一项前面的勾选框：`[x]` = 已修，`[ ]` = 还没处理。
 
 **怎么读这份清单**
 
-- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。
+- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，新增的条目接在后面。
 - 可信度：
   - **已确认**：读过对应代码，行号核对过。
   - **潜伏**：代码确实有问题，但当前没有调用路径会触发。
   - **推测**：有依据但没有实际复现/回退验证。
-- 行号对应本次 review 结束时的工作区（含这次改的注释，未提交）。
-- 除了 C6（`Tools/ModWeb` 构建），本次没有改任何运行时逻辑，下面的问题都还没修。
+- 行号对应第四轮结束时的工作区。
 
 **覆盖范围**
 
@@ -21,16 +20,137 @@
 
 ---
 
+## 第四轮："引用了就必须声明依赖"——试过，已撤掉
+
+**结论**
+
+- 你提了"引用了某个 mod 就必须声明依赖"，我在 ModTest 里做成了硬性检查。
+- 做完发现引用方向不等于依赖方向：楼用 `stationMod` 点名站点、房间用 `storageType`/`manufactureTypes` 点名仓库和工坊，但语义上是站点依赖楼、仓库和工坊依赖房间。
+- 你决定去掉这项检查。现在 ModTest 不查依赖声明是否完整，谁依赖谁由作者按语义写。
+- 依赖表里站点 → 楼、仓库/工坊 → 房间这 7 条我中途删过，已经原样恢复。
+
+**我中途说错的一句**
+
+- 我说过"启用了房间却没启用它点名的工坊，生成世界时会找不到 mod"。这是没查代码就下的结论，是错的。
+- 实际上宿主缺了被托管的 mod，Core 只是跳过：[traffic.cpp:375](Forever_UE/Source/Core/traffic/traffic.cpp:375)、[industry.cpp:53](Forever_UE/Source/Core/industry/industry.cpp:53)。
+
+**这一轮留下来的东西**
+
+- **引用存在性检查变准了**（`referenced mods are provided by a loaded dll`）。
+  - 原来只看少数几个字段，而且不管 Core 会不会真的用到。
+  - 现在覆盖脚本、房间/组件、站点、仓库/工坊、武器/产品/弹药、载具、岗位、内部建筑、配方。
+  - 园区和建筑的引用是在 `Layout` 里填的，ModTest 拿 8 块样例地块各调一次。
+  - 脚本只在 Core 真的会建 Script 时才算。第三轮说 Wxdj 的建筑引用了 `script_empty`，其实它没有 `milestoneNames`，不算。
+- **依赖成环检查**（`GetModDependencies has no cycle`）。成环的 mod 都启用后在配置界面里互相锁死，这条规则原来只写在 `basic.md` 里。这项是我自己加的，你没要求；不想要的话说一声就去掉。
+- **Basic 依赖表补了 17 个 mod 的声明**（[basic.cpp](Forever_UE/Source/Basic/basic.cpp)）。这些是强制检查那一版跑出来的真漏项，按 `basic.md` 原有的标准本来就该有：
+  - 会建脚本但没声明 `script_empty`：3 个住宅园区、`room_residence`、`organization_manufacture`、`asset_burger`、`asset_grenade`、5 个武器资产、5 个武器。禁用 `script_empty` 时它们会让 `Script` 构造抛异常。
+  - `building_train_station` 用了占位房间槽，补了 `room_empty`。
+- **默认 ScriptMod 的 id 收成了一个常量**：`Dependence/story/script_mod.h` 的 `kDefaultScriptModId`，Core 原来写死的三处 `"script_empty"` 改用它。A5 本身没有解决。
+
+**验证**
+
+- Framework 编译通过。这一步只动了 ModTest 和 `basic.cpp`；UE 模块和外部 mod 在上一步的全量 `build.bat` 里编过，之后没有再改它们依赖的头文件。
+- ModTest 按 `config.json`：1421 项全过，核对了 137 处引用。
+- ModTest 全量（5 个 dll、150 个 mod）：1468 项全过，核对了 142 处引用。
+- 单测 Wxdj、不带 `--with`：3 项失败（依赖和引用的 `room_empty`、`component_empty` 没有 dll 提供），符合预期。
+- 成环检查在强制检查那一版验证过：临时给 Yuanshen 加了一条互相依赖，ModTest 报出 `building_yuanshen -> script_yuanshen -> building_yuanshen`，已还原。
+- CoreTest quick：7232 通过、20 失败，失败的 20 项和之前逐条相同（G 节）。
+- 没有进 UE 编辑器验证。
+
+**没有测试兜底的事**
+
+- 依赖声明写得全不全。改 mod 时要对着 `basic.md` 的判定标准自己核对。
+- 可以只启用农场房间而不启用农场工坊：房间照常生成但不生产，没有任何提示。
+
+---
+
+## 第三轮：ModTest 拆分和 mod id 唯一性
+
+按你的两点指示做的：
+
+**1. mod id 必须全局唯一，由测试保证**
+
+- 规则写进了 `CONVENTIONS.md` 第 5 节：所有 mod 的 id 全局唯一，不管属于哪个 concept、由哪个 dll 提供；不支持不同 concept 共用一个 id。
+- 所以 D10 不再是问题（只用 id 做键是成立的），已勾掉。
+- 两处检查：ModTest 对它加载的全部 dll 查重名；CoreTest 的 mods 套件对 `config.json` 的 `dll_paths` 再查一次。
+
+**2. 把对 mod 的测试拆成 ModTest**
+
+- 新工程 [Source/Test/Mod](Forever_UE/Source/Test/Mod/ModTest.md)，产出 `x64/Release/ModTest.exe`，已加进 `Framework.sln`。**只链接 `Dependence.lib`，include 路径里没有 Core**，mod 作者不需要 Core 和 UE。
+- 从 CoreTest 搬过去的：`UnitTest`、漏包随机、实例名唯一、各 concept 的字段检查、房间家具布局检查。新加的：id 合法性（非空、不含空白）、id 重名、`GetModDependencies` 声明的依赖是否存在、dll 是否导出 `BindRandomHost`。
+- CoreTest 的 mods 套件只留"mod 接进 Core 之后"的检查：id 全局唯一、`Registry` 认得每个 mod、计数器复位、`Config` 的 mod 参数。
+- 为了让不依赖 Core 的 ModTest 能加载 mod，把 23 个 concept 的导出符号表从 `Core/common/loader.cpp` 挪到了 `Dependence/common/mod_concepts.h/.cpp`，Core 这边转 include，行为不变。
+- `run_tests.bat` 的 `core` 管线现在先跑 ModTest 再跑 CoreTest。
+- 用法：
+  - mod 作者：`ModTest MyMod.dll --with Basic.dll --with Empty.dll`（`--with` 带上被引用/依赖的 mod 所在的 dll）。
+  - 你这边全量：`ModTest x64\Release ..\Forever_Mod`（重名检查覆盖全部 mod）。
+
+**验证**
+
+- `build.bat` 全量通过（Framework 含 ModTest、UE 模块、四个外部 mod）。
+- ModTest 实跑了五种情况，行为都符合预期：
+  - 按 `config.json`：3 个 dll、146 个 mod，1252 项全过。
+  - 全量（Basic + `Forever_Mod` 下全部）：5 个 dll、150 个 mod，1293 项全过。
+  - 单测 Wxdj、不带 `--with`：报 3 项失败（依赖的 `room_empty`、`component_empty` 和引用的 `script_empty` 没有 dll 提供）。带上 Basic 和 Empty 后全过。
+  - 把 `Wxdj.dll` 复制一份改名后一起测：两个 id 都报重名，并列出是哪两个 dll。
+  - 给一个不是 mod 的 dll：报"不是 mod dll"。
+- `run_tests.bat quick core`：ModTest 1252 项全过；CoreTest 7232 通过、20 失败，失败的 20 项和之前逐条相同（G 节）。通过数比上一轮少，是因为逐 mod 的检查搬去了 ModTest。
+
+**顺手修的一个小问题**：`run_tests.bat` 用 `%DATE%` 截子串拼报告目录名，在这台机器的区域格式下会拼出 `周三022611_171703` 这种名字。改成从 PowerShell 取时间戳了。
+
+**需要你知道的**
+
+- **给作者的 SDK 还没有打包脚本**。我假定作者除了 Dependence 的头文件和 lib，还能拿到 `ModTest.exe` 以及 `Basic.dll`/`Empty.dll`（用来 `--with`）。如果你不打算发 Basic/Empty 的 dll，那"引用/依赖的 mod 必须存在"这类检查对作者就会报失败，需要另外定策略。
+- **站点的一条检查变弱了**：原来是"不是公交站就必须有端口"，这要求测试认识 `"bus"`。现在只查"声明了端口就必须有 `stationType`"。
+- **家具布局检查**：模型名在内置尺寸表（Basic 的 `room_furniture_catalog.h`）里的才查占地重叠；mod 自带的模型只查锚点在不在房间里，并记一条 note，不判失败。"大房间里家具太少"只对用了内置家具的 mod 才算问题。
+- ModTest 不检查"字段里引用了某个 mod，但 `GetModDependencies` 没声明依赖它"。第四轮试过做成硬性要求，后来撤掉了，原因见上一节。（当时说 Wxdj 的建筑漏声明 `script_empty` 是我看错了：它没有 `milestoneNames`，Core 不会给它建脚本，不算引用。）
+- `Dependence/common/random.h` 里有一句我第二轮写的注释（"两个 concept 注册了同名 id 会共用一条流"），内容仍然属实，这轮没再动它。
+
+---
+
+## 第二轮修复小结（按你的 5 点指示）
+
+| 指示 | 做了什么 | 状态 |
+|---|---|---|
+| 1. E 板块全部修复 | E1–E4 全修，见 E 节。其中 include 分组实际扫出 55 个文件不合规，重排了 52 个 | 已修，已编译 |
+| 2. mod id 格式只是弱约定 | 去掉了三处假定格式的代码（A6、`CheckModIdentity` 的前缀检查、CoreTest 的 `_empty` 后缀判断），改了 `CONVENTIONS.md` 和相关文档。见下面"mod id 格式"一节 | 已修，CoreTest 通过 |
+| 3. C1/C2/C3/C5/C10 | 全修，见 C 节 | 已修，已编译；UE 里的实际表现没跑 |
+| 4. B8 | 删掉了 `ForeverModSubsystem` 里重复的 Factory 校验，函数改名 `MountModContent` | 已修，已编译 |
+| 5. 刷新本文件 | 本次 | — |
+
+**验证**
+
+- `build.bat` 全量通过：`Framework.sln`、UE 模块 `ForeverEditor`、四个外部 mod 均 0 错误。
+- CoreTest quick（第二轮当时）：7940 通过，20 失败。失败的 20 项和修复前逐条相同（见 G 节，都是旧问题）；通过数多 1 是新加的计数器复位测试。presets、save、random 三个和这次改动直接相关的套件全过。
+- **没有做的验证**：没有开编辑器/PIE。C1（公交切物理的初速度和停站时间）、C3（改脚本后重开 PIE 生效）、C5（第二次开局名字从头编）、C10（存档覆盖）在 UE 里的实际表现都没跑过，只有编译和 CoreTest 能覆盖的部分是验证过的。
+
+### mod id 格式（指示 2）
+
+规则：`<concept>_<name>` 只是弱约定，mod id 可以是任意字符串，任何实现都不能假定 id 的格式。已写进 `CONVENTIONS.md` 第 5 节。
+
+改掉的三处格式假定：
+
+- [map.cpp:512](Forever_UE/Source/Core/map/map.cpp:512)：`PlacePresets` 原来用 `rfind("zone_")` 判断预设是不是园区，改成 `zoneFactory.CheckRegistered(id)`（即 A6）。
+- [mod_test.cpp](Forever_UE/Source/Dependence/common/mod_test.cpp)：`CheckModIdentity`（每个 mod 的通用单元测试）原来要求 type 以 `<concept>_` 开头，去掉了这条检查，只要求 type 和 name 非空。
+- 测试里原来按 `_empty` 后缀识别占位模板，改成按提供它的 dll（`Empty.dll`）识别。这段代码第三轮随逐 mod 的检查搬到了 [ModTest 的 main.cpp](Forever_UE/Source/Test/Mod/main.cpp)。
+
+没改、需要你知道的两类：
+
+- **按完整 id 精确比较的特判**（`station_empty`、`route_empty`、`app_empty`、`script_empty`）不算"假定格式"，但属于感知具体 mod，仍在 A4、A5 里。
+- **"id 跨 concept 不重名"**：第三轮按你的决定定成了硬规则，由测试保证，见 D10。
+
+---
+
 ## A. Core 感知具体 mod
 
 ### - [ ] A1 每日需求的服务类型写死 `"food"`/`"video"`（已确认）
-- 位置：[economy.cpp:31-35](Forever_UE/Source/Core/society/economy.cpp:31)、308-310
+- 位置：[economy.cpp:32-36](Forever_UE/Source/Core/society/economy.cpp:32)、309-311
 - 问题：`kMealServiceType="food"`、`kVideoServiceType="video"`，以及视频需求的财富阈值 `kVideoWealthLow/High`（2000 元/5000 元）都是 Core 常量。"市民需要什么服务、需要多少"是具体 mod（餐厅/视频公司）的业务。
 - 影响：换一套组织 mod（没有 food/video 服务）后，Core 仍然只会产生这两种需求；新增一种服务类型必须改 Core。
 - 建议：需求由 mod 声明。代码里的注释已经写了"先写死，以后由 scheduler 自定义"——比如让 `SchedulerMod` 或一个新的需求声明接口返回"(服务类型, 份数, 预算规则)"列表，Core 只做撮合。
 
 ### - [ ] A2 `AssignVehicles` 写死载具种类 `"car"`/`"truck"`（已确认）
-- 位置：[traffic.cpp:564-565](Forever_UE/Source/Core/traffic/traffic.cpp:564)、584-585；常量在 31-34 行
+- 位置：[traffic.cpp:565-566](Forever_UE/Source/Core/traffic/traffic.cpp:565)、585-586；常量在 32-35 行
 - 问题：成年市民 20% 概率分一辆 `"car"`，组织随机 1-5 次分 `"truck"`。种类字符串是 Basic 的 `vehicle_sedan`/`vehicle_truck` 注册的，Core 不该知道。
 - 附带：成年年龄用自己的 `kAdultAge = 18`，而经济/选举用的是可调政策 `GovernmentPolicy::adultAge`，两处会不一致。
 - 建议：改成由 mod 声明"谁拥有哪类车、概率多少"（例如 `OrganizationMod`/`SchedulerMod` 上的字段，或车辆 mod 注册时带"适用所有者"），Core 只负责找车位和建资产。
@@ -40,33 +160,32 @@
 - 建议：没注册种类就是空串，或者注册时强制要求种类非空。
 
 ### - [ ] A4 按名字特判占位 mod（已确认）
-- 位置：[traffic.cpp:404](Forever_UE/Source/Core/traffic/traffic.cpp:404)（`station_empty`）、[465](Forever_UE/Source/Core/traffic/traffic.cpp:465)（`route_empty`）、[phone.cpp:54](Forever_UE/Source/Core/player/phone.cpp:54)（`app_empty`）
+- 位置：[traffic.cpp:405](Forever_UE/Source/Core/traffic/traffic.cpp:405)（`station_empty`）、[466](Forever_UE/Source/Core/traffic/traffic.cpp:466)（`route_empty`）、[phone.cpp:54](Forever_UE/Source/Core/player/phone.cpp:54)（`app_empty`）
 - 问题：只有这三个 concept 特判了占位 id，其余 20 个没有；`<concept>_empty` 是 `Forever_Mod/Empty` 这个具体 mod 的 id。
 - 建议：二选一——占位 mod 不应该出现在 `config.json` 的启用列表里（那就不需要特判）；或者在 Factory 注册时加一个通用的"占位"标记，Core 统一跳过。
 
 ### - [ ] A5 实体脚本兜底 `script_empty`，Core 强依赖一个具体 mod（已确认）
-- 位置：`MakeScript` [script.cpp:864](Forever_UE/Source/Core/story/script.cpp:864)；[cabin.cpp:20](Forever_UE/Source/Core/map/cabin.cpp:20)、[map.cpp:3907](Forever_UE/Source/Core/map/map.cpp:3907)；默认值在 `Core/map/building.h:563`、`room.h:193`、`zone.h:117`，以及 Dependence 的 `building_mod.h:57/109/152`、`room_mod.h:52`、`zone_mod.h:91`、`feature_spec.h:22`
-- 问题：没指定 ScriptMod 的实体脚本一律用 `"script_empty"`。`Script::Script` 在 mod 创建失败时抛 `NullPointerException`（[script.cpp:26](Forever_UE/Source/Core/story/script.cpp:26)），而配置界面允许把 `script_empty` 取消勾选。
+- 位置（兜底用的 id 第四轮收成了 Dependence 的 `kDefaultScriptModId`，问题本身没变）：`MakeScript` [script.cpp:879](Forever_UE/Source/Core/story/script.cpp:879)；[cabin.cpp:20](Forever_UE/Source/Core/map/cabin.cpp:20)、[map.cpp:3908](Forever_UE/Source/Core/map/map.cpp:3908)；默认值在 `Core/map/building.h`、`room.h`、`zone.h`，以及 Dependence 的 `building_mod.h`、`room_mod.h`、`zone_mod.h`、`feature_spec.h`
+- 问题：没指定 ScriptMod 的实体脚本一律用 `"script_empty"`。`Script::Script` 在 mod 创建失败时抛 `NullPointerException`（[script.cpp:27](Forever_UE/Source/Core/story/script.cpp:27)），而配置界面允许把 `script_empty` 取消勾选。
 - 影响：禁用 `script_empty` 后生成世界会抛异常退出。
 - 建议：没指定 ScriptMod 时用 Dependence 里一个内建的"直通"ScriptMod（不经过 Factory），而不是依赖外部 mod 提供的 id。
 
-### - [ ] A6 按 id 前缀 `zone_` 判断预设类型（已确认）
-- 位置：[map.cpp:511](Forever_UE/Source/Core/map/map.cpp:511)
-- 问题：`preset.modId.rfind("zone_", 0) == 0` 决定预设走园区还是建筑。`<concept>_<name>` 只是命名约定，`registry.md` 里明确写了 Core 不依赖它。
-- 建议：直接问 `zoneFactory.CheckRegistered(id)` / `buildingFactory.CheckRegistered(id)`，或者在路网文件的预设里显式带 concept 字段。
+### - [x] A6 按 id 前缀 `zone_` 判断预设类型（已修）
+- 位置：[map.cpp:512](Forever_UE/Source/Core/map/map.cpp:512)
+- 修法：改成 `zoneFactory.CheckRegistered(preset.modId)`。行为不变：园区 mod 没启用时照旧落到建筑预设的退化路径。CoreTest presets 套件 54 项全过。
 
 ### - [ ] A7 主线脚本退回名为 `test` 的脚本（已确认）
-- 位置：[config.cpp:502-504](Forever_UE/Source/Core/common/config.cpp:502)
+- 位置：[config.cpp:503](Forever_UE/Source/Core/common/config.cpp:503)
 - 问题：`GetMainStoryScriptPath()` 返回 `GetScriptPath("test")`，`test` 是 `Forever_Mod/Test` 的脚本名。
 - 建议：没配 `story_scripts` 就是没有主线脚本，不兜底。
 
 ### - [ ] A8 默认地形 `plain` 的 UE 资产路径写在 Core（已确认）
-- 位置：[map.cpp:3040-3050](Forever_UE/Source/Core/map/map.cpp:3040)（`GetTerrainAppearances`），默认值在 [map.h:37](Forever_UE/Source/Core/map/map.h:37)
+- 位置：[map.cpp:3041-3051](Forever_UE/Source/Core/map/map.cpp:3041)（`GetTerrainAppearances`），默认值在 [map.h:37](Forever_UE/Source/Core/map/map.h:37)
 - 问题：这条不是感知 mod，而是 Core 里出现了 `/Game/Asset/Terrain/Plain/...` 三个 UE 资产路径，属于分层问题。
-- 建议：默认地形的外观放到 UE 层兜底，或者做成一个 `terrain_plain` mod。
+- 建议：默认地形的外观放到 UE 层兜底，或者做成一个地形 mod。
 
 ### - [ ] A9 `TerrainMod` 基类里写死 Megascans 目录约定（已确认）
-- 位置：[terrain_mod.h:42](Forever_UE/Source/Dependence/map/terrain_mod.h:42)
+- 位置：[terrain_mod.h:39-42](Forever_UE/Source/Dependence/map/terrain_mod.h:39)
 - 问题：辅助函数拼 `/Game/3rdParty/Megascans/Surfaces/<folder>/Medium/<id>_tier_2/Textures/...`。这是 Basic 那几个地形用的资产包的目录结构，放在所有 mod 共用的基类里。
 - 建议：挪到 Basic 的公共头里。
 
@@ -77,7 +196,7 @@
 
 ### - [ ] A11 Core 注释里点名具体 mod（已确认，软性）
 - 例子：`map.cpp` 里的 `JingRoadnet`/`roadnet_jing.md`、`vehicle.cpp:31` 的 `vehicle_bus.script`、`economy.cpp` 的"视频公司"、`traffic.cpp` 的 `room_parking`/"机场的飞机、港口的船"、`populace.cpp` 的 `scheduler_basic`。
-- 这次没动。要不要清理看你的尺度：举例说明是有用的，但严格按"Core 不感知 mod"应该换成中性描述。
+- 没动。要不要清理看你的尺度：举例说明是有用的，但严格按"Core 不感知 mod"应该换成中性描述。
 
 ---
 
@@ -102,7 +221,7 @@
 - 建议：按 `stationType` 字符串建一个 `TMap`，颜色由 mod 给或按哈希取。
 
 ### - [ ] B5 `vehicle_command` 直接映射到公交函数（已确认）
-- 位置：[ForeverFrameworkActor.cpp:649-650](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:649)
+- 位置：[ForeverFrameworkActor.cpp:653-654](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:653)
 - 问题：脚本词汇 `run`/`stop` 是通用的，实现却是 `StartBusTestRun`/`StopBusRun`。随 B3 一起改。
 
 ### - [ ] B6 触发盒大小按 `!= "car"` 判断（已确认）
@@ -114,10 +233,11 @@
 - 背景：安装版引擎下 mod 不能带 UE C++，这些类只能留在主程序。它们是通过 mod 给的蓝图路径间接选中的，UE 代码里没有按 mod id 分派，所以算"命名和归属"问题而不是硬违例。
 - 建议：按能力命名（飞行载具/浮力载具/带尾迹的发射物），`BoardTruck` 改成中性名字。
 
-### - [ ] B8 `ForeverModSubsystem` 另建一套 Factory 做校验，只覆盖 16 个 concept（已确认）
-- 位置：[ForeverModSubsystem.cpp:152 起](Forever_UE/Source/Forever/Mod/ForeverModSubsystem.cpp:152)
-- 问题：每次开局用局部 `ModLoader` + 局部 Factory 把 dll 再注册一遍，逐个 id 创建临时实例打日志。Terrain/Roadnet/Zone/Green/Building/Weapon/Party 七个 concept 没覆盖；和 Core 的 `Registry` 重复；还带来 C5 的副作用。
-- 建议：直接对 `Registry::Get()` 里的 Factory 做校验，或者删掉这段（CoreTest 的 mods 套件已经在做同样的事）。
+### - [x] B8 `ForeverModSubsystem` 另建一套 Factory 做校验（已修）
+- 位置：[ForeverModSubsystem.cpp](Forever_UE/Source/Forever/Mod/ForeverModSubsystem.cpp)
+- 修法：删掉了局部 `ModLoader`、16 个局部 Factory 和 `ValidateFactory`（文件从 300 行减到 104 行）。剩下的函数只挂载 mod 的 Plugin/Pak 内容，所以把 `EnsureModsRegistered` 改名为 `MountModContent`，两个调用方（`ForeverConfigBridgeSubsystem`、`ForeverSaveSubsystem`）和文档同步改了。
+- 影响：开局日志里不再有 `ForeverModSubsystem: [Concept] id=... type=... name=...` 这批行。mod 能否注册和创建，由 ModTest 覆盖（枚举全部 23 个 concept）；Core 的 `Registry` 认不认得，由 CoreTest 的 mods 套件覆盖。
+- 验证：UE 模块编译通过；没开编辑器跑。
 
 ### - [ ] B9 Basic 的脚本资源放在主程序的 `Resource/Story/`（已确认）
 - 位置：`Forever_UE/Resource/Story/` 下共 26 个 `.script`，其中 `asset_burger.script`、`vehicle_bus.script`、`weapon_pistol.script`、`organization_shop.script`、`job_shop_saler.script` 这类按 mod id 命名的占大多数
@@ -125,33 +245,30 @@
 - 建议：挪到 `Resource/Mod/Basic/` 下。
 
 ### - [ ] B10 UE 注释里点名具体 mod（已确认，软性）
-- `BuildingElement.cpp:645`、`ForeverBuildingFrameworkComponent.cpp:82`（Mohar），`ForeverAvatarSubsystem.cpp:107`（Yuanshen），`ForeverWeaponVisualComponent.h`（`weapon_pistol`）。这次没动。
+- `BuildingElement.cpp:645`、`ForeverBuildingFrameworkComponent.cpp:82`（Mohar），`ForeverAvatarSubsystem.cpp:107`（Yuanshen），`ForeverWeaponVisualComponent.h`（`weapon_pistol`）。没动。
 
 ---
 
 ## C. Bug
 
-### - [ ] C1 线路车辆的"游戏秒/真实秒"系数写死成 120（已确认）
-- 位置：[route.cpp:21](Forever_UE/Source/Core/traffic/route.cpp:21)，用在 294、721、734 行
-- 问题：`kGameSecondsPerRealSecond = 120` 对应 `timeFlowRatio = 2.0`。但 `Player::timeFlowRatio` 默认 10.0，`test.script`/`ys.script` 都用 `global_setting` 设成 1，而且脚本可以运行时改。
-- 影响：
-  - 721 行的 `speedMapPerRealSecond` 被 UE 用作公交从运动学切到物理时的初速度（[ForeverTrafficFrameworkComponent.cpp:1637](Forever_UE/Source/Forever/Framework/ForeverTrafficFrameworkComponent.cpp:1637)）。倍率为 1 时初速度快一倍。
-  - 734 行的 `dwellRemainingSeconds` 是停站剩余真实秒（同文件 1652 行在用）。倍率为 1 时短一半。
-  - 294 行的 `easeSeconds` 换算同样偏差。
-- 建议：`Route` 从调用方拿实际倍率（UE 侧已经有 `GameSecondsPerRealSecond()`，在 `ForeverPopulaceFrameworkComponent.cpp:779`）。
-- 注：我在这行注释和 `route_mod.md` 里标了这个问题。
+### - [x] C1 线路车辆的"游戏秒/真实秒"系数写死成 120（已修）
+- 位置：[route.cpp:22](Forever_UE/Source/Core/traffic/route.cpp:22)、`Route::QueryVehicleState`；[ForeverTrafficFrameworkComponent.cpp:1613](Forever_UE/Source/Forever/Framework/ForeverTrafficFrameworkComponent.cpp:1613)
+- 原问题：给 UE 的"每真实秒速度"和"剩余停站真实秒"按 `timeFlowRatio=2.0` 换算，而实际倍率是脚本设的 1（默认 10）。
+- 修法：`QueryVehicleState` 多一个参数 `gameSecondsPerRealSecond`，由调用方传当前实际倍率（UE 传 `60 * Player::GetTimeFlowRatio()`），这两个量按它换算；倍率为 0 时夹到一个很小的正数避免除零。
+- **一个需要你确认的取舍**：`easeSeconds` 换算成游戏秒时仍然用固定的基准 120（常量改名 `kEaseGameSecondsPerRealSecond`）。原因是加减速曲线在建线路时就预算进时刻表了，那时 `Player` 还不存在，脚本也可能运行中改倍率；如果跟着实际倍率重算，时刻表的周期会变、车会跳位置。现在的语义是：时刻表整体按游戏秒固定，倍率变了，车的真实速度和加减速时长一起按比例变。如果你想要"加减速的真实时长不随倍率变"，那是另一种设计，要重算时刻表。
+- 验证：编译通过；公交切物理的实际表现没在 PIE 里看。
 
-### - [ ] C2 `Traffic::elapsedSeconds` 是 `float` 且一直累加（已确认，长时间游玩才触发）
-- 位置：[traffic.h:199](Forever_UE/Source/Core/traffic/traffic.h:199)，`Traffic::Tick` 累加；`Route::Update(float)` [route.h:109](Forever_UE/Source/Core/traffic/route.h:109)、`lastElapsedSeconds`
-- 问题：`float` 只有 24 位有效数字。累计超过 2^24 秒（约 194 游戏天）后精度是 2 秒；倍率为 1、60 帧时每帧增量正好 1 游戏秒，加不进去，线路车辆停住。在这之前精度逐步变差，车辆运动会一顿一顿。`jump_time` 会加速到达这个点。
-- 建议：改 `double`（存档里对应字段一起改）。
+### - [x] C2 `Traffic::elapsedSeconds` 是 `float`（已修）
+- 位置：[traffic.h:199](Forever_UE/Source/Core/traffic/traffic.h:199)、`Route::Update`、`Route::lastElapsedSeconds`、`traffic_save.cpp`
+- 修法：`elapsedSeconds`、`Route::Update` 的参数、`lastElapsedSeconds` 都改成 `double`；对周期取模用 `fmod`，取模后的一圈内时间才转 `float`。存档里这个字段从 F32 改成 F64。
+- 影响：**旧存档读不了**（交通段布局变了，按约定没升版本、没写迁移）。
+- 验证：CoreTest save 套件 88 项全过（存读档往返一致）。
 
-### - [ ] C3 `Script::caches` 静态缓存从不清空（已确认）
-- 位置：[script.cpp:16](Forever_UE/Source/Core/story/script.cpp:16)，[108 行](Forever_UE/Source/Core/story/script.cpp:108)命中缓存就直接返回
-- 问题：按文件路径缓存解析结果，整个进程生命周期不清。没有任何清理接口。
-- 影响：编辑器不关的情况下，改了 `.script` 再开 PIE 读到的还是旧内容。`Milestone*` 也不释放。
-- 建议：每局开始（`Registry::RefreshMods` 那个阶段）清一次，或者按文件修改时间失效。
-- 我没有在编辑器里实际复现，是从代码推出来的；如果你平时改脚本后重开 PIE 是生效的，告诉我，我再查是哪里绕过了缓存。
+### - [x] C3 `Script::caches` 静态缓存从不清空（已修）
+- 位置：[script.cpp:40](Forever_UE/Source/Core/story/script.cpp:40)（`Script::ClearCache`）
+- 修法：新增 `Script::ClearCache()`，释放缓存里的 `Milestone` 并清空。调用点两处：每局"加载模组"阶段（`ForeverFrameworkActor.cpp`），以及菜单的 `ValidateAndStartGame`（让依赖校验读到最新的 `mod_dependences`）。
+- 安全措施：缓存里的 `Milestone` 被活着的 `Script` 裸指针引用，所以加了 `liveCount`（构造 +1、析构 -1），还有 `Script` 活着时 `ClearCache` 什么都不做并打一条警告。
+- 验证：编译通过，CoreTest 不受影响（CoreTest 不调它）。**没有在编辑器里实测"改脚本后重开 PIE 生效"**；初版里我也说过这个 bug 是从代码推出来的，没复现过。
 
 ### - [ ] C4 `Player::Tick` 每帧截断毫秒，不累计余数（已确认）
 - 位置：[player.cpp:52](Forever_UE/Source/Core/player/player.cpp:52)
@@ -159,20 +276,19 @@
 - 影响：游戏时钟速度随帧率变化（倍率 1、144 帧时每帧 416.67ms 截成 416，慢约 0.16%）；倍率小到每帧不足 1ms 时时钟完全不走。
 - 建议：保留一个 `double` 余数累加。
 
-### - [ ] C5 mod 命名计数器新开局不复位（已确认）
-- 位置：各 mod 的 `static int count`；只有读档时 [save.cpp:135](Forever_UE/Source/Core/common/save.cpp:135) 的 `SetInstanceCounter` 会恢复
-- 问题：`Registry` 常驻持有 dll，计数器跨局累加。同一进程第二次开局（再开 PIE、回菜单重开），建筑/房间等名字的编号接着上一局涨。另外 B8 的校验每次开局会为 16 个 concept 的每个 id 多建一个实例，再吃掉一个编号，所以 UE 和 CoreTest 的名字也差一格。
-- 影响：同种子在不同会话、UE 与 CoreTest 之间生成的名字不一致（名字是 `buildings` 表的键，也出现在地址里）。不会崩。
-- 建议：开局时把所有 mod 的计数器清零（复用存档那套 `setCounter`）。
+### - [x] C5 mod 命名计数器新开局不复位（已修）
+- 位置：[save.cpp:619](Forever_UE/Source/Core/common/save.cpp:619)（`SaveGame::ResetInstanceCounters`）、[ForeverFrameworkActor.cpp:202](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:202)
+- 修法：新增 `SaveGame::ResetInstanceCounters()`，对 `config.json` 里每个已启用的 mod id 把计数器设回 0（复用读档那套"临时建实例、`SetInstanceCounter`、销毁"）。UE 在每局"加载模组"阶段调用，**只在新开局时调**；读档仍然走原来的 `RestoreInstanceCounters`。
+- 连带：B8 删掉后，UE 开局不再为每个 mod 多建一个临时实例，UE 和 CoreTest 的编号起点一致了。
+- 验证：CoreTest mods 套件新增一项检查（复位后第一个实例的名字每次相同），通过。UE 里"第二次开局名字从头编"没实测。
 
-### - [x] C6 `Tools/ModWeb` 构建已坏（已确认，已修）
+### - [x] C6 `Tools/ModWeb` 构建已坏（第一轮已修）
 - 位置：[build_web.bat](Forever_UE/Tools/ModWeb/build_web.bat)、[web_main.cpp](Forever_UE/Tools/ModWeb/web_main.cpp)
-- 问题：还引用 2026-11-13 改名前的 `puzzle_basic.*`/`app_basic.*`；源文件清单缺后来加的 `Dependence/common/random.cpp`、`mod_test.cpp`；网页版不编 `utility.cpp`，缺 `debugf`。
-- 修了什么：include 和源文件清单换成 `puzzle_tetris`/`puzzle_anykey`/`app_bounce`/`app_notes`，补上两个 `.cpp`，在 `web_main.cpp` 里加了 `debugf` 桩（打到 stderr）。
-- 验证：`build_web.bat` 现在能产出 `dist/forever_mods.html`（13.8MB）。**没有在浏览器里打开验证运行**。
+- 修了什么：include 和源文件清单换成 `puzzle_tetris`/`puzzle_anykey`/`app_bounce`/`app_notes`，补上 `random.cpp`、`mod_test.cpp`，在 `web_main.cpp` 里加了 `debugf` 桩。
+- 验证：`build_web.bat` 能产出 `dist/forever_mods.html`。**没有在浏览器里打开验证运行**；第二轮改了 `mod_test.cpp` 之后也没有重新跑这个构建。
 
 ### - [ ] C7 销毁车辆不释放车位和行程（潜伏）
-- 位置：[vehicle.cpp:36](Forever_UE/Source/Core/traffic/vehicle.cpp:36)（`~Vehicle`）、[traffic.cpp:632](Forever_UE/Source/Core/traffic/traffic.cpp:632)（`DestroyVehicle`）、[614](Forever_UE/Source/Core/traffic/traffic.cpp:614)（`CreateVehicle` 同名覆盖分支）
+- 位置：[vehicle.cpp:36](Forever_UE/Source/Core/traffic/vehicle.cpp:36)（`~Vehicle`）、[traffic.cpp:633](Forever_UE/Source/Core/traffic/traffic.cpp:633)（`DestroyVehicle`）、[615](Forever_UE/Source/Core/traffic/traffic.cpp:615)（`CreateVehicle` 同名覆盖分支）
 - 问题：析构不调 `ReleaseSlot`/`ClearReservation`，`ParkingSlot::parkedVehicle`/`reservedBy` 留悬空指针，车位永远不空闲。`DestroyVehicle` 只取消组织任务行程，不取消通勤行程（`trips` 里留悬空 `Vehicle*`）；同名覆盖分支两种行程都不取消。
 - 当前状态：`Traffic::DestroyVehicle` 没有任何调用方，车名也不会重复，所以还没触发。
 - 建议：在 `~Vehicle` 里释放车位和预订；`DestroyVehicle` 补上 `FindTripByVehicle` 的取消。
@@ -184,28 +300,28 @@
 - 建议：改成按引用输出（`bool GetValue(name, ValueType& out)`）和 `const ValueType&` 入参。
 
 ### - [ ] C9 异常处理不全（已确认）
-- [ForeverFrameworkActor.cpp:287](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:287)：`RunGenerationStep` 只 `catch (const ExceptionBase&)`。`std::out_of_range`、`std::bad_alloc`、`stod` 的异常等标准库异常会直接崩，而不是走"打日志退出"。
+- [ForeverFrameworkActor.cpp:291](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:291)：`RunGenerationStep` 只 `catch (const ExceptionBase&)`。`std::out_of_range`、`std::bad_alloc`、`stod` 的异常等标准库异常会直接崩，而不是走"打日志退出"。
 - [config.cpp:415](Forever_UE/Source/Core/common/config.cpp:415)：`AddResourcePath` 的 `recursive_directory_iterator` 没带 `error_code`，遇到无权限子目录抛 `filesystem_error`（`AddDllPath` 那边是带了的）。
 - `Config::ReadConfig`：`dll_paths` 等数组里出现非字符串元素时 `AsString()` 抛 `JsonFormatException`，没人接，启动即崩。
 
-### - [ ] C10 存档直接覆盖写（已确认）
-- 位置：[ForeverSaveSubsystem.cpp:191](Forever_UE/Source/Forever/Mod/ForeverSaveSubsystem.cpp:191)
-- 问题：`SaveArrayToFile` 直接写目标路径。写到一半失败（磁盘满、进程被杀）会毁掉原来的存档。
-- 建议：先写 `.tmp` 再改名。
+### - [x] C10 存档直接覆盖写（已修）
+- 位置：[ForeverSaveSubsystem.cpp:193](Forever_UE/Source/Forever/Mod/ForeverSaveSubsystem.cpp:193)
+- 修法：先写到同目录的 `<路径>.tmp`，写完整了再 `IFileManager::Move` 覆盖目标文件。写临时文件或改名任一步失败，都会删掉临时文件、报错返回，原存档不动。
+- 验证：编译通过；没有实际存一次档。
 
 ### - [ ] C11 小问题（已确认，优先级低）
 - [room.cpp:369](Forever_UE/Source/Core/map/room.cpp:369)：`Room::AddAsset` 用 `insert_or_assign`，同名资产会被覆盖并泄漏。资产名目前唯一，所以没触发。
 - [config.cpp:196](Forever_UE/Source/Core/common/config.cpp:196)：`seed` 写成负数或超大浮点数时，`double` 转 `unsigned long long` 是未定义行为。
-- [ForeverFrameworkActor.cpp:837](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:837)：`ApplySpawnNpc` 里 `*player->GetTime()` 没判空（世界生成完之后 `player` 一定非空，实际不会触发）。
-- `Map::CreateBuildingAt`（`map.cpp:664`）：建筑重名时 `delete building`，但之前已经登记的 `entityNav[building]` 和 `pendingBuildingRoadAccess` 里的 `owner` 指针还留着。mod 名字唯一，所以没触发。
+- [ForeverFrameworkActor.cpp:841](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:841)：`ApplySpawnNpc` 里 `*player->GetTime()` 没判空（世界生成完之后 `player` 一定非空，实际不会触发）。
+- `Map::CreateBuildingAt`（[map.cpp:665](Forever_UE/Source/Core/map/map.cpp:665)）：建筑重名时 `delete building`，但之前已经登记的 `entityNav[building]` 和 `pendingBuildingRoadAccess` 里的 `owner` 指针还留着。mod 名字唯一，所以没触发。
 - `Config::GetScriptPath`/`GetResourceFilePath`：遍历 `unordered_map`，多个资源目录里有同名文件时取哪个不确定；`GetResourceFilePath` 每次 post 都重新递归扫盘。
 
 ---
 
 ## D. 设计问题
 
-### - [ ] D1 23 个 concept 的清单在六七处重复维护
-- `loader.cpp` 的符号表、`registry.cpp` 的 `RegisterMods`/`ReloadModArgs`/`CheckModRegistered` 三处、`registry.h` 的成员和 getter、`save.cpp` 的 `ConceptOps` 表、`ForeverModSubsystem`（只有 16 个）。
+### - [ ] D1 23 个 concept 的清单在多处重复维护
+- `Dependence/common/mod_concepts.cpp` 的符号表（第三轮从 `loader.cpp` 挪过来）、`registry.cpp` 的 `RegisterMods`/`ReloadModArgs`/`CheckModRegistered` 三处、`registry.h` 的成员和 getter、`save.cpp` 的 `ConceptOps` 表、`Test/Mod/mod_checks.cpp` 的 `ModTestHost`（第三轮新增，启动时会核对有没有和符号表对上）。`ForeverModSubsystem` 那份随 B8 删掉了。
 - 新增 concept 要改所有这些地方，漏一处不会编译报错。`Config` 里"单选 concept"的清单（`Roadnets`/`Names`）也重复了两份（[config.cpp:37](Forever_UE/Source/Core/common/config.cpp:37)、[591](Forever_UE/Source/Core/common/config.cpp:591)）。
 - 建议：一张表（X-macro 或 tuple）生成全部。
 
@@ -215,18 +331,18 @@
 
 ### - [ ] D3 `Registry` 单例从不卸载 dll
 - `RefreshMods` 只补加载新路径。编辑器开着时重编 mod dll 不会生效（文件还被占用），从配置里移除的 dll 也一直留在进程里（靠"不在启用表"屏蔽）。
-- 是否要支持热重载看你的工作流；至少文档里要写清楚（`ForeverFrameworkActor.h` 里"EndPlay 让 dll 卸载"的旧注释我已经改掉）。
+- 是否要支持热重载看你的工作流。C5 的计数器复位是这个设计下的补丁：dll 不卸载，static 状态就得手动清。mod 里如果还有别的 static 状态，同样会跨局残留。
 
 ### - [ ] D4 `ApplyChange` 是约 40 个 `dynamic_cast` 的长链
-- 位置：[ForeverFrameworkActor.cpp:371 起](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:371)
+- 位置：[ForeverFrameworkActor.cpp:375 起](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:375)
 - 每个 Change 最坏要过 40 次 `dynamic_cast`；新增 Change 类型要在这条链里找位置。
 - 建议：按 `Change::GetType()` 字符串建分发表，各域/各组件注册自己认识的类型。
 
 ### - [ ] D5 Roadnet 的启用方式和别的 Factory 不一致
-- `RoadnetFactory` 用 `SetConfig(id, bool)`/`GetRoadnet()`（见 [map.cpp:180-193](Forever_UE/Source/Core/map/map.cpp:180)），其余 22 个用 `SetModArgs` + `IsEnabled`。`InitRoadnet` 里还要手动清上一局留下的启用标记。
+- `RoadnetFactory` 用 `SetConfig(id, bool)`/`GetRoadnet()`（见 [map.cpp:180-193](Forever_UE/Source/Core/map/map.cpp:180)），其余 22 个用 `SetModArgs` + `IsEnabled`。`InitRoadnet` 里还要手动清上一局留下的启用标记。`RoadnetFactory::CheckRegistered`/`GetRegisteredIds` 也不看是否启用，和别的 Factory 语义不同。
 
 ### - [ ] D6 Core 的警告玩家看不到
-- `debugf` 只走 `OutputDebugString`（附加调试器才能看到），`Config` 的警告走 `std::cerr`，都不进 `Forever.log`。Core 里有上百条 `Warning:` 日志实际上是丢的。
+- `debugf` 只走 `OutputDebugString`（附加调试器才能看到），`Config` 的警告走 `std::cerr`，都不进 `Forever.log`。Core 里有上百条 `Warning:` 日志实际上是丢的（包括这次 `Script::ClearCache` 被跳过时的那条）。
 - 政治域已经有"Core 产出文本、UE 注入 sink"的做法（`polit_log`），可以推广成通用的 Core 日志 sink。
 
 ### - [ ] D7 `Config::AddDllPath` 为了探测会 `LoadLibrary` 目录下每一个 dll
@@ -242,68 +358,77 @@
 - `UForeverBuildingFrameworkComponent::ResolveLodMaterial`/`defaultLodMaterial`：无调用方。
 - `Traffic::Tick` 的 `crossedDay`、`post` 两个参数没用。
 - `Map::FindPath` 的 `coords` 参数没用（函数里 `(void)coords`）。
+- `Config::GetActiveDllPaths`/`IsDllActive`：B8 删掉后在 `Source` 和 `Tools` 里都没有调用方了（`config.md` 里还有它们的说明）。
+
+### - [x] D10 多处只用 mod id 做键，隐含"id 跨 concept 不重名"（按你的决定定成规则，由测试保证）
+- 结论：不改键。"所有 mod 的 id 全局唯一"是硬规则（`CONVENTIONS.md` 第 5 节），重名由 ModTest 和 CoreTest 的 mods 套件拦住，见本文件"第三轮"一节。下面是当初记录的背景，留作说明这条规则保护的是什么。
+- 背景：既然 id 可以是任意字符串，两个 concept 就可能注册同名 id。下面这些地方只用 id、不带 concept：
+  - 随机流：`RandomRegistry` 的 mod 流按 id 取（[random.h:79](Forever_UE/Source/Dependence/common/random.h:79)），同名 id 会共用一条流和一个 `--seed`。
+  - mod 依赖表：`Config::modDependences` 是 `id -> 依赖 id 列表` 的扁平表，同名 id 后者覆盖前者；`Config::IsModIdEnabled(id)` 也不分 concept。
+  - `Registry::CheckModRegistered(id)`：任意一个 Factory 认得就算数。主线脚本的 `mod_dependences` 靠它校验。
+- 影响：现在项目里的 id 靠 `<concept>_<name>` 的习惯写法没有撞名，所以没出问题；第三方 mod 不守这个习惯时会串。
+- 运行时没有重名检查：两个 dll 提供了同名 id 时，`Config`/`Registry` 会静默地后者覆盖前者。按你的要求这由测试保证，游戏启动时不再查。
 
 ---
 
 ## E. 违反 `CONVENTIONS.md`
 
-### - [ ] E1 `.vcxproj.filters` 漏文件
-- `Dependence.vcxproj.filters` 缺 `common/random.h`、`common/random.cpp`。
-- `Test.vcxproj.filters` 缺 `econ_report.h`、`econ_report.cpp`。
-- （`.vcxproj` 本身都列全了，只影响 VS 里的筛选器显示。）
+### - [x] E1 `.vcxproj.filters` 漏文件（已修）
+- `Dependence.vcxproj.filters` 补了 `common/random.h`、`common/random.cpp`；`Test.vcxproj.filters` 补了 `econ_report.h`、`econ_report.cpp`。
 
-### - [ ] E2 头文件没有配对 `.cpp`（第 2 节要求每个 `.h` 配一个）
-- Core：`common/save_refs.h`
-- Dependence：`map/transit_data.h`、`polit/party_mod.h`、`polit/policy_ids.h`
-- Basic：`player/puzzle_common.h`、`traffic/bus_stop_name.h`（`map/room_furniture_catalog.h` 是工具生成的，可以豁免）
+### - [x] E2 头文件没有配对 `.cpp`（已修）
+- 新建了 6 个只含 `#include "同名.h"` 的 `.cpp`，并加进各自的 `.vcxproj` 和 `.filters`：
+  - Core：`common/save_refs.cpp`
+  - Dependence：`map/transit_data.cpp`、`polit/party_mod.cpp`、`polit/policy_ids.cpp`
+  - Basic：`player/puzzle_common.cpp`、`traffic/bus_stop_name.cpp`
+- 六个头文件都能单独编译通过（自包含）。`Basic/map/room_furniture_catalog.h` 是工具生成的，没有配。
 
-### - [ ] E3 头文件没有配对 `.md`
-- Core：`map/terrain_coverage.h`
-- Basic：`traffic/bus_stop_name.h`（10 个小游戏共用 `puzzle_games.md`，符合"同类可共用"）
-- Test/Core：`child_world.h`、`process_util.h`、`test_framework.h`、`world_build.h`
+### - [x] E3 头文件没有配对 `.md`（已修，其中一条是我初版列错了）
+- `Core/map/terrain_coverage.h`：把 `terrain.md` 里"覆盖图"那一节搬成了独立的 [terrain_coverage.md](Forever_UE/Source/Core/map/terrain_coverage.md)，`terrain.md` 里留一句指引，头文件注释同步改了。
+- `Basic/traffic/bus_stop_name.h`：新建了 [bus_stop_name.md](Forever_UE/Source/Basic/traffic/bus_stop_name.md)。
+- **更正**：初版把 `Test/Core` 的 `child_world.h`、`process_util.h`、`test_framework.h`、`world_build.h` 也列成了违例，这是错的。`CONVENTIONS.md` 第 1 节只对 Dependence/Core/Basic 强制要求配对文档，而且这几个文件已经在共用文档 `CoreTest.md` 的"文件分工"里写了。所以没有给它们建文件。
 
-### - [ ] E4 其它
-- [room.h:14-15](Forever_UE/Source/Core/map/room.h:14) 自己写了 `class Script; class Vehicle;` 前向声明（约定是统一放 `class.h`）。
-- `config.cpp` 第一行是 `#include <set>`，在自己的头文件之前；`implement.cpp` 的 include 分组也不合规。
+### - [x] E4 其它（已修）
+- `Core/map/room.h` 里的 `class Script; class Vehicle;` 删掉了（`class.h` 里本来就有）。
+- include 分组：初版只列了 `config.cpp` 和 `implement.cpp`，实际扫描发现 Core/Dependence/Basic 里有 55 个 `.cpp` 不符合"自己的头文件、空行、Dependence 组、空行、本模块组、空行、系统头"。大多数是 `common/random.h` 紧贴在自己的头文件后面。用脚本重排了 52 个，组内顺序保持原样，编译通过。
+- 没动的 3 个：
+  - `Basic/basic.cpp`：没有对应的 `basic.h`，谈不上"自己的头文件在最前"。
+  - `Core/polit/congress.cpp`、`election.cpp`：它们是 `polit.h` 的拆分实现文件，第一行是说明性注释，include 的是 `polit/polit.h`。
 
 ---
 
 ## F. 文档和注释
 
-### 这次改了什么（119 个文件，未提交）
+### 第一轮改了什么（已随 `29b82f6` 提交）
 
-- **重写**：`Source/Core/README.md`（原文还写着"其余 domain 目前没有 Core 层本体类"）、`Forever/Framework/ForeverFrameworkComponent.md`（原文是迁移期的"旧 Framework Actor 对照表"）。
-- **`CONVENTIONS.md`**：
-  - 第 3 节新增一条，把"Core 和 Forever(UE) 层不感知任何具体 mod"写成明文规则。**这是我加的规则文字，请确认措辞。**
-  - 第 3 节补了 `Source/Test`；第 5 节补了"mod id 一律 `<concept>_<name>`、Basic 每个 mod 一组文件"；第 9 节补了 Yuanshen；修正了不存在的示例名（`PengzhanBuilding`、`terrain_basic`、`ForeverGameMode`）和 `class.h` 分组（加 Polit）。
-- **`Dependence/README.md`**：concept 表补 Weapon；参数传递流程从 `ForeverModSubsystem` 改成 `Registry::ReloadModArgs`；修正共享原语的文件名。
-- **批量修正的过时引用**：
-  - 20 份 Factory 文档里不存在的 `MergeTemp` 两段式注册。
-  - 13 处 `Source/Basic/<domain>/<concept>_basic.*`（Basic 早已按 mod id 拆文件）。
-  - 已合并进 CoreTest 的 `EconSim`、已改名的 `GlobalAllocate`（现在是 `Distribute`）、`InitAirportVehicles`（现在是 `InitStockedVehicles`）。
-  - "mod id 不带 concept 前缀"的旧说法（4 处文档 + 2 处代码注释）。
-  - `time_flow_ratio` 默认值（文档写 2.0，实际 10.0）。
-- **按实际代码改写的段落**：建筑 LOD 操作队列（`ForeverBuildingFrameworkComponent.md`、`BuildingElement.md`，原文描述的 `BuildFarMesh`/`doorTierOpQueue` 等都不存在）、`ForeverModSubsystem.md`、`terrain_factory.md`、`roadnet_mod.md` 的 `GreenSite` 结构、门资产路径的填写位置、`VehicleRig/README.md` 的新增载具步骤。
-- **代码注释约 20 处**：指向已改名函数/文件的引用、`party_mod.h` 里指向 Claude 记忆文件的引用（改成指向 `CONVENTIONS.md`）、`ForeverFrameworkActor.h` 里 `EndPlay` 的过时解释、`vehicle_mod.h` 里"搭乘未实现"的说法。
-- 约 30 处"已删/原来是…"的纯过程叙述改成了当前状态描述。
+- 重写 `Source/Core/README.md`、`Forever/Framework/ForeverFrameworkComponent.md`。
+- `CONVENTIONS.md`：第 3 节新增"Core 和 Forever(UE) 层不感知任何具体 mod"；补 `Source/Test`、Yuanshen；修正不存在的示例名和 `class.h` 分组。
+- `Dependence/README.md`：concept 表补 Weapon；参数传递流程改成 `Registry::ReloadModArgs`。
+- 批量修正过时引用（`MergeTemp`、`<concept>_basic.*`、`EconSim`、`GlobalAllocate` 等），按实际代码改写建筑 LOD 队列等段落，约 20 处代码注释。
+
+### 第二轮改了什么（未提交）
+
+- `CONVENTIONS.md` 第 5 节：把我第一轮写的"所有 mod id 一律是 `<concept>_<name>`"改成"mod id 可以是任意字符串，任何实现都不能假定格式"。
+- 去掉各处"id 必须是…""不带/带 concept 前缀"的说法：`mod_test.h/.md`、`random.h`、`green_factory.md`、`party_factory.md`、`basic.md`、`Basic/README.md`、`script.md`、`registry.h/.md`、`config.md`、`loader.md`、`VehicleRig/README.md`、`Test/README.md`。
+- 跟着代码改的文档：`route.md`、`route_mod.md`、`traffic.md`、`traffic_save.md`（C1/C2）；`script.md`（C3）；`save.md`（C5）；`ForeverSaveSubsystem.md`（C10）；`ForeverModSubsystem.md` 重写、`ForeverConfigBridgeSubsystem.md`、`loader.md`、`Dependence/README.md`、`Forever_Mod/README.md`（B8）；`ForeverFrameworkActor.md`、`ForeverTrafficFrameworkComponent.md`、`map.md`、`Core/README.md`。
+- 新文档：`terrain_coverage.md`、`bus_stop_name.md`。
 
 ### - [ ] F1 文档里的日期和变更记录没有清理
 - 97 份 md 里有 936 处 `2026-xx-xx` 标记，很多是"(2026-11-22 改)""原来是…现在…"这种变更记录。`CONVENTIONS.md` 第 1 节要求文档只写当前状态。
-- 这次没动：量大，而且哪些是"值得保留的踩坑记录"需要你定尺度。
+- 没动：量大，而且哪些是"值得保留的踩坑记录"需要你定尺度。
 
-### - [ ] F2 仍有 154 份 md 被引用扫描标记
-- 我用脚本扫了"md 里用反引号引用、但代码里已不存在的标识符/文件"。修完后还剩 154 份、568 处。
+### - [ ] F2 仍有约 150 份 md 被引用扫描标记
+- 我用脚本扫了"md 里用反引号引用、但代码里已不存在的标识符/文件"。第一轮修完后还剩 154 份、568 处；第二轮没有重扫。
 - 我看过的大多是误报：简称（如用 `IndustryBuilding` 指代高/中/低三个类）、UE 引擎自带的标识符、`h/.cpp` 这种写法、故意写出来的"不要这样做"的名字。但**没有逐份确认**，里面可能还有真过时的。
-- 扫描脚本和报告在本次会话的临时目录里，需要的话我可以重跑并把报告放进仓库。
 
-### - [ ] F3 `Core/story/story.md`、`ForeverWeaponComponent.md` 等的"待办"里提到不存在的类
-- 例如 `AddMessage`/`PopMessages`、`ArrestPlayerChange`/`ReleasePlayerChange`。它们是作为"还没做"列出的，不算错，但如果这些计划已经放弃，应该删掉。
+### - [ ] F3 "待办"里提到不存在的类
+- 例如 `Core/story/story.md` 的 `AddMessage`/`PopMessages`、`ForeverWeaponComponent.md` 的 `ArrestPlayerChange`/`ReleasePlayerChange`。它们是作为"还没做"列出的，不算错，但如果这些计划已经放弃，应该删掉。
 
 ---
 
-## G. 现有测试失败（不是这次改动引起的）
+## G. 现有测试失败（不是这两轮改动引起的）
 
-CoreTest quick（`--suite all --quick`）：7939 通过，20 失败。我的代码改动只有注释和 `Tools/ModWeb`，不影响这些套件。报告在 `Forever_UE/Saved/TestReports/review_20261125/core`。
+CoreTest quick（`--suite all --quick`）三轮都是同样的 20 项失败，逐条对比完全相同。第二轮的报告在 `Forever_UE/Saved/TestReports/review_20261125_fix/core`，第一轮的在 `review_20261125/core`；第三轮经 `run_tests.bat` 跑的那份因为时间戳问题（已修）落在了 `Saved/TestReports/周三022611_171703`。
 
 ### - [ ] G1 route 套件 11 项失败（已确认是旧问题）
 - 11-24 13:23 的旧报告（`Saved/TestReports/core`）里就有同样的 11 项。
@@ -313,14 +438,10 @@ CoreTest quick（`--suite all --quick`）：7939 通过，20 失败。我的代�
   - 路线缓存：反向没命中同一条缓存、新增了缓存项、24 小时无命中的项没保留。
   - 随机车位到车位的车辆路线失败率超过 5%（18/300）。
 
-### - [ ] G2 polit 套件 8 项失败（推测与今天的配置改动有关）
+### - [ ] G2 polit 套件 8 项失败（推测与小地图配置有关）
 - 只出现在 seed 12：两个党派创建时都没拿到会议室，后面的党代会、会议室冲突测试跟着失败。
-- 11-24 的旧报告里 polit 是全过的。中间只隔了提交 `7731158`（改了 `config.json`：小地图）。我没有回退验证，是推测。
-- 值得看的点：地图上没有 `room_meeting` 房间时党派就没有会议室，这本身是个脆弱点（会议室只出现在 `ResidenceHighBuilding` 的一种布局里）。
+- 11-24 的旧报告里 polit 是全过的。中间隔了提交 `7731158`（改了 `config.json`：小地图）。我没有回退验证，是推测。
+- 值得看的点：地图上没有会议室房间时党派就没有会议室，这本身是个脆弱点（会议室只出现在 `ResidenceHighBuilding` 的一种布局里）。
 
 ### - [ ] G3 perform 套件 1 项失败
 - `at most 5% of random slot-to-slot routes fail`（14/200，seed 11），和 G1 的车辆路线失败是同一类。旧报告里 perform 有 4 项失败。
-
-### 构建
-- `build.bat` 全量通过：`Framework.sln`（0 错误，20 个警告）、UE 模块 `ForeverEditor`、四个外部 mod 均成功。
-- UE 侧带画面的测试和 PIE 没有跑。

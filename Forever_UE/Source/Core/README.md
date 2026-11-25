@@ -55,6 +55,5 @@ id、类型名或它的业务含义。
   - 按名字特判占位mod：`station_empty`/`route_empty`(`traffic/traffic.cpp`)、`app_empty`(`player/phone.cpp`)；
     实体脚本没指定ScriptMod时兜底用`script_empty`(`map/`下各实体、`story/script.cpp`的`MakeScript`)，因此
     `script_empty`必须启用。
-  - `map/map.cpp`的`PlacePresets`：按id是否以`zone_`开头判断预设是园区还是建筑。
   - `common/config.cpp`的`GetMainStoryScriptPath`：没配`story_scripts`时退回名为`test`的脚本。
   - `map/map.cpp`的`GetTerrainAppearances`：没有mod的默认地形`plain`，其UE材质路径写在Core里。

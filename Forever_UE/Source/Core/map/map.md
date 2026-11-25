@@ -60,7 +60,7 @@
 
 ### PlacePresets（路网预设，2026-11-21）
 
-`InitZones`开头、Assign之前调用一次，数据来自`Roadnet::GetPresets()`。按文件顺序对每个预设：在`lot->GetFreeLots()`里找完整包含矩形的自由子地块(跨小路=找不到=失败)，把矩形换算成该子块本地的`marginStart/marginEnd/depth`(WEST: depth=rx1; EAST: depth=tw-rx0; NORTH: depth=ry1; SOUTH: depth=th-ry0)，子块就是lot自己直接`lot->RequestPlacement`，否则`sub->RequestPlacement`+`PromoteAdaptiveRemainder(lot, sub)`(同Assign的自适应路径)，路径连接登记`pendingPathRoadLinks`。**无论id是否有效都占位**，保证和编辑器按创建顺序重放的结果一致。占位成功后：`zone_`开头立即`CreateZoneAt`；其余存进`pendingBuildingPresets`，`InitBuildings`开头`CreateBuildingAt`。id为空、或未注册/未启用(含落空的zone_id，后者告警)都退化：`InitBuildings`里按顶层lot的分区权重(`PickRandomBuildingId`，`BuildingFactory::GetPower`)随机放一栋建筑，占位分区/没有候选则只占位。`CreateZoneAt/CreateBuildingAt`是和Assign共用的创建函数。存档存实例，预设不用进存档。各mod的`--skip`(见`zone_mod.md`/`building_mod.md`)只跳过自己的Assign，预设先放，所以和预设互不冲突。CoreTest的`presets`套件对照编辑器模拟器验证(注意Quad位置是中心)。
+`InitZones`开头、Assign之前调用一次，数据来自`Roadnet::GetPresets()`。按文件顺序对每个预设：在`lot->GetFreeLots()`里找完整包含矩形的自由子地块(跨小路=找不到=失败)，把矩形换算成该子块本地的`marginStart/marginEnd/depth`(WEST: depth=rx1; EAST: depth=tw-rx0; NORTH: depth=ry1; SOUTH: depth=th-ry0)，子块就是lot自己直接`lot->RequestPlacement`，否则`sub->RequestPlacement`+`PromoteAdaptiveRemainder(lot, sub)`(同Assign的自适应路径)，路径连接登记`pendingPathRoadLinks`。**无论id是否有效都占位**，保证和编辑器按创建顺序重放的结果一致。占位成功后：`ZoneFactory`认得这个id(`CheckRegistered`，不看id长什么样)就立即`CreateZoneAt`；其余存进`pendingBuildingPresets`，`InitBuildings`开头`CreateBuildingAt`。id为空、或哪个Factory都不认得/没启用(告警)都退化：`InitBuildings`里按顶层lot的分区权重(`PickRandomBuildingId`，`BuildingFactory::GetPower`)随机放一栋建筑，占位分区/没有候选则只占位。`CreateZoneAt/CreateBuildingAt`是和Assign共用的创建函数。存档存实例，预设不用进存档。各mod的`--skip`(见`zone_mod.md`/`building_mod.md`)只跳过自己的Assign，预设先放，所以和预设互不冲突。CoreTest的`presets`套件对照编辑器模拟器验证(注意Quad位置是中心)。
 
 ### InitGreens（绿化区，2026-11-20）
 

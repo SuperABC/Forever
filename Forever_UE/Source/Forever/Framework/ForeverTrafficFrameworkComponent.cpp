@@ -1606,7 +1606,11 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 		state.bNoPhysics = true;
 		return false;
 	}
-	const Route::ScheduleState schedule = route->QueryVehicleState(vehicle);
+	// 时刻表按游戏秒算；初速度和剩余停站时间要真实秒，按当前实际的时间倍率换算。
+	AForeverFrameworkActor* scheduleFramework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* schedulePlayer = scheduleFramework ? scheduleFramework->GetPlayer() : nullptr;
+	const double gameSecondsPerRealSecond = 60.0 * (schedulePlayer ? schedulePlayer->GetTimeFlowRatio() : 10.0);
+	const Route::ScheduleState schedule = route->QueryVehicleState(vehicle, gameSecondsPerRealSecond);
 	if (!schedule.valid) return false;
 	std::vector<int> ids = route->GetLineStopNodeIds(static_cast<size_t>(schedule.line));
 	if (ids.size() < 2) {

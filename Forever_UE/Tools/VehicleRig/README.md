@@ -98,7 +98,7 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
 照 `Source/Basic/traffic/vehicle_basic.{h,cpp}` 里 `SedanVehicle`/`BusVehicle`/`TruckVehicle` 的写法：
 
 1. 在 `Source/Basic/traffic/` 新建 `vehicle_xxx.h/.cpp/.md`(每个 mod 一组以 id 命名的文件，照 `vehicle_sedan.*` 写，记得加进 `Basic.vcxproj` 和 `.filters`)，里面是 `XxxVehicle : VehicleMod`：
-   - `GetId()`（`vehicle_xxx`，id 必须 `<concept>_<name>`）、`GetCategory()`（种类，停车位按种类挑车型）、`GetType()`、`GetName()`（static 计数器 + id）。
+   - `GetId()`（如 `vehicle_xxx`；id 可以是任意字符串，`<concept>_<name>` 只是习惯写法）、`GetCategory()`（种类，停车位按种类挑车型）、`GetType()`、`GetName()`（static 计数器 + id）。
    - `SetProperty()` 里填：`blueprintPath`（`/Game/.../BP_XxxElement.BP_XxxElement_C`）、`sizeX/Y/Z`（包围盒）、`scriptModName="script_empty"` 和 `milestoneNames`（可驾驶的车复用 `vehicle_basic`，即靠近弹出"上车"）、`exitOffsetX/Y/Z`（下车点，车身局部坐标，Z 默认 100，站不下人会拒绝下车）、`drivable=true`。
 2. `basic.cpp` 三处：依赖表里加 `{ XxxVehicle::GetId(), { kScriptEmpty } }`；`GetModVehicles` 的列表；`RegisterModVehicles` 里 `factory->RegisterVehicle(...)`。
 3. `Resource/Config/config.json` 的 `vehicle_mods` 里加 `"vehicle_xxx"`。

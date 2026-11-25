@@ -82,7 +82,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - **`GetPlugins`/`GetPakFiles`**：UE资产只能通过已注册挂载点访问，独立编辑的UE资产因此
   必须放在一个Plugin里——`resource_paths`配置目录下`Plugins/<ModName>/<ModName>.uplugin`
   （编辑器/PIE挂载用）和`Plugins/<ModName>_Pak/<ModName>.pak`（打包/Shipping用）会被
-  `AddResourcePath`的扫描发现；真正的挂载逻辑在UE层`ForeverModSubsystem::Initialize()`，
+  `AddResourcePath`的扫描发现；真正的挂载逻辑在UE层`UForeverModSubsystem::MountModContent()`，
   见`Source/Forever/Mod/ForeverModSubsystem.md`。
 - **`GetMainStoryScriptModName`/`GetMainStoryScriptPath`**：分别读`config.json`的
   `"main_story"`字段、包一层`GetScriptPath("test")`，供`Story::Init()`/
@@ -94,7 +94,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   "多选一激活"（和`main_story`单独一个字段、决定主线挂载哪个`ScriptMod`是两件事）。
 - **`IsModIdEnabled`/`IsDllActive`/`GetActiveDllPaths`/`GetModDependences`**：给游戏启动
   配置界面的依赖校验用。`IsModIdEnabled(id)`不看concept，只要id在任意一个已启用的
-  `(concept, modId)`里出现过就算数（不解析id里的concept前缀）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
+  `(concept, modId)`里出现过就算数（不看id的格式）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
   加载/不加载，这个函数只管"要不要加载这个DLL"，和下面的依赖声明粒度无关）；
   `GetModDependences(modId)`按modId查`AddDllPath`探测阶段缓存的、来自
   `GetModDependences()`导出符号的依赖声明——粒度是单个mod id，不是DLL：同一个DLL

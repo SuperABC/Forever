@@ -16,9 +16,10 @@ using namespace std;
 
 namespace {
 	constexpr float PI = 3.14159265358979323846f;
-	// 游戏内秒/真实秒：按timeFlowRatio=2.0写死的系数(Player的默认值是10.0，剧情脚本常设成1，倍率不是2.0时
-	// easeSeconds/停站剩余时间/交给UE的每真实秒速度都不准，待改成读实际倍率)。easeSeconds是真实秒，运动学全部按游戏秒算。
-	constexpr float kGameSecondsPerRealSecond = 120.f;
+	// easeSeconds换算成游戏秒用的基准倍率(1真实秒=120游戏秒，即timeFlowRatio=2.0时easeSeconds正好是真实秒)。
+	// 时刻表(速度/停站/加减速)全部按游戏秒预算并固定下来，不随实际timeFlowRatio重算——倍率变了，车的真实速度和
+	// 加减速时长一起按比例变。需要真实秒的地方(QueryVehicleState)由调用方传入实际倍率。
+	constexpr float kEaseGameSecondsPerRealSecond = 120.f;
 
 	float ToDegrees(float radians) { return radians * (180.f / PI); }
 }
@@ -291,7 +292,7 @@ void Route::ComputeRunPhases(RouteRun& run) const {
 	size_t n = run.pieces.size();
 	if (n == 0) return;
 
-	float ease = max(mod->easeSeconds, 0.01f) * kGameSecondsPerRealSecond;
+	float ease = max(mod->easeSeconds, 0.01f) * kEaseGameSecondsPerRealSecond;
 	float acc = max(mod->normalSpeed, 1e-6f) / ease;
 
 	// 边界速度：两端为0，其余取相邻两块上限的较小者，再按加速度前向/后向收紧。
@@ -650,7 +651,7 @@ void Route::DriveVehicle(Vehicle* vehicle, const RouteLine& line, float localTim
 	}
 }
 
-void Route::Update(float elapsedSeconds) {
+void Route::Update(double elapsedSeconds) {
 	if (!mod) return;
 	lastElapsedSeconds = elapsedSeconds;
 
@@ -663,7 +664,8 @@ void Route::Update(float elapsedSeconds) {
 		for (int k = 0; k < vehicleCount; k++) {
 			float phase = line.period * static_cast<float>(k) / static_cast<float>(vehicleCount);
 			Vehicle* vehicle = vehicles[k];
-			float localTime = fmodf(elapsedSeconds + phase + GetPhaseAdjust(vehicle), line.period);
+			// 总秒数用double累加和取模(float到约194游戏天后精度不足1秒)，取模后的一圈内时间再转float。
+			float localTime = static_cast<float>(fmod(elapsedSeconds + phase + GetPhaseAdjust(vehicle), static_cast<double>(line.period)));
 			if (localTime < 0.f) localTime += line.period;
 			// 物理段（UE层的物理公交+Controller在开）：位姿和停站事件都由UE层负责，这里不碰，
 			// 否则时刻表会和实车打架、重复发进站/离站事件。交还时刻表时ResetStopState重新观察。
@@ -701,9 +703,11 @@ void Route::ResetStopState(Vehicle* vehicle) {
 	lastStopStation.erase(vehicle);
 }
 
-Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
+Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle, double gameSecondsPerRealSecond) const {
 	ScheduleState state;
 	if (!mod || !vehicle) return state;
+	// 游戏时钟停住(倍率0)时没有意义的除法：夹一个很小的正数。
+	const float secondsRatio = static_cast<float>(max(gameSecondsPerRealSecond, 1e-3));
 
 	for (size_t lineIdx = 0; lineIdx < lines.size() && lineIdx < lineVehicles.size(); lineIdx++) {
 		const RouteLine& line = lines[lineIdx];
@@ -714,11 +718,11 @@ Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 			if (line.period <= 0.f) return state;
 
 			float phase = line.period * static_cast<float>(k) / static_cast<float>(vehicleCount);
-			float t = fmodf(lastElapsedSeconds + phase + GetPhaseAdjust(vehicle), line.period);
+			float t = static_cast<float>(fmod(lastElapsedSeconds + phase + GetPhaseAdjust(vehicle), static_cast<double>(line.period)));
 			if (t < 0.f) t += line.period;
 
 			state.line = static_cast<int>(lineIdx);
-			state.speedMapPerRealSecond = mod->normalSpeed * kGameSecondsPerRealSecond;
+			state.speedMapPerRealSecond = mod->normalSpeed * secondsRatio;
 			for (size_t i = 0; i < line.runs.size(); i++) {
 				const RouteRun& run = line.runs[i];
 				if (t < run.travelTime) {
@@ -731,7 +735,7 @@ Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 					state.valid = true;
 					state.legIndex = static_cast<int>(i);
 					state.dwelling = true;
-					state.dwellRemainingSeconds = (mod->dwellSeconds - t) / kGameSecondsPerRealSecond;
+					state.dwellRemainingSeconds = (mod->dwellSeconds - t) / secondsRatio;
 					return state;
 				}
 				t -= mod->dwellSeconds;
@@ -765,7 +769,7 @@ bool Route::SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legF
 			else target += RunTimeAtArc(run, run.length * max(0.f, min(1.f, legFraction)));
 
 			float phase = line.period * static_cast<float>(k) / static_cast<float>(vehicleCount);
-			float adjust = fmodf(target - (lastElapsedSeconds + phase), line.period);
+			float adjust = static_cast<float>(fmod(target - (lastElapsedSeconds + phase), static_cast<double>(line.period)));
 			phaseAdjust[vehicle] = adjust;
 			return true;
 		}

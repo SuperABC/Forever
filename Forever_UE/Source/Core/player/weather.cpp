@@ -1,6 +1,6 @@
 #include "player/weather.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/utility.h"
 
 #include <algorithm>

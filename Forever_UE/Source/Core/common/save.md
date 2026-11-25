@@ -102,7 +102,8 @@
      - `ValidateModStateVersions`：只对 `stateVersion>0` 的 mod 临时建实例比较。
 
      任何一步失败，调用方用返回的快照 `RestoreConfig` 恢复。
-- **命名计数器恢复**：`RestoreInstanceCounters` 由 `AForeverFrameworkActor::EnsureMapGenerated` 在地图按存档恢复之后、其余域恢复之前调用。之后新建的 mod 实例会从存档时的编号接着往下编，不和恢复出来的名字撞。
+- **命名计数器复位(新开局)**：`ResetInstanceCounters` 把所有已启用 mod 的计数器清零，UE 在每局的"加载模组"阶段调用(读档不调)。mod dll 由 `Registry` 常驻加载，计数器是 dll 里的 static，不清的话同一进程第二次开局名字会接着上一局往下编。
+- **命名计数器恢复(读档)**：`RestoreInstanceCounters` 由 `AForeverFrameworkActor::BuildMapTerrain` 在地图按存档恢复之后、其余域恢复之前调用。之后新建的 mod 实例会从存档时的编号接着往下编，不和恢复出来的名字撞。
 - **JsonStateWriter/Reader**：Writer 用"层级栈 + 闭合时挂回父节点"的方式构建 JSON，不持有指向容器内部的指针；Reader 只做 const 访问。二进制数据用 base64 存成字符串。
 
 ## 后续可选

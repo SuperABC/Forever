@@ -8,7 +8,7 @@
 
 - **做成`UGameInstanceSubsystem`而不是Actor**：不用在Menu关卡里放置Actor，且`OpenLevel`不会销毁它(`ValidateAndStartGame`在`EnsureModsRegistered()`和切关卡前后都要存活)，和`UForeverModSubsystem`同一套模式。
 - **依赖闭包`ComputeRequiredModIds()`**：当前"必需启用"的mod id集合 = 全部Story screen脚本的`mod_dependences`(无条件计入，Story脚本没有单独的启用开关) ∪ 每个**已启用**mod id自己声明的`Config::GetModDependences`(按modId粒度)。key=被依赖的mod id，value=依赖方(mod id或`剧情脚本 <文件名>`，去重)。`GetModRows`据此给每行填`bLocked`/`Dependents`(锁定行整行变灰且不能取消勾选；未启用但被依赖的行标红)，`IsModLocked`直接查它。锁定判定**不看concept**，只认mod id字符串，和`Registry::CheckModRegistered`同一套匹配规则，所以`IsModLocked`的`ConceptKey`参数不影响结果。
-- **`ValidateAndStartGame`**：先`Config::RescanFiles()`刷新资源目录里的`.layout`/`.script`缓存；再校验Story脚本依赖和每个已启用mod的依赖是否都在启用集合里(`Config::IsModIdEnabled`)，失败原因拼进`OutFailureMessage`，**失败时不改任何状态**；全部通过才`WriteConfig`写回`config.json`(只在这一刻保存，中途编辑不自动保存)、`UForeverModSubsystem::EnsureModsRegistered()`、再经`UFadeSubsystem::OpenWorldLevel`先变黑再`OpenLevel(World)`(没有FadeSubsystem时直接`OpenLevel`)。
+- **`ValidateAndStartGame`**：先`Config::RescanFiles()`刷新资源目录里的`.layout`/`.script`文件列表、`Script::ClearCache()`清掉`.script`的解析缓存(改过的`mod_dependences`才会被校验看到)；再校验Story脚本依赖和每个已启用mod的依赖是否都在启用集合里(`Config::IsModIdEnabled`)，失败原因拼进`OutFailureMessage`，**失败时不改任何状态**；全部通过才`WriteConfig`写回`config.json`(只在这一刻保存，中途编辑不自动保存)、`UForeverModSubsystem::MountModContent()`、再经`UFadeSubsystem::OpenWorldLevel`先变黑再`OpenLevel(World)`(没有FadeSubsystem时直接`OpenLevel`)。
 - **配置存取**：
   - `SaveConfigWithDialog`：弹保存对话框，把当前内存配置`WriteConfig`到所选json，不校验依赖，不动`config.json`。取消时返回false且error为空。
   - `LoadConfigWithDialog`：弹打开对话框，`UForeverModSubsystem::ReloadConfigFrom(所选文件)`，成功后立即`WriteConfig`覆盖`config.json`(写绝对路径，所选文件里的相对路径按它自己所在目录解析)。文件无效时配置恢复为`config.json`并返回error"配置文件无效或为空"。成功后调用方需刷新三个面板。

@@ -54,7 +54,7 @@
 线路公交（`FBusState::bRouteBus`）和跑过"测试运行"的停车场公交共用`busStates`（按车名）。
 - **远近切换**（`UpdateBusPhysicsHandoff`，每帧最多切一辆）：地形`busPhysicsLodLevel`（默认4，LOD4范围外Chaos地形碰撞太粗糙，物理不可靠）级LOD范围外 = 运动学`ATransitVehicleElement` + Core时刻表；
   范围内 = 物理`AVehicleElement`（蓝图`GetBlueprintPath()`）+`ABusController`按站序循环。范围判定`UForeverTerrainFrameworkComponent::IsInsideLodLevel`，进入用`busPhysicsEnterScale`(0.9)缩小的范围、离开用完整范围（滞回）。
-  - 运动学→物理（`BusToPhysics`）：`Route::QueryVehicleState`取线路/腿/是否停靠/剩余停靠，先挂起运动学Actor（`SetSuspended`，撤掉它名下的选项），在Core位姿spawn物理公交并给初速度（`ResumePhysics`），
+  - 运动学→物理（`BusToPhysics`）：`Route::QueryVehicleState`(传入当前实际的游戏秒/真实秒倍率)取线路/腿/是否停靠/剩余停靠，先挂起运动学Actor（`SetSuspended`，撤掉它名下的选项），在Core位姿spawn物理公交并给初速度（`ResumePhysics`），
     `Vehicle::SetPhysicsDriven(true)`（`Route::Update`跳过它），下发`MakeLoop`指令（停靠中带`bStartAtStop/startDwellSeconds/bStopAlreadyEntered`）。
   - 物理→运动学（`BusToKinematic`）：先用`ABusController::QueryLoopProgress`+`Route::SyncVehicleProgress`把时刻表进度对齐到实车位置（物理车比名义速度慢，不对齐会"瞬移"），再`ClearCommands`（停站补`leave_stop`）、销毁物理公交+Controller、`SetPhysicsDriven(false)`、`Route::ResetStopState`（下一次`Update`当第一次观察，正好停着就补发`enter_stop`）、恢复运动学Actor。玩家驾驶/搭乘中不收回。
   - `enter_stop/leave_stop`任何时刻只有一个发出方：运动学段 = Core时刻表（`AForeverFrameworkActor`转发），物理段 = `ABusController`（`FireStopEvent`，用`stationByNodeId`把辅助导航节点id反查回车站）。

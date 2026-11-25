@@ -1,5 +1,6 @@
-#include "../common/mod_args.h"
 #include "building_factory.h"
+
+#include "../common/mod_args.h"
 #include "common/random.h"
 
 

@@ -1,6 +1,6 @@
 #include "zone.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/error.h"
 
 #include "map/door.h"

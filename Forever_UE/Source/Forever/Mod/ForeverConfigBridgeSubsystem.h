@@ -115,7 +115,7 @@ public:
 
 	// 校验Story screen全部脚本的mod_dependences + 每个已启用的mod id自己声明的
 	// GetModDependences，是否都能在当前启用的mod id集合里找到。全部通过才会写回
-	// config.json、触发UForeverModSubsystem::EnsureModsRegistered()、OpenLevel进入
+	// config.json、触发UForeverModSubsystem::MountModContent()、OpenLevel进入
 	// World.World，返回true；否则OutFailureMessage里拼好失败原因，返回false，不做任何
 	// 状态改变(不写config.json，不触发注册，不切关卡)。
 	UFUNCTION(BlueprintCallable, Category = "Config")

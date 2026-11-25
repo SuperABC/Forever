@@ -12,12 +12,13 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   dll是合法mod"(探测完即释放句柄,详见`config.md`);`ModLoader`回答"把这些合法dll接入
   某个具体系统的Factory"(常驻句柄,按需调用注册/收尾)。这是两件调用频率不同的事:探测在
   `ReadConfig`时做一次,注册要按每个系统(Building/Script/……)各自的Factory分别做。
-- **`GetModConceptDescriptors()`是全部23个concept的DLL导出符号名唯一权威列表**——
+- **`GetModConceptDescriptors()`是全部23个concept的DLL导出符号名唯一权威列表**(表本身在`Dependence/common/mod_concepts.h/.cpp`，
+  不依赖Core的ModTest也要用它；`loader.h`只是转include)——
   `conceptKey`只是内部使用的可读标签(`"Buildings"`/`"Scripts"`等),真正决定探测/注册
   行为的是`getModSymbol`/`registerModSymbol`/`finishModSymbol`三个字符串。
   `Config::AddDllPath`复用这份列表的`getModSymbol`做探测,避免两处维护同一份符号表。
 - **头文件不`#include <windows.h>`**——`HMODULE`/`FARPROC`只在`loader.cpp`里出现,句柄
-  对外一律是`void*`。这是因为`loader.h`会被`Source/Forever/Mod/ForeverModSubsystem.cpp`
+  对外一律是`void*`。这是因为`loader.h`会经`registry.h`被`Source/Forever`下的UE代码
   间接引用,而UE的`CoreMinimal.h`已经拉了一套宏安全的Windows类型子集,再让这个头文件自己
   `#include <windows.h>`有和UE宏冲突的风险,隔离在.cpp里彻底避免这类问题。
 - **`RegisterConcept`是模板方法**——直接用`FactoryT*`承接调用方传入的具体Factory类型
@@ -61,17 +62,15 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
 `kModDependenciesSymbol`整个DLL只有一份，不属于任何concept，由`Config::AddDllPath`在探测concept符号的同一次
 `LoadLibrary`里顺带读取，不在描述符表里(表的行是3个per-concept符号)。返回内容是这个DLL里**每个mod id各自**的
 依赖列表配对表(`vector<pair<modId, vector<depId>>>`，静态对象指针，调用方只读不释放，和`GetMod<Concept>`
-同一套约定)，一个DLL注册的多个互不相关的mod可以各自声明不同依赖；modId全局唯一(CONVENTIONS §5)，不需要带
-concept前缀。给游戏启动配置界面的依赖校验用，见`config.md`。
+同一套约定)，一个DLL注册的多个互不相关的mod可以各自声明不同依赖；依赖表只按modId做键(要求id跨concept不重名，见CONVENTIONS §5)，
+不带concept。给游戏启动配置界面的依赖校验用，见`config.md`。
 
 ## 依赖关系
 
 - 依赖:无引擎依赖,纯C++(`<windows.h>`只在`.cpp`里)。
 - 被谁依赖:`Source/Core/common/config.cpp`(用`GetModConceptDescriptors()`做探测)、
   `Source/Core/common/registry.cpp`(持有全部23个concept唯一的`ModLoader`实例，`RegisterMods`里
-  对每个concept各调一次`RegisterConcept`，见`registry.md`)、
-  `Source/Forever/Mod/ForeverModSubsystem.cpp`(开局前校验用,构造独立的临时`ModLoader`
-  实例,和`Registry`那份互不相关)。
+  对每个concept各调一次`RegisterConcept`，见`registry.md`)。
 
 ## 待办/后续阶段
 

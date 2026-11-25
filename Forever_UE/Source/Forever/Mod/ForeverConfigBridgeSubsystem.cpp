@@ -160,6 +160,8 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 
 	// 刷新缓存的.layout/.script文件列表，让运行中往资源目录里增删的文件在这次开局生效。
 	Config::RescanFiles();
+	// .script的解析结果有缓存：清掉再读，改过的mod_dependences才会被下面的校验看到(还有Script活着时不清)。
+	Script::ClearCache();
 
 	for (const std::string& scriptPath : Config::GetStoryScripts()) {
 		for (const std::string& id : Script::GetModDependences(scriptPath)) {
@@ -214,7 +216,7 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 	UGameInstance* gameInstance = GetGameInstance();
 	if (gameInstance) {
 		if (UForeverModSubsystem* modSubsystem = gameInstance->GetSubsystem<UForeverModSubsystem>()) {
-			modSubsystem->EnsureModsRegistered();
+			modSubsystem->MountModContent();
 		}
 		// 先变黑再进World(OpenLevel要同步加载很久，期间画面不刷新)，见UFadeSubsystem。
 		if (UFadeSubsystem* fade = gameInstance->GetSubsystem<UFadeSubsystem>()) {

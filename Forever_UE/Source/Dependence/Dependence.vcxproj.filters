@@ -45,6 +45,9 @@
     <ClCompile Include="common\mod_test.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\mod_concepts.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="common\save_archive.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -213,6 +216,18 @@
     <ClCompile Include="polit\party_factory.cpp">
       <Filter>polit</Filter>
     </ClCompile>
+    <ClCompile Include="map\transit_data.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\party_mod.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\policy_ids.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="common\random.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\error.h">
@@ -231,6 +246,9 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\mod_test.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\mod_concepts.h">
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\utility.h">
@@ -406,6 +424,9 @@
     </ClInclude>
     <ClInclude Include="polit\policy_ids.h">
       <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="common\random.h">
+      <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

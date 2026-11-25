@@ -1,4 +1,5 @@
 #include "party_factory.h"
+
 #include "common/random.h"
 
 #include <algorithm>

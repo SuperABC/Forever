@@ -1,5 +1,7 @@
 #include "society/settlement.h"
+
 #include "common/random.h"
+#include "common/utility.h"
 
 #include "society/society.h"
 #include "society/organization.h"
@@ -7,8 +9,6 @@
 #include "map/room.h"
 #include "populace/household.h"
 #include "populace/citizen.h"
-
-#include "common/utility.h"
 
 #include <algorithm>
 #include <cmath>

@@ -1,6 +1,6 @@
 #include "building.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/error.h"
 #include "common/json.h"
 #include "common/utility.h"

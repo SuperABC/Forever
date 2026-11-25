@@ -1,6 +1,6 @@
 #include "puzzle.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/error.h"
 
 

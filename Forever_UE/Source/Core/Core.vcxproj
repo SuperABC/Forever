@@ -154,6 +154,7 @@
     <ClCompile Include="polit\congress.cpp" />
     <ClCompile Include="polit\polit_log.cpp" />
     <ClCompile Include="polit\polit_save.cpp" />
+    <ClCompile Include="common\save_refs.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\class.h" />

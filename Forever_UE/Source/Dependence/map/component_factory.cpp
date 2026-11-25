@@ -1,4 +1,5 @@
 #include "component_factory.h"
+
 #include "common/random.h"
 
 

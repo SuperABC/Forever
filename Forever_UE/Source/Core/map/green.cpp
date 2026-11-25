@@ -1,8 +1,8 @@
 #include "green.h"
+
 #include "common/random.h"
 #include "common/error.h"
 #include "common/utility.h"
-
 #include "map/polygon_util.h"
 
 #include <algorithm>

@@ -1,5 +1,7 @@
 #include "society/immigration.h"
+
 #include "common/random.h"
+#include "common/utility.h"
 
 #include "society/society.h"
 #include "society/settlement.h"
@@ -8,8 +10,6 @@
 #include "map/room.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
-
-#include "common/utility.h"
 
 #include <algorithm>
 #include <cmath>

@@ -62,7 +62,7 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 
 ### Tick
 
-`Tick(currentTime, crossedDay, post)`按`Time::DifferenceInSeconds`累加`elapsedSeconds`
+`Tick(currentTime, crossedDay, post)`按`Time::DifferenceInSeconds`累加`elapsedSeconds`(`double`：它一直累加，`float`到约194游戏天后每帧的增量就加不进去了)
 （单调递增，不存在需要补偿的跨天问题；`lastTickTime`不存档，读档后第一帧只记时间），再对每条
 `Route`调`Update(elapsedSeconds)`驱动线路车辆。
 

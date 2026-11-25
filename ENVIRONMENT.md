@@ -35,7 +35,7 @@
 Source\Test\run_tests.bat [quick|full] [core|ue|all]
 ```
 
-详见 `Forever_UE/Source/Test/README.md`。注意：
+`core` 管线先跑 ModTest(给 mod 作者用的 mod 自测程序，这里对 config 里的全部 mod dll 跑一遍)，再跑 CoreTest。详见 `Forever_UE/Source/Test/README.md`。注意：
 
 - 改了 Core 必须编整个 `Framework.sln`；只编 `Source/Test/Core/Test.vcxproj` 不会重编 `Core.lib`，会测到旧代码。
 - 改了 `Source/Dependence` 头文件，四个外部 mod 都要重编，否则 lint 报 DLL 过期，且 vtable/结构体错位会读越界。

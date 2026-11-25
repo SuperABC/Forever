@@ -14,11 +14,6 @@ bool CheckModIdentity(const char* conceptName, const char* type, const char* nam
 		say(string("[") + conceptName + "] GetType() is empty");
 		return false;
 	}
-	const string prefix = string(conceptName) + "_";
-	if (strncmp(type, prefix.c_str(), prefix.size()) != 0) {
-		say(string("[") + conceptName + "] type '" + type + "' does not start with '" + prefix + "'");
-		ok = false;
-	}
 	if (!name || !*name) {
 		say(string("[") + conceptName + "] mod '" + type + "' has an empty GetName()");
 		ok = false;

@@ -1,6 +1,6 @@
 #include "roadnet_checkboard.h"
-#include "common/mod_args.h"
 
+#include "common/mod_args.h"
 #include "common/utility.h"
 
 #include <cmath>

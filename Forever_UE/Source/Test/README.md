@@ -1,17 +1,19 @@
 # Source/Test
 
-自动化测试管线。Core 无画面管线(`Core/`)和 UE 管线(`UE/`，模块 `ForeverTest`，有 boot/components/saveload(无渲染)和 perform/commute/ride/changes(perform、commute、ride 带窗口渲染)套件)。
+自动化测试管线。Mod 自测(`Mod/`，`ModTest.exe`：给 mod 作者用，只依赖 Dependence，见 `Mod/ModTest.md`)、Core 无画面管线(`Core/`)和 UE 管线(`UE/`，模块 `ForeverTest`，有 boot/components/saveload(无渲染)和 perform/commute/ride/changes(perform、commute、ride 带窗口渲染)套件)。
 
 ## 用法
 ```
 Source\Test\run_tests.bat [quick|full] [core|ue|all]
 ```
-或直接 `x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,polit,perform,route,green|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
+`core` 管线先对 config 里 `dll_paths` 下的全部 mod dll 跑 ModTest(报告在 `<out>/../mod`)，再跑 CoreTest。
+单独跑 ModTest：`x64\Release\ModTest.exe <mod.dll|目录>... [--with <dll|目录>] [--config config.json] [--seed N] [--out dir]`，全量(含 `Forever_Mod` 下所有 mod、查重名)用 `x64\Release\ModTest.exe x64\Release ..\Forever_Mod`。
+单独跑 CoreTest：`x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,polit,perform,route,green|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
 先编译：`MSBuild Source\Framework.sln /p:Configuration=Release /p:Platform=x64`(必须编整个 sln：只编 `Source/Test/Core/Test.vcxproj`(输出仍是 `CoreTest.exe`)不会重编 Core.lib，改了 Core 会测到旧代码)。改了 `Dependence` 头文件要把 `Forever_Mod` 下 Empty/Test/Wxdj/Yuanshen 也各自重编，lint 会检查 DLL 是否比头文件旧。UE 代码用 UBT 编 `ForeverEditor Win64 Development`。
 
 ## 套件
 - random：同种子跨进程所有阶段严格一致、各阶段无未包作用域的随机、DLL 导出 BindRandomHost、源码里无绕过 GetRandom 的随机源、流状态快照恢复。
-- mods：枚举所有已注册 mod，调 `UnitTest`，检查无漏包随机、名字唯一(`*_empty` 模板除外)，并按 concept 做字段合法性检查(见文末"字段检查")。
+- mods：只查 mod 接进 Core 之后的事——config 的 `dll_paths` 下发现的 mod id 全局唯一、Core 的 `Registry` 认得每个 mod、`ResetInstanceCounters` 复位命名计数器、`Config` 对 mod 参数的读写/暂存。**对 mod 本身的测试(UnitTest、漏包随机、名字唯一、字段合法性、依赖声明)在 ModTest 里**，见 `Mod/ModTest.md`。
 - lint：mod DLL 不旧于 Dependence 头文件。
 - terrainshot(UE，带窗口渲染，2026-11-24)：`UnrealEditor.exe Forever.uproject /Game/Levels/World -game -windowed -ResX=1280 -ResY=720 -unattended -ForeverTest=terrainshot -ForeverTestOut=<dir>`。相机依次放到山顶(斜视/俯视/地面)、最陡山坡(近/远)、海/河/沙滩/平原的代表格(斜视/俯视)，每个机位等约4秒让LOD稳定后截图 `shot_NN_<名>.png` 到输出目录——我看不到PIE，地形材质靠它出图自查(2026-11-24靠它发现覆盖图R/B通道串台)。
 - terrain：地形覆盖图烘焙(2026-11-24)。`terrain_coverage`的纯函数：覆盖度和=255、对称、直边单调、45°斜线边界模糊后沿对角线波纹≤8(不模糊>100)、mip链、降采样、非法输入、大图耗时。UE侧材质画面只能 PIE 目测。
@@ -67,5 +69,8 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - 车辆流式压测、带画面 GPU 采样。
 - 字段检查(组织/路线/房间/地形/路网等)；已做：车辆、武器、产品、仓储、制造、岗位、建筑、站点、房间、调度、资产、地形(组织/路线/路网/地块/脚本/名字/组件/应用/谜题没有可校验的静态字段，靠 UnitTest 和 world 套件覆盖)。
 
-## 字段检查(mods 套件)
-车辆(尺寸/载客量/蓝图)、武器(伤害/弹匣/射程，不开火的工具跳过)、产品(价格 retail>import>export>0、原料数量)、仓储(容量/能存能取/需求值)、制造(目标批数)、岗位(脚本 mod 已注册)、建筑(国有概率、脚本/车站 mod 已注册、电梯楼层范围)、站点(类型/端口，公交站贴路无端口)、房间(容量/租金/引用的 mod 已注册)、调度、资产(重量体积/武器类型/引用已注册)、地形(SetupTexture 后声明了材质或地图色)。`*_empty` 占位模板按 id 跳过。其余 concept 靠 UnitTest 与 world 套件覆盖。
+## 字段检查(ModTest，`Mod/mod_checks.cpp`)
+车辆(尺寸/载客量/蓝图)、武器(伤害/弹匣/射程，不开火的工具跳过)、产品(价格 retail>import>export>0、原料数量)、仓储(容量/能存能取/需求值)、制造(目标批数)、岗位(脚本 mod 已注册)、建筑(国有概率、脚本/车站 mod 已注册、电梯楼层范围)、站点(类型/端口，公交站贴路无端口)、房间(容量/租金/引用的 mod 已注册)、调度、资产(重量体积/武器类型/引用已注册)、地形(SetupTexture 后声明了材质或地图色)。占位模板按提供它的 dll(`Empty.dll`)识别，个别检查对它放宽。其余 concept 靠 UnitTest 与 world 套件覆盖。
+
+## 引用和依赖(ModTest)
+ModTest 把各 concept 字段里写到的别的 mod 的 id(脚本、房间/组件、站点、仓库/工坊、武器/产品/弹药、载具、岗位、内部建筑、配方)收集起来，核对每个都有 dll 提供；对每个 dll 的依赖声明查"被依赖的 id 存在"和"不成环"。不查依赖声明是否完整(引用方向不等于依赖方向，谁依赖谁按语义由作者写)。范围见 `Mod/ModTest.md`。

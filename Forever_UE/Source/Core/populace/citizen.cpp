@@ -1,6 +1,6 @@
 #include "populace/citizen.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/utility.h"
 #include "common/error.h"
 

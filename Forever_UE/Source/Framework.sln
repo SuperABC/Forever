@@ -19,6 +19,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test", "Test\Core\Test.vcxp
 		{B8693740-B1CC-47DB-B616-7194E9B0E478} = {B8693740-B1CC-47DB-B616-7194E9B0E478}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ModTest", "Test\Mod\ModTest.vcxproj", "{5C1F7A3E-9B24-4D6A-8E0F-2A7B6C4D1E93}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D17ED2A6-5758-446B-AFFF-3D6C69EDCE4B} = {D17ED2A6-5758-446B-AFFF-3D6C69EDCE4B}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -41,6 +46,10 @@ Global
 		{8E4D2B71-6A35-4C90-B1F8-3D7A5C2E9F46}.Debug|x64.Build.0 = Debug|x64
 		{8E4D2B71-6A35-4C90-B1F8-3D7A5C2E9F46}.Release|x64.ActiveCfg = Release|x64
 		{8E4D2B71-6A35-4C90-B1F8-3D7A5C2E9F46}.Release|x64.Build.0 = Release|x64
+		{5C1F7A3E-9B24-4D6A-8E0F-2A7B6C4D1E93}.Debug|x64.ActiveCfg = Debug|x64
+		{5C1F7A3E-9B24-4D6A-8E0F-2A7B6C4D1E93}.Debug|x64.Build.0 = Debug|x64
+		{5C1F7A3E-9B24-4D6A-8E0F-2A7B6C4D1E93}.Release|x64.ActiveCfg = Release|x64
+		{5C1F7A3E-9B24-4D6A-8E0F-2A7B6C4D1E93}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

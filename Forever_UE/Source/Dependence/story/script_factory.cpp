@@ -1,4 +1,5 @@
 #include "script_factory.h"
+
 #include "common/random.h"
 
 

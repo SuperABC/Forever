@@ -25,4 +25,4 @@
 
 ## 待办/后续阶段
 
-- 确认Mod和Basic在同一个Factory里注册时id冲突如何处理(所有mod id带concept前缀，目前没有出现冲突场景)。
+- 确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前靠`<concept>_<name>`的习惯写法避免撞名，没有出现冲突场景；这只是弱约定)。

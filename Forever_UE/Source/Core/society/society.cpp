@@ -1,4 +1,5 @@
 #include "society/society.h"
+
 #include "common/random.h"
 
 #include "society/organization.h"

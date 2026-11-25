@@ -6,7 +6,7 @@
 - 站点；
 - 线路；
 - 车辆；
-- 公交计时 `elapsedSeconds`；
+- 公交计时 `elapsedSeconds`(`double`，写成 F64)；
 - 车辆和站点的命名计数器。
 
 存档系统总说明见 `Source/Core/common/save.md`。

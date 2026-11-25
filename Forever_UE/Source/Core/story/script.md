@@ -50,8 +50,11 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   调用点直接用`obj["xxx"].AsString()`取原始字符串，求值前才现场`Parse`。
 - **`MatchEvent`收尾的拷贝顺序**：`WrapScript`返回的是mod堆上`actionStack`一层的引用，必须先拷贝进Core自己的
   vector再`AutoPop`，`AutoPop`之后引用失效。
-- **`ReadMilestones`**：按`subsequences`建图（`premise`计数），`premise==0`的节点进`actives`；`caches`按路径缓存，
+- **`ReadMilestones`**：按`subsequences`建图（`premise`计数），`premise==0`的节点进`actives`；`caches`按路径缓存(`ClearCache()`每局开始清一次，见下)，
   同一文件只解析一次，多个Script实例共享里程碑本体（不持有所有权）。
+- **`ClearCache()`**：释放`caches`里全部`Milestone`并清空，下次`ReadScript`重新读盘。UE在每局的"加载模组"阶段
+  和菜单`ValidateAndStartGame`里各调一次，所以编辑器不重启、改过的`.script`下一局就生效。缓存里的`Milestone`被
+  活着的`Script`裸指针引用，所以用`liveCount`(构造+1、析构-1)把关：还有`Script`活着时什么都不做并返回`false`。
 - **`MatchEvent`的触发条件检查在`Milestone::MatchTrigger`内部完成**，不是`Script`这一层单独
   维护的循环，见`Core/story/milestone.md`"MatchTrigger"一节。
 
@@ -66,13 +69,13 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 - **`global_settings`**：目前只识别一个子字段`time_flow_ratio`（游戏时钟相对真实时间的
   倍率，默认`10.0`，见`player/player.md`）——`AForeverFrameworkActor::EnsurePlayerGenerated()`读到就调用
   `Player::SetTimeFlowRatio()`覆盖默认值。
-- **`mod_dependences`**：字符串数组，元素是完整的mod id(`<concept>_<name>`，如`"building_residence_high"`)，
-  声明主线剧情脚本依赖哪些mod。校验时不解析id里的concept前缀，直接问全部Factory。
+- **`mod_dependences`**：字符串数组，元素是mod id(任意字符串，如`"building_residence_high"`)，
+  声明主线剧情脚本依赖哪些mod。校验时不看id的格式，直接问全部Factory。
   `AForeverFrameworkActor::ValidateMainStoryDependencies()`在`BeginPlay()`最前面
   （生成任何东西之前）对`Registry::CheckModRegistered(id)`做全局OR匹配（20个Factory各查
   一次`CheckRegistered`），只要有一个id没被任何concept注册就`THROW_EXCEPTION`，交给
   `BeginPlay()`统一的`try/catch`处理（打日志+退出游戏，见`ForeverFrameworkActor.md`）。
-  已知边界情况(mod id带concept前缀之前)：`"empty"`这种几乎每个concept都会注册的占位id，全局匹配下必然"通过"——现在各concept的占位id是`<concept>_empty`，不再撞名，
+  已知边界情况：多个concept注册了同名id(比如都叫`"empty"`)时，全局匹配下必然"通过"——现在各concept的占位id习惯写成`<concept>_empty`，实际不撞名，
   这是"id不带concept信息"这个前提本身带来的局限，不是bug。
 
 **读取时机**：`name_reserve`必须在生成市民之前读到，但milestone的正式加载时机

@@ -1,4 +1,5 @@
 #include "product_factory.h"
+
 #include "common/random.h"
 
 

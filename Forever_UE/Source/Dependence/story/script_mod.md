@@ -5,6 +5,10 @@
 - `ScriptAction`类型别名：`using ScriptAction = std::variant<const Dialog*, const Change*>;`——
   `Script::MatchEvent`匹配命中后要执行的一个动作，`Dialog*`/`Change*`都是引用（本体挂在某个
   `Milestone`上，见`dialog.md`/`change.md`），这里绝不delete。
+- `kDefaultScriptModId`(`"script_empty"`)：默认ScriptMod的id。实体要建Script但mod没填`scriptModName`时Core用它
+  (`MakeScript`/`MakeEntityScript`/`Cabin`)，Zone/Building/Room/电梯/门的`scriptModName`字段默认值也是这个字符串。
+  ModTest据此判断"靠默认值用到了哪个ScriptMod"(核对它存在)。这样用到它的mod应该在`GetModDependencies`里声明依赖它，
+  否则它被禁用时`Script`构造会抛异常。
 - `WrapScript`虚方法 + `actionStack`/`AutoCopy`/`AutoPop`：mod自定义改写`Script`匹配结果的
   入口（json表达不了的复杂剧情逻辑走这里）。默认实现只调`AutoCopy(actions)`原样透传，不做
   任何改写；按`PlaceHolderChange`标签替换成mod自己持有的Dialog/Change，是具体mod的事（见下

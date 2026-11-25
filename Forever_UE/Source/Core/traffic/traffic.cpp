@@ -1,13 +1,14 @@
 #include "traffic.h"
+
 #include "common/random.h"
+#include "common/utility.h"
+#include "map/general_geometry.h"
+#include "story/change.h"
 
 #include "common/registry.h"
-#include "common/utility.h"
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
-#include "map/general_geometry.h"
-#include "story/change.h"
 #include "story/script.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
@@ -669,7 +670,7 @@ const unordered_map<string, Route*>& Traffic::GetRoutes() const { return routes;
 void Traffic::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 	if (hasLastTickTime) {
 		double delta = lastTickTime.DifferenceInSeconds(currentTime);
-		if (delta > 0.0) elapsedSeconds += static_cast<float>(delta);
+		if (delta > 0.0) elapsedSeconds += delta;
 	}
 	lastTickTime = currentTime;
 	hasLastTickTime = true;

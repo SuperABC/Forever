@@ -43,6 +43,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Compression.h"
 #include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
 #include <cstring>
@@ -188,8 +189,17 @@ bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) {
 	WriteU64(file, static_cast<uint64>(body.size()));
 	file.Append(compressed.GetData(), compressedSize);
 
-	if (!FFileHelper::SaveArrayToFile(file, *Path)) {
+	// 先写到同目录的临时文件，写完整了再改名覆盖：直接写目标文件的话，写到一半失败(磁盘满/进程被杀)会把原来的存档毁掉。
+	const FString tempPath = Path + TEXT(".tmp");
+	IFileManager& fileManager = IFileManager::Get();
+	if (!FFileHelper::SaveArrayToFile(file, *tempPath)) {
+		fileManager.Delete(*tempPath, /*RequireExists=*/false, /*EvenReadOnly=*/true, /*Quiet=*/true);
 		OutError = FString::Printf(TEXT("无法写入存档文件：%s"), *Path);
+		return false;
+	}
+	if (!fileManager.Move(*Path, *tempPath, /*Replace=*/true, /*EvenIfReadOnly=*/true)) {
+		fileManager.Delete(*tempPath, /*RequireExists=*/false, /*EvenReadOnly=*/true, /*Quiet=*/true);
+		OutError = FString::Printf(TEXT("无法覆盖存档文件(原文件未改动)：%s"), *Path);
 		return false;
 	}
 	UE_LOG(LogTemp, Log, TEXT("ForeverSaveSubsystem: saved %s (%d bytes, %llu uncompressed)"), *Path, file.Num(), static_cast<uint64>(body.size()));
@@ -261,7 +271,7 @@ bool UForeverSaveSubsystem::RequestLoad(const FString& Path, FString& OutError) 
 	UGameInstance* gameInstance = GetGameInstance();
 	if (gameInstance) {
 		if (UForeverModSubsystem* modSubsystem = gameInstance->GetSubsystem<UForeverModSubsystem>()) {
-			modSubsystem->EnsureModsRegistered();
+			modSubsystem->MountModContent();
 		}
 	}
 	errors = SaveGame::ValidateModsRegistered(load->manifest);

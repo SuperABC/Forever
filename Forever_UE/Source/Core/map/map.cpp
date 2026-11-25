@@ -1,19 +1,19 @@
 #include "map.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/utility.h"
+#include "map/polygon_util.h"
+#include "story/change.h"
+#include "story/script_factory.h"
 
 #include "common/config.h"
 #include "common/registry.h"
 #include "map/room.h"
-#include "map/polygon_util.h"
 #include "player/asset.h"
 #include "player/estate_asset.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
-#include "story/change.h"
 #include "story/script.h"
-#include "story/script_factory.h"
 
 #include <algorithm>
 #include <cmath>
@@ -508,7 +508,8 @@ void Map::PlacePresets() {
 	for (const Roadnet::Preset& preset : roadnet->GetPresets()) {
 		Lot* lot = preset.lot;
 		if (!lot) continue;
-		const bool isZone = preset.modId.rfind("zone_", 0) == 0;
+		// 预设是园区还是建筑由"哪个Factory认得这个id"决定，不看id长什么样(mod id可以是任意字符串)。
+		const bool isZone = zoneFactory.CheckRegistered(preset.modId);
 
 		// 子块在顶层lot本地坐标系里的范围
 		const float c = cosf(lot->GetRotation()), sn = sinf(lot->GetRotation());
@@ -3904,7 +3905,7 @@ namespace {
 	Script* MakeEntityScript(ScriptFactory& factory, const string& modName, const vector<string>& milestoneNames,
 		const string& name, const string& address) {
 		if (milestoneNames.empty()) return nullptr;
-		Script* script = new Script(&factory, modName.empty() ? string("script_empty") : modName);
+		Script* script = new Script(&factory, modName.empty() ? string(kDefaultScriptModId) : modName);
 		for (const string& milestoneName : milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(milestoneName));
 		}

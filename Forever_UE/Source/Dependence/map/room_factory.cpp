@@ -1,4 +1,5 @@
 #include "room_factory.h"
+
 #include "common/random.h"
 
 

@@ -216,6 +216,8 @@
     <ClCompile Include="polit\party_democratic.cpp" />
     <ClCompile Include="map\room_meeting.cpp" />
     <ClCompile Include="map\component_meeting.cpp" />
+    <ClCompile Include="player\puzzle_common.cpp" />
+    <ClCompile Include="traffic\bus_stop_name.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\building_airport.h" />

@@ -196,6 +196,10 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("加载模组"), [this]() {
 		// 每局开始按当前config补加载新mod dll并刷新启用表/参数表，见Source/Core/common/registry.md。
 		Registry::Get().RefreshMods();
+		// 上一局的Script已随EndPlay全部销毁：清掉.script解析缓存，这一局重新读盘(编辑器里改过的脚本不用重启就生效)。
+		Script::ClearCache();
+		// 新开局：mod的命名计数器从0开始(mod dll常驻加载，不清的话名字会接着上一局往下编)。读档由存档恢复计数器。
+		if (!FetchActiveLoad()) SaveGame::ResetInstanceCounters();
 		// 依赖不满足就尽早拒绝生成世界。
 		ValidateMainStoryDependencies();
 	});

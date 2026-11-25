@@ -1,6 +1,6 @@
 #include "common/random.h"
-#include "common/mod_args.h"
 
+#include "common/mod_args.h"
 #include "common/utility.h"
 
 #include <cstdlib>

@@ -1,15 +1,15 @@
 #include "map_save.h"
+
 #include "map/polygon_util.h"
+#include "common/json.h"
+#include "common/utility.h"
 
 #include "map/map.h"
 #include "map/room.h"
 #include "map/component.h"
 #include "map/door.h"
-
 #include "common/save.h"
 #include "common/save_refs.h"
-#include "common/json.h"
-#include "common/utility.h"
 
 #include <algorithm>
 #include <unordered_map>

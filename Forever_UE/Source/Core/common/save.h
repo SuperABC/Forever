@@ -162,6 +162,11 @@ public:
 	// 必须在读档重建完所有mod实例之后调用。
 	static void RestoreInstanceCounters(const SaveManifest& manifest);
 
+	// 新开局用：把所有已启用mod的命名计数器清零(每个id临时创建一个实例、SetInstanceCounter(0)、再销毁)。
+	// mod dll由Registry常驻加载，计数器是dll里的static，不清的话同一进程第二次开局名字会接着上一局往下编。
+	// 必须在上一局的mod实例全部销毁之后、这一局创建任何mod实例之前调用；读档不调(读档走RestoreInstanceCounters)。
+	static void ResetInstanceCounters();
+
 	// 把存档里的随机流状态覆盖到RandomRegistry(存档没有这一段=什么都不做)。必须在读档重建完世界之后调用——
 	// 重建过程中构造Citizen等会抽随机，最后覆盖才能让流停在存档时的位置。
 	static void RestoreRandom(const SaveArchive& archive);

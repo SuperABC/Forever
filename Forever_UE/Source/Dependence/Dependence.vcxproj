@@ -85,6 +85,7 @@
     <ClCompile Include="common\mod_state.cpp" />
     <ClCompile Include="common\mod_args.cpp" />
     <ClCompile Include="common\mod_test.cpp" />
+    <ClCompile Include="common\mod_concepts.cpp" />
     <ClCompile Include="common\save_archive.cpp" />
     <ClCompile Include="common\random.cpp" />
     <ClCompile Include="common\utility.cpp" />
@@ -142,6 +143,9 @@
     <ClCompile Include="traffic\station_mod.cpp" />
     <ClCompile Include="traffic\vehicle_mod.cpp" />
     <ClCompile Include="polit\party_factory.cpp" />
+    <ClCompile Include="map\transit_data.cpp" />
+    <ClCompile Include="polit\party_mod.cpp" />
+    <ClCompile Include="polit\policy_ids.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\error.h" />
@@ -150,6 +154,7 @@
     <ClInclude Include="common\mod_state.h" />
     <ClInclude Include="common\mod_args.h" />
     <ClInclude Include="common\mod_test.h" />
+    <ClInclude Include="common\mod_concepts.h" />
     <ClInclude Include="common\random.h" />
     <ClInclude Include="common\utility.h" />
     <ClInclude Include="common\handle.h" />

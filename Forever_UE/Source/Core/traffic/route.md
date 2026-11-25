@@ -33,14 +33,14 @@ Core 对站/线的类型完全不关心，也不计算任何连线几何：几�
 
 ## Update / 停站事件
 
-- `Update(elapsedSeconds)` 是纯函数式：每辆车 `localTime = (elapsedSeconds + 均匀相位 + phaseAdjust) mod period`，逐 run 累减"行驶耗时+停靠耗时"，落在行驶区间用 `EvaluateRun`，落在停靠区间停在该 run 终点（`SetPitch(0)`），停靠事件报 `run.toStation`。俯仰角只在行驶时、instantiate 或 `tiltAlongPath` 的线路才非零。
+- `Update(elapsedSeconds)` 是纯函数式（`elapsedSeconds` 是 `double`，对 `period` 取模之后的一圈内时间才转 `float`）：每辆车 `localTime = (elapsedSeconds + 均匀相位 + phaseAdjust) mod period`，逐 run 累减"行驶耗时+停靠耗时"，落在行驶区间用 `EvaluateRun`，落在停靠区间停在该 run 终点（`SetPitch(0)`），停靠事件报 `run.toStation`。俯仰角只在行驶时、instantiate 或 `tiltAlongPath` 的线路才非零。
 - 停站/离站边沿检测：和 `lastStopStation` 比较，在→不在=leaving，不在→在=entering，A→B=先 A leaving 再 B entering；`ConsumeStopEvents()` 取走；读档后 `SilenceInitialStopEvents()` 让第一次 Update 只记状态不发事件。Core 不碰 script，由 `AForeverFrameworkActor::Tick` 转发为 `enter_stop`/`leave_stop`。
 - **每条线路的车辆数**：`RouteLine::vehicleCount`(`Assemble` 从 `mod->lineVehicleCounts[线路下标]` 填，没给就是 0)；`GetLineVehicleCount(lineIdx)` 取它，<=0 按 1 辆。`Traffic::InitTransitVehicles` 按它给每条线路创建车。不存档(读档时车辆按名字恢复)。
 - `Vehicle::IsPhysicsDriven()` 为真时 `Update` 跳过该车，时刻表相位照常累计。
 
 ## 物理接管支持
 
-- `QueryVehicleState`：线路下标、`legIndex`（run 下标）、是否停靠、剩余停靠（真实秒）、巡航速度（`normalSpeed*120`，缓动段不精确，仅供给物理车初速度）。
+- `QueryVehicleState`：线路下标、`legIndex`（run 下标）、是否停靠、剩余停靠（真实秒）、巡航速度（`normalSpeed*gameSecondsPerRealSecond`，缓动段不精确，仅供给物理车初速度）。时刻表按游戏秒算，这两个真实秒的量按调用方传入的实际倍率（`60*Player::GetTimeFlowRatio()`）换算，不假定倍率是多少。
 - `GetLineStopNodeIds(line)`：每个 run 起点站的 `stationNode` id（Map 辅助导航节点），顺序即行驶顺序；任何一站没有 road link 返回空。
 - `ResetStopState(vehicle)`：物理段交还时刻表时忘掉停靠状态。
 - `SyncVehicleProgress(vehicle, legIndex, legFraction, dwelling, dwellFraction)`：给这辆车记一个运行时相位修正量 `phaseAdjust`（游戏秒，不存档），使"现在"对应的时刻表时间等于实车的路程进度（`legFraction` 是路程比例，经 `RunTimeAtArc` 换成时间）。UE 侧在 `BusToKinematic` 里、`ClearCommands` 之前用 `QueryLoopProgress` 取进度调用。

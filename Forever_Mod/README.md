@@ -36,7 +36,7 @@
 ## 每个mod DLL必须导出的三个函数
 
 以`Building`概念为例(其余概念符号名把`Buildings`换成对应复数,参见
-`Forever_UE/Source/Core/common/loader.md`的23个concept符号表):
+`Forever_UE/Source/Dependence/common/mod_concepts.h`的23个concept符号表):
 
 ```cpp
 extern "C" __declspec(dllexport) void* GetModBuildings();                    // 返回该dll提供的static id列表
@@ -67,6 +67,39 @@ return new PengzhanBuilding(args); }`),不用就直接忽略这个参数,详见
 `BuildingMod*(*)(const std::string&)`,必须在lambda里显式写`-> BuildingMod*`让返回值在
 lambda内部完成到基类指针的隐式转换。
 
+除了每个concept的这三个函数，dll还要：
+
+- 在入口cpp里写一行`FOREVER_MOD_BIND_RANDOM`(导出`BindRandomHost`)，否则dll里的`GetRandom`不受种子控制，见`Dependence/common/random.h`。
+- 导出`GetModDependencies`，声明自己每个mod id依赖哪些mod id(配置界面据此联动启用：启用了你的mod，它依赖的mod也必须启用)，
+  写法照`Empty/Cpp/Empty/mod_empty.cpp`。依赖按语义写——"没有它我这个mod就没意义/不能工作"：楼依赖它用到的房间、组件和脚本，
+  组织依赖岗位，线路依赖站点和载具；只能从别的mod里生成的(挂在楼上的站点、房间里的仓库和工坊)依赖它的宿主。
+  会建脚本但没填`scriptModName`时游戏用默认的`script_empty`，要把它列进依赖。
+  **依赖不能成环**：A依赖B、B又依赖A，两个都启用后在配置界面里互相锁死，哪个都关不掉。
+
+## mod id和提交前自测(ModTest)
+
+**mod id的规则**：
+
+- **全局唯一**：所有mod的id不能相同，不管属于哪个concept、在哪个dll里。不支持不同concept共用一个id。
+- 非空，不含空白字符(`config.json`里每个条目是`"id 参数..."`，按第一个空格切开)。
+- 除此之外可以是任意字符串。项目自己的mod习惯写成`<concept>_<name>`(如`building_residence_high`)，这只是弱约定，游戏不依赖id的格式；
+  但带上自己独特的前缀能大大降低和别人重名的概率。
+
+**提交前跑ModTest**(`Forever_UE/x64/Release/ModTest.exe`，源码在`Forever_UE/Source/Test/Mod`，说明见那里的`ModTest.md`)。
+它只依赖Dependence，不需要游戏本体和UE：
+
+```
+rem 测自己的mod；引用/依赖了别的dll里的mod(比如Basic、Empty里的)就用--with带上
+ModTest MyMod.dll --with Basic.dll --with Empty.dll
+```
+
+它会检查：dll导出是否齐全、id是否合法、每个mod能否创建、`UnitTest`是否通过、有没有漏包的随机、实例名是否唯一、各concept的字段是否合法、
+字段里引用到的mod和声明依赖的mod是否存在、依赖有没有成环、加载进来的这批dll里有没有重名的id。全部通过(退出码0)再提交。
+依赖声明写得全不全它不查，要你自己保证。
+
+**重名只能由项目这边查全**：你手里没有别人的mod，ModTest只能查出你带进来的那些dll之间的重名。项目收集到新mod后会把全部mod一起再跑一遍
+(`ModTest x64\Release ..\Forever_Mod`)，这一步发现和已有mod重名的话需要改id。
+
 ## 用mod提供载具(含蓝图)
 
 **结论**：mod可以带自己的载具蓝图，父类留在主程序里即可。已验证：编辑器PIE下公交从`/Test/Bus/Actor/BP_BusElement`正常生成、上车、驾驶；打包版挂载新pak未实测(挂载代码和已有的飞机静态网格同一条路径)。
@@ -86,7 +119,7 @@ lambda内部完成到基类指针的隐式转换。
 1. 把蓝图的依赖闭包拷进迷你工程`Content/`，路径和主工程`/Game/...`一致(公交：`3rdParty/PAZ_652`整个文件夹，加上父蓝图`Blueprint/Vehicle/BP_VehicleElement.uasset`)。依赖可以用`strings`式扫描uasset里的`/Game/...`得到。
 2. 父蓝图(`BP_VehicleElement`)留在迷你工程`Content/`里就行，**不要**放进`Plugins/<Mod>/Content`：它不会进pak，运行时用的是主程序里的那份，子蓝图引用的仍是`/Game/Blueprint/Vehicle/BP_VehicleElement`。
 3. 用迷你工程的`UnrealEditor-Cmd.exe Test.uproject -ExecutePythonScript=move.py -unattended`把子蓝图和它的网格/材质/贴图一次性搬到`/<Mod>/<Name>/...`。**必须用`AssetToolsHelpers.get_asset_tools().rename_assets([AssetRenameData(asset, 新文件夹, 新名字), ...])`整批改名**；逐个调`EditorAssetLibrary.rename_asset`会让蓝图里网格引用丢成None(先搬蓝图再搬网格，蓝图已存盘的引用不会被改写)。搬完用Python加载蓝图，检查`CarMesh`的`skeletal_mesh`指向新路径、`WheelSetups`的骨骼名都在。
-4. 主程序里`<Name>Vehicle::SetProperty`的`blueprintPath`改成`/<Mod>/<Name>/Actor/BP_xxx.BP_xxx_C`。编辑器PIE下`ForeverModSubsystem::EnsureModsRegistered`直接挂载插件`Content`目录(不用cook)；打包版跑mod自己的`pak.bat`(CookAll，实测约7分钟，pak因为带了公交贴图从22MB涨到131MB)。
+4. 主程序里`<Name>Vehicle::SetProperty`的`blueprintPath`改成`/<Mod>/<Name>/Actor/BP_xxx.BP_xxx_C`。编辑器PIE下`ForeverModSubsystem::MountModContent`直接挂载插件`Content`目录(不用cook)；打包版跑mod自己的`pak.bat`(CookAll，实测约7分钟，pak因为带了公交贴图从22MB涨到131MB)。
 
 **无害的现象**：迷你工程的commandlet日志里有大量`CDO Constructor (...): Failed to find /Game/...`(主工程的IA_*、材质、网格不在迷你工程里)，只是类的默认对象里引用为空；蓝图只存与父类默认值的差异，所以不影响搬进来的蓝图。名字末尾带`_652`这类数字的资产，在uasset名字表里会被拆成`SKM_paz`+数字后缀，扫描依赖时别被误导。
 

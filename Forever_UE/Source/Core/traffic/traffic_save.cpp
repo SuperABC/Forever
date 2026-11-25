@@ -98,7 +98,7 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, const Popula
 
 	w.I32(traffic.vehicleCounter);
 	w.I32(traffic.stationCounter);
-	w.F32(traffic.elapsedSeconds);
+	w.F64(traffic.elapsedSeconds);
 
 	auto stationIds = SaveRefs::LiveIds<StationFactory, StationMod>(traffic.stationFactory);
 	auto routeIds = SaveRefs::LiveIds<RouteFactory, RouteMod>(traffic.routeFactory);
@@ -288,7 +288,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 		Traffic* traffic = new Traffic();
 		traffic->vehicleCounter = r.I32();
 		traffic->stationCounter = r.I32();
-		traffic->elapsedSeconds = r.F32();
+		traffic->elapsedSeconds = r.F64();
 		// 公交位置由elapsedSeconds推算；上一帧的游戏时间不恢复，下一次Tick重新定锚(读档后游戏
 		// 时钟可能和存档时不一致，用旧的lastTickTime会算出负的时间差，公交停住不动)。
 		traffic->hasLastTickTime = false;

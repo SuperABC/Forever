@@ -1,6 +1,6 @@
 #include "lamp.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/utility.h"
 
 #include <cmath>

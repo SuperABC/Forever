@@ -1,4 +1,5 @@
 #include "green_factory.h"
+
 #include "common/random.h"
 
 

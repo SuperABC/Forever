@@ -1,9 +1,10 @@
 #include "roadnet.h"
-#include "map/map.h"
-#include "common/random.h"
 
+#include "common/random.h"
 #include "common/error.h"
 #include "common/utility.h"
+
+#include "map/map.h"
 
 #include <cmath>
 #include <algorithm>

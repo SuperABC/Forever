@@ -616,6 +616,15 @@ vector<string> SaveGame::ValidateModStateVersions(const SaveManifest& manifest) 
 	return errors;
 }
 
+void SaveGame::ResetInstanceCounters() {
+	for (const ConceptOps& ops : GetConceptOps()) {
+		for (const auto& [id, args] : Config::GetConceptMods(ops.jsonKey)) {
+			(void)args;
+			ops.setCounter(id, 0); // 没注册/创建失败的id、没有计数器的mod都是空操作
+		}
+	}
+}
+
 void SaveGame::RestoreInstanceCounters(const SaveManifest& manifest) {
 	for (const SaveModRecord& mod : manifest.mods) {
 		if (mod.counter < 0) continue;

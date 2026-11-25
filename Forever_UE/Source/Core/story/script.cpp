@@ -14,6 +14,7 @@
 using namespace std;
 
 unordered_map<string, Script::FileCache> Script::caches = {};
+int Script::liveCount = 0;
 
 Script::Script(ScriptFactory* factory, const string& id) :
 	mod(factory->CreateScript(id)),
@@ -28,10 +29,24 @@ Script::Script(ScriptFactory* factory, const string& id) :
 
 	type = mod->GetType();
 	name = mod->GetName();
+	liveCount++;
 }
 
 Script::~Script() {
 	factory->DestroyScript(mod);
+	liveCount--;
+}
+
+bool Script::ClearCache() {
+	if (liveCount > 0) {
+		debugf("Warning: Script::ClearCache skipped, %d script(s) still alive.\n", liveCount);
+		return false;
+	}
+	for (auto& [path, fileCache] : caches) {
+		for (auto& [milestoneName, milestone] : fileCache.milestones) delete milestone;
+	}
+	caches.clear();
+	return true;
 }
 
 string Script::GetType() const {
@@ -861,7 +876,7 @@ vector<string> Script::BuildSubsequences(const JsonValue& root) {
 Script* MakeScript(ScriptFactory* factory, const string& scriptModName, const vector<string>& milestoneNames) {
 	if (!factory) return nullptr;
 	if (scriptModName.empty() && milestoneNames.empty()) return nullptr;
-	Script* script = new Script(factory, scriptModName.empty() ? string("script_empty") : scriptModName);
+	Script* script = new Script(factory, scriptModName.empty() ? string(kDefaultScriptModId) : scriptModName);
 	for (const string& milestoneName : milestoneNames) {
 		script->ReadMilestones(Config::GetScriptPath(milestoneName));
 	}
