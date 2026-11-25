@@ -64,11 +64,10 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `Populace::InitNames()`在生成市民之前把这些名字喂给`Name::ReserveName`占位，姓名生成器
   之后不会再生成同名结果，避免"脚本里写死的角色名"和"随机生成的市民名"撞名。
 - **`global_settings`**：目前只识别一个子字段`time_flow_ratio`（游戏时钟相对真实时间的
-  倍率，默认`2.0`）——`AForeverFrameworkActor::EnsurePlayerGenerated()`读到就调用
+  倍率，默认`10.0`，见`player/player.md`）——`AForeverFrameworkActor::EnsurePlayerGenerated()`读到就调用
   `Player::SetTimeFlowRatio()`覆盖默认值。
-- **`mod_dependences`**：字符串数组，元素是mod id（**不带concept前缀**——id的命名不保证
-  能反映它属于哪个concept，比如`"building_clean"`名字像Building mod，实际可能是个Job
-  mod，不能靠字符串猜），声明主线剧情脚本依赖哪些mod。
+- **`mod_dependences`**：字符串数组，元素是完整的mod id(`<concept>_<name>`，如`"building_residence_high"`)，
+  声明主线剧情脚本依赖哪些mod。校验时不解析id里的concept前缀，直接问全部Factory。
   `AForeverFrameworkActor::ValidateMainStoryDependencies()`在`BeginPlay()`最前面
   （生成任何东西之前）对`Registry::CheckModRegistered(id)`做全局OR匹配（20个Factory各查
   一次`CheckRegistered`），只要有一个id没被任何concept注册就`THROW_EXCEPTION`，交给
@@ -89,7 +88,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 - 依赖：`Dependence/story/{expression,event,dialog,change,script_mod,script_factory}.h`、
   `Dependence/common/handle.h`（`PostHandle`，`WrapScript`/`MatchEvent`透传）、
   `common/{utility,error,json}.h`、`Core/story/milestone.h`。
-- 被谁依赖：`Core/story/story.h`（`Story::mainScripts`/`systemScript`，
+- 被谁依赖：`Core/story/story.h`（`Story::mainScript`/`systemScript`/`globalScript`，
   `Story::BroadcastGameStart`构造`post`传进`MatchEvent`）、
   `Forever/Framework/ForeverStoryFrameworkComponent.cpp`（间接通过`Story`）、
   `Core/populace/populace.cpp`（`InitNames()`调`GetNameReserve`）、
@@ -102,7 +101,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 - 多剧情共享同一份milestone缓存时的命名冲突机制，等真的需要时再加。
 
 ## 载具/公交相关解析
-`BuildEvent`新增`enter_stop`/`leave_stop`(stop)、`enter_vehicle`/`leave_vehicle`(vehicle/mode)；`BuildChanges`新增`board_vehicle`、`leave_vehicle`(原先类已声明未解析)、`force_leave`。详见`Dependence/story/event.md`/`change.md`。
+`BuildEvent`解析`enter_stop`/`leave_stop`(stop)、`enter_vehicle`/`leave_vehicle`(vehicle/mode)；`BuildChanges`解析`board_vehicle`、`leave_vehicle`、`force_leave`。详见`Dependence/story/event.md`/`change.md`。
 
 ## 本次新增解析
 `npc_revive`(name必填，health可选，缺省满血)；`create_timer`新增可选`mode`(absolute/relative/real/next)；`citizen_decease`触发条件见`Dependence/story/event.md`。

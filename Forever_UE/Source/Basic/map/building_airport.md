@@ -25,7 +25,7 @@
   3. `request.lot`直接是该商业区，不用`adaptiveParent`；`RequestPlacement`失败Core直接跳过。
   4. 机场数量取决于地图大小：地图边长不足800时只有`AREA_TEST`那一座(或第一个合格商业区)。
 - **`TrainStationBuilding::Layout`**：`footprint`占满整个Building区域，`basements=1`+`layers=1`，层高0.6；地下1层站台层`preset_train_station_bg+`(楼梯通上来，`Stair_Line`资产)、地面1层大厅`preset_train_station_fg-`放2间`TrainStationRoom`，两层各2台电梯。`TrainStation::Layout`的轨道/接口(`depthRatio` 0.55/0.65)因此落在楼体范围内。
-- **`AirportBuilding::Layout`**(2026-11-22改)：无地下室、2层，层高各0.6；1楼`preset_airport_fg+`(10个single槽位、2个停机坪`parkings`、2台电梯井、楼梯`Stair_Line`)，2楼`preset_airport_fu-`(2个single槽位、2台电梯井)；**房间先全部`room_empty`**(业务房间以后再换，`room_airport`暂不用)，两台电梯各`AssignElevatorCabin(shaft, 0, 1)`。2个停机坪用`AssignStockedParking(0, i, i, -1.f, {"plane"})`归入同矩形的第i个single槽位(原来4个停机坪太窄，2026-11-22并成2个)，**`spacing=-1`=整个矩形就是一个机位**(机场占地随地块变，固定间距凑不出"每个停机坪恰好一架")，所以`Traffic::InitAirportVehicles`每座机场恰好停2架飞机，取代原来机场两侧空地的2个机位。**`footprint`占满整个Building区域**(2026-11-22改，默认`BuildingFootprintSpec`，同火车站；原来用`NearRoadFootprint`把楼体压到靠路一侧、深处留给跑道)，所以`AirStation::Layout`的两条跑道(`depthRatio` 0.7/0.9)落在楼体范围之内，layout里的矩形(停机坪等)都按整个区域的比例算。
+- **`AirportBuilding::Layout`**(2026-11-22改)：无地下室、2层，层高各0.6；1楼`preset_airport_fg+`(10个single槽位、2个停机坪`parkings`、2台电梯井、楼梯`Stair_Line`)，2楼`preset_airport_fu-`(2个single槽位、2台电梯井)；**房间先全部`room_empty`**(业务房间以后再换，`room_airport`暂不用)，两台电梯各`AssignElevatorCabin(shaft, 0, 1)`。2个停机坪用`AssignStockedParking(0, i, i, -1.f, {"plane"})`归入同矩形的第i个single槽位(原来4个停机坪太窄，2026-11-22并成2个)，**`spacing=-1`=整个矩形就是一个机位**(机场占地随地块变，固定间距凑不出"每个停机坪恰好一架")，所以`Traffic::InitStockedVehicles`每座机场恰好停2架飞机，取代原来机场两侧空地的2个机位。**`footprint`占满整个Building区域**(2026-11-22改，默认`BuildingFootprintSpec`，同火车站；原来用`NearRoadFootprint`把楼体压到靠路一侧、深处留给跑道)，所以`AirStation::Layout`的两条跑道(`depthRatio` 0.7/0.9)落在楼体范围之内，layout里的矩形(停机坪等)都按整个区域的比例算。
 
 ## 依赖关系
 

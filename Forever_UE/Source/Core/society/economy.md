@@ -44,7 +44,6 @@
 - **存款**：政府当银行，市民存款转进政府账户并记负债，政府按年利率（`depositRateBp`，默认3%）每月付息，见`treasury.md`。
 - **政府净头寸** = 政府账户 − 存款 − 国债本金。税率/补助的负反馈用净头寸（`Society::GovernmentNetRatio`），所以借来的钱（国债、存款）抬高账户的同时抬高负债，不改善指标；印钞没有负债，直接改善。
 - **补缺口**（`FundGovernment`，每日最后）：政府账户为负时，先向市民发国债，利率=存款利率+`bondPremiumBp`（默认再加3%），期限`bondTermDays`；国债补不满的剩余缺口由城市外账户直接印钞打给政府（`Flow::PRINT_MONEY`，城市外账户更负、政府账户变正，总和仍为0）。到期国债本金也从政府账户还，不够时当天重新发债/印钞。
-- 离线压力测试：`EconSim`设环境变量`ECON_DRAIN`（每天从政府账户划走的分数）可把政府打成赤字，观察发债和印钞。
 
 ## 关键设计
 - 全部金额int64分，资金只经`Ledger::Transfer`流动，总和恒为0。
@@ -54,7 +53,7 @@
 
 ## 依赖关系
 - 依赖：`Society`（账本、月份状态、政策、Treasury、Market）、`Industry`（库存）、`Settlement`、`Investor`、`Emigration`、组织mod接口。
-- 被谁依赖：EconSim、`AForeverFrameworkActor`的每日结算。
+- 被谁依赖：`WorldStep`(UE的`AForeverFrameworkActor::StepWorld`和CoreTest共用的每日结算入口)。
 
 ## 玩家参与经济（`PayWage` / `ListShopItems` / `PlayerPurchaseCart`）
 玩家的钱就是当前被操控市民在Ledger里的账户(`Holder::Of(citizen)`)，不另设玩家钱包。

@@ -11,7 +11,7 @@
 
 ## 关键设计
 
-- 变量名里可以内嵌`$$(expr)`动态拼名字，见文末"变量名里的内嵌表达式"（2026-11-16起支持，旧的"不支持"已作废）。
+- 变量名里可以内嵌`$$(expr)`动态拼名字，见文末"变量名里的内嵌表达式"。
 - **变量寻址**（`ResolveVariableName`，读`$$x`和写`set_value`共用），四个变量池对应`ScriptContext`的四个槽位：
 
   | 写法 | 变量池 | 槽位 | 脚本能不能写 |
@@ -68,7 +68,7 @@ struct ScriptContext {
   `expression.h`拿`Expression`类型）。
 - 被谁依赖：`event.h`（`Event::condition`）、`change.h`（`Change::condition`）、`dialog.h`
   （`Dialog`/`Option`的`condition`、`Section`的四个台词字段）、`Core/story/milestone.h`
-  （`Milestone::drop`）、`Core/story/script.h`（`Script::BuildExpression`统一解析json字符串）。
+  （`Milestone::drop`）、`Core/story/script.cpp`（把json里的字符串原样交给Event/Change/Dialog，执行时由`EvaluateExpression`求值）。
 
 ## 待办/后续阶段
 

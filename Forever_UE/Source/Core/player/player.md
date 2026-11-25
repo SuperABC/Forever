@@ -57,7 +57,7 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 
 `leftHand`/`rightHand`/`backPack`/`leftShoulder`/`rightShoulder`五个槽位均持有所有权，析构时全部
 `delete`。不动产/载具资产不在玩家身上：它们挂在`Citizen`/`Organization`/`Society`的资产列表上，
-见`estate_asset.md`/`vehicle_asset.md`（原来的`Player::estateAssets`从未被填充，已删除）。
+见`estate_asset.md`/`vehicle_asset.md`（`Player`自己不持有不动产列表）。
 
 - `CreateAsset(id)`/`DestroyAsset(asset)`：名字不再由调用方传入，取mod的`GetName()`（mod保证全局唯一，读档时`PlayerSaveCodec`把名字覆写回存档里的）。`SplitAsset(src, n)`从堆叠拆出n个：再`CreateAsset`一个同type的新实例（名字由它的mod保证唯一）、`count=n`，`src->count`减n。`id`需要在`config.json`的
   `"asset_mods"`数组里启用，否则`CreateAsset`返回`nullptr`（内部`new`后立刻检查
@@ -124,7 +124,7 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
 ## 范围边界
 
 - 不含存款相关字段/方法。
-- 没有暂停机制（对应`AGlobalBase::GlobalPause/GlobalResume`那一套）。
+- 没有暂停机制(暂停/恢复游戏时钟)。
 
 ## 脚本驱动的收纳/扣除
 - `FindAssetTypeByProduct(productType)`：哪个Asset的productType指向这个Product(商店用)，首次调用时临时创建每个已启用Asset读完销毁，结果缓存。

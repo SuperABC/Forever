@@ -25,7 +25,7 @@ const char* CommerceLowBuilding::GetName() {
 
 void CommerceLowBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// direction==-1时的兜底，同ResidenceBuilding::Layout。
+	// direction==-1时的兜底，同ResidenceLowBuilding::Layout。
 	if (direction < 0) {
 		std::vector<int> candidates;
 		for (auto& [dir, road] : boundaryRoads) {

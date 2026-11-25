@@ -93,7 +93,7 @@ public:
 	bool QueryLoopProgress(int32& outLegIndex, float& outLegFraction, bool& outDwelling, float& outDwellFraction) const;
 
 	// 正在行驶时的剩余路径（世界坐标，第一个点是车当前位置，其后是路径上还没走过的点）。
-	// 空闲/停靠中/没有有效路径返回false。"你在去哪"折线（UForeverTrafficFrameworkComponent::StartTestNavigation）用它。
+	// 空闲/停靠中/没有有效路径返回false。"你在去哪"折线（UForeverTrafficFrameworkComponent::StartGuide）用它。
 	// 倒车出库阶段：waypoints = 车当前位置、倒车终点、之后的路径点，outReverseFirst=true(第一段是倒车)。
 	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, bool* outReverseFirst = nullptr) const;
 	bool IsReversing() const { return bReversing; }

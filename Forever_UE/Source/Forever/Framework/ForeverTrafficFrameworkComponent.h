@@ -147,7 +147,7 @@ public:
 	// 以时刻表为准(不对齐实车进度)，靠近玩家的之后会被UpdateBusPhysicsHandoff重新切回物理。
 	void ResyncBusesAfterTimeSkip();
 
-	// ---- 有序通行（路口管理 + 跟车，见AVehicleCommandController.md"有序通行"） ----
+	// ---- 有序通行（路口管理 + 跟车，见Controller/VehicleCommandController.md"有序通行"） ----
 	// 被Controller驱动的车辆登记表（跟车判断遍历它）；Controller在Setup时登记，Actor销毁后弱引用自然失效。
 	void RegisterDriver(AVehicleCommandController* driver);
 	const TArray<TWeakObjectPtr<AVehicleCommandController>>& GetDrivers() const { return drivers; }

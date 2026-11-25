@@ -45,8 +45,8 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
   默认每帧8栋)，之后永远不拆。远/近两个LOD都有它。
 - **近处（`ELod::Near`）**：外壳之上再加楼梯/坡道网格(按层、只排有楼梯坡道的层)、电梯轿厢、
   自定义模型；门由门框架组件按距离另行流式加载。离开近处只销毁这些，外壳不动。
-- **远处（`ELod::Far`）**：只有外壳。旧的"整栋一个灰box"(`farMesh`)已删除，
-  `ResolveLodMaterial`/`defaultLodMaterial`不再有调用方。
+- **远处（`ELod::Far`）**：只有外壳(没有"整栋一个灰box"的远景替身)。
+  `ResolveLodMaterial`/`defaultLodMaterial`目前没有调用方。
 - **切换距离，两个阈值形成迟滞区间**：`lodNearEnterDistance`（默认16，远→近的触发距离）/
   `lodFarExitDistance`（默认32，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
   地图单位。近→远的阈值故意比远→近的大——已经精细化的building要离得更远才会退回只有外壳，
@@ -147,11 +147,12 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 1. **入队自己的队列**：跳过`transitionPending`为true的情况，按水平距离和`currentLod`比较
    决定要不要切换：
-   - 近→远（`wantNear=false`且`currentLod==Near`）：往`floorTierOpQueue`入队`BuildFarMesh`+
-     `DeleteAllNearMeshes`两条。
-   - 远→近（`wantNear=true`且`currentLod==Far`）：往`floorTierOpQueue`入队
-     `nearFloorCount`条`BuildFloorMesh`（每层一条）+`BuildElevatorCabins`+最后一条
-     `DeleteFarMesh`。门不在这里排队：门由`ForeverDoorFrameworkComponent`独立流式加载（见`ForeverDoorFrameworkComponent.md`）。
+   - 开局一次：入队`BuildShell`(整栋楼所有楼层的墙/地板/天花板，远近都有、常驻不拆，走外壳预算`TryConsumeShellBudget`)。
+   - 近→远（`currentLod==Near`且距离超过`GetLodFarExitDistance()`）：往`floorTierOpQueue`入队
+     `DeleteAllNearMeshes`一条(只清近处专有的东西，外壳保留)。
+   - 远→近（`currentLod==Far`且距离不超过`GetLodNearEnterDistance()`）：依次入队`BuildTriggers`、
+     每个有楼梯/坡道/房间的楼层一条`BuildFloorExtras`、`BuildDecorations`(有自定义模型才排)、
+     每个有家具的楼层一条`BuildRoomFurniture`、`BuildElevatorCabins`、最后一条`FinishNear`。门不在这里排队：门由`ForeverDoorFrameworkComponent`独立流式加载（见`ForeverDoorFrameworkComponent.md`）。
    - 入队后立刻把`transitionPending`置`true`。
 2. **drain自己的队列**：每次执行一条之前，先向框架组件的
    `TryConsumeLodOpBudget()`申请一份全局共享预算（框架组件的
@@ -159,8 +160,8 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
    仍然会卡顿）——申请失败（这一帧全地图的预算已经被其它building的Element用完）就先停手，下一帧再继续。**必须先判断
    自己的队列是否为空，再申请预算**，不能反过来：如果反过来，每一栋"这一帧其实无事可做"
    的building也会白白申请（并消耗）一份全局预算，挤占真正需要建楼层的building的份额。
-   **只有序列的最后一条**（`DeleteAllNearMeshes`/`DeleteFarMesh`）执行时才更新`currentLod`+
-   清`transitionPending`，中间的`BuildFarMesh`/`BuildFloorMesh`只是建几何，不改状态。
+   **只有序列的最后一条**（`DeleteAllNearMeshes`/`FinishNear`）执行时才更新`currentLod`+
+   清`transitionPending`，中间的操作只是建几何，不改状态。
 
 这个设计的取舍：具体的LOD状态机/队列下放到每个Element自己身上（每个building的近/远状态、
 当前排队的操作，天然就该是这栋楼自己的状态），但保留了框架组件作为"全局节流总闸"的角色——
@@ -180,7 +181,7 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 这个机制之所以能生效，关键在于**时间倍率只缩放`Tick`函数收到的`DeltaTime`参数，不会
 阻止`Tick`函数本身按正常帧率被调用**——`frameOpBudgetRemaining`的重置、
-`ABuildingElement::Tick`里drain`floorTierOpQueue`/`doorTierOpQueue`的那两段循环都不读
+`ABuildingElement::Tick`里drain`floorTierOpQueue`的循环都不读
 `DeltaTime`，所以"世界静止"期间LOD队列依然能照常按每帧预算排空，不会因为倍率归零而
 卡死。门级操作此时仍然受全局优先级门槛约束——如果恰好有building在冻结期间还有楼层级
 操作排队，门会继续等，但这不影响冻结判定本身（判定只看楼层是否就位，见下面
@@ -278,12 +279,11 @@ UE对"同一个Actor根组件下挂大量Static简单碰撞子组件"会做"焊�
   BoxComponent.h`/`Kismet/GameplayStatics.h`/`Containers/Queue.h`）现在都在
   `BuildingElement.cpp`里，这个组件自己不再需要。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
-  （`EnsureMapGenerated()`在`GenerateZones`之后调用一次`GenerateBuildings`）；
+  （`GenerateBuildingMesh()`调用一次`GenerateBuildings`，排在园区模型之后）；
   `Source/Forever/Element/BuildingElement.cpp`通过`TWeakObjectPtr<
   UForeverBuildingFrameworkComponent>`反向调用`ResolveMaterial`/`ResolveMesh`/
   `Get*默认资产`/`GetLodNearEnterDistance`/`GetLodFarExitDistance`/`GetCabinCruiseSpeed`/`GetCabinEaseSeconds`/
-  `TryConsumeLodOpBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`/
-  `NotifyFloorTierOpEnqueued`/`NotifyFloorTierOpExecuted`/`GetMaxDoorsPerOp`；
+  `TryConsumeLodOpBudget`/`TryConsumeShellBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`；
   `Source/Forever/Framework/ForeverStoryFrameworkComponent.cpp`（`ApplyControlChange`
   切换玩家控制权后调`RequestFreezeUntilLodSettled`）。
 

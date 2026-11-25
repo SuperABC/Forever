@@ -34,7 +34,7 @@ wrapper → `Basic`默认内容的三层结构，`Weapon`是这套结构里Core�
   这样`create_timer`等按键查脚本的机制也能用在武器脚本上。
 - 武器脚本没有场景实体：`spawn_effect`/`area_damage`必须填`position`(通常是`$$local.hit`)。
 
-`damage`/`muzzleVelocity`/`bulletGravityScale`/`ComputeDamage`已删，`Weapon::GetFireMode()`只剩`Hitscan`/`Custom`。
+`Weapon`不算伤害、不模拟弹道，`Weapon::GetFireMode()`只有`Hitscan`/`Custom`两种。
 
 ## 依赖关系
 

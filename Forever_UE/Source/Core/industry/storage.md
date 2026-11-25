@@ -54,6 +54,6 @@ mod驱动的仓库从mod读这些字段；工坊cache由`Manufacture::ComputeRec
 
 - 依赖：`Dependence/industry/storage_mod.h`/`storage_factory.h`
   （`StorageMod`/`StorageFactory`，仅mod驱动的构造需要）。
-- 被谁依赖：`Industry`（持有所有权，按name索引普通仓库，`GlobalAllocate()`
+- 被谁依赖：`Industry`（持有所有权，按name索引普通仓库，`Distribute()`
   统一读写）、`Manufacture`（持有两个`Storage*`作为`inputCache`/
   `outputCache`，直接构造、不走mod系统）。

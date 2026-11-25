@@ -12,16 +12,16 @@
   (`Forever_UE/x64/<Config>/`)，`IncludePath`/链接只依赖`Dependence`，不依赖`Core`——这是
   Basic作为"Mod DLL"定位的必然要求，和`CONVENTIONS.md`"Mod只link Dependence.lib"的规则对齐。
 - 根目录`basic.cpp`为每个concept导出`GetMod<Concept>`/`RegisterMod<Concept>`/
-  `FinishMod<Concept>`三个符号，按`XxxBasic::GetId()`注册具体实现。
+  `FinishMod<Concept>`三个符号，按各mod类的静态`GetId()`(如`ResidenceHighBuilding::GetId()`)注册具体实现。
 - `Forever_UE/Resource/Config/config.json`的`dll_paths`需要包含Basic的输出目录，
   `Config::AddDllPath`才会扫描到`Basic.dll`。
 
 ## 依赖关系
 
 - 依赖：`Source/Dependence/<domain>/<concept>_mod.h`(继承对应`<Concept>Mod`)、
-  `Source/Dependence/<domain>/<concept>_factory.h`(`Basic.cpp`的`RegisterMod<Concept>`要用)。
+  `Source/Dependence/<domain>/<concept>_factory.h`(`basic.cpp`的`RegisterMod<Concept>`要用)。
 - 被谁依赖：不被任何代码静态`#include`/链接——`Basic.dll`只在运行时被`Config`/`ModLoader`
-  按符号名发现、加载，和`Forever_Mod/Test`、`Forever_Mod/Wxdj`处于同一层级。
+  按符号名发现、加载，和`Forever_Mod/Test`、`Forever_Mod/Wxdj`等外部mod处于同一层级。
 
 ## 待办/后续阶段
 

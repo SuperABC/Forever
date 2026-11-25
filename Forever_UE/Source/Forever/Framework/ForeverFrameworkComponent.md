@@ -2,55 +2,45 @@
 
 ## 职责
 
-`UForeverFrameworkComponent`是所有Framework域组件的抽象基类，继承`UActorComponent`，没有
-任何逻辑，只作为类型标签用——单独抽出这一层而不是让各个域组件直接继承`UActorComponent`，
-是为了能统一按`UForeverFrameworkComponent::StaticClass()`查询/遍历`AForeverFrameworkActor`
-身上的所有域组件，而不用逐个列举具体类型。
+`UForeverFrameworkComponent`是所有Framework域组件的抽象基类，继承`UActorComponent`，没有任何逻辑，只作为
+类型标签用。`AForeverFrameworkActor`在构造函数里用`CreateDefaultSubobject`创建16个具体子类，每个子类把一个
+Core域(或一类表现)翻译成UE里的网格/Actor/效果：
 
-`AForeverFrameworkActor`按域划分出9个对应旧Framework Actor的具体子类，另有4个新增的功能组件(Sky/Vegetation/Lamp/Weather，见下表之后)：
+| 域组件 | 负责的内容 |
+|---|---|
+| `UForeverTerrainFrameworkComponent` | 地形网格(clipmap式LOD)、地形材质 |
+| `UForeverWaterFrameworkComponent` | 水面、水下后处理 |
+| `UForeverRoadnetFrameworkComponent` | 道路/路口网格、桥墩 |
+| `UForeverZoneFrameworkComponent` | 园区围墙、园区触发盒 |
+| `UForeverGreenFrameworkComponent` | 绿化区的装饰物 |
+| `UForeverBuildingFrameworkComponent` | 建筑LOD调度与`ABuildingElement`的生成 |
+| `UForeverRoomFrameworkComponent` | 目前是空实现(房间的表现都在`ABuildingElement`里)，原因见`ForeverRoomFrameworkComponent.md` |
+| `UForeverDoorFrameworkComponent` | 全图门的流式生成/销毁 |
+| `UForeverVegetationFrameworkComponent` | 全图植被实例与风 |
+| `UForeverLampFrameworkComponent` | 路灯实例与昼夜开关 |
+| `UForeverSkyFrameworkComponent` | 昼夜循环 |
+| `UForeverWeatherFrameworkComponent` | 天气表现(云/雨雪/地面湿润) |
+| `UForeverPopulaceFrameworkComponent` | 市民Actor的流式生成、走路/通勤/任务的执行 |
+| `UForeverTrafficFrameworkComponent` | 载具Actor、线路车辆、导航线、车位 |
+| `UForeverAssetFrameworkComponent` | 地上物品Actor、背包相关Change、伤害/特效/音效 |
+| `UForeverStoryFrameworkComponent` | 事件广播、对话/小游戏/商店界面、计时器、操控权切换 |
 
-| 域组件 | 旧Framework Actor | 旧C++ Base类(Core层) |
-|---|---|---|
-| `UForeverAssetFrameworkComponent` | Asset | `AssetBase`（独立文档见`ForeverAssetFrameworkComponent.md`） |
-| `UForeverBuildingFrameworkComponent` | Building | `BuildingBase`（独立文档见`ForeverBuildingFrameworkComponent.md`） |
-| `UForeverPopulaceFrameworkComponent` | Populace | `PopulaceBase`（独立文档见`ForeverPopulaceFrameworkComponent.md`） |
-| `UForeverRoadnetFrameworkComponent` | Roadnet | `RoadnetBase`（独立文档见`ForeverRoadnetFrameworkComponent.md`） |
-| `UForeverRoomFrameworkComponent` | Room | `RoomBase`（当前空实现，独立文档见`ForeverRoomFrameworkComponent.md`） |
-| `UForeverStoryFrameworkComponent` | Story | `StoryBase`（独立文档见`ForeverStoryFrameworkComponent.md`） |
-| `UForeverTerrainFrameworkComponent` | Terrain | `TerrainBase`（独立文档见`ForeverTerrainFrameworkComponent.md`） |
-| `UForeverTrafficFrameworkComponent` | Traffic | `TrafficBase`（独立文档见`ForeverTrafficFrameworkComponent.md`） |
-| `UForeverZoneFrameworkComponent` | Zone | `ZoneBase`（独立文档见`ForeverZoneFrameworkComponent.md`） |
-| `UForeverDoorFrameworkComponent` | Door | 无旧工程对应物，全图门的流式加载（独立文档见`ForeverDoorFrameworkComponent.md`） |
-
-新增的4个组件没有旧工程对应物，各有独立`.md`：`UForeverSkyFrameworkComponent`(昼夜循环)、`UForeverVegetationFrameworkComponent`(全图植被+风)、
-`UForeverLampFrameworkComponent`(路灯)、`UForeverWeatherFrameworkComponent`(天气表现)。
-
-这份共用文档现在只覆盖基类本身——全部具体子类都已经有各自的独立`.md`（含
-`UForeverRoomFrameworkComponent`，虽然当前是空实现，但有自己的文档说明原因）。
-
-**没有`UForeverGlobalFrameworkComponent`**：旧工程`GlobalBase`"放在关卡里、串起其它
-Framework Actor"的角色，现在整个由`AForeverFrameworkActor`自己承担，不需要再在它内部嵌
-一个名叫"Global"的子组件重复扮演这个角色。`GlobalBase`真正的业务逻辑（`GlobalPause`/
-`DrawMap`/`InitPhone`等）将来直接落在`AForeverFrameworkActor`自己身上，不会有对应的域
-组件，详见`ForeverFrameworkActor.md`。
-
-`StartBase`(Core层另一个Base类)不在这份对照表里——按既定收敛范围有意排除，不是遗漏。
-`Blueprint/Element/*`(AssetElement/BuildingElement等)也不在这份对照表里，保持各自独立的
-Actor类型不变。
+每个子类各有同名的独立`.md`，这份文档只说明基类本身。
 
 ## 关键设计
 
-- 基类本身是空`UCLASS()`，没有构造函数、没有成员——每个具体域组件的接口形状由该域自己的
-  Core层Base类逻辑决定，不在基类里预设。
-- 用`UActorComponent`而不是让`AForeverFrameworkActor`直接塞好几组虚函数，是因为组件天然
-  对应UE的"子系统挂载"惯用法，给某个域填逻辑时改动范围只在该组件自己的.h/.cpp里，不会
-  牵动其他域或Actor本体。
+- 基类是空`UCLASS()`，没有构造函数、没有成员——每个域组件的接口形状由该域自己的需要决定，不在基类里预设。
+- 用组件而不是把所有逻辑堆在`AForeverFrameworkActor`上：给某个域改逻辑时改动范围只在该组件自己的`.h/.cpp`里。
+- "串起各个域"的全局逻辑(分阶段生成世界、全局时钟、`StepWorld`、`ApplyChange`分发、存读档编排)在
+  `AForeverFrameworkActor`自己身上，没有对应的"Global"域组件，见`ForeverFrameworkActor.md`。
+- 域组件和Core域对象是两回事：Core域(`Map`/`Populace`/`Traffic`…)由`AForeverFrameworkActor`创建并持有，域组件
+  只拿裸指针读它们，世界销毁时(`EndPlay`)随Actor一起失效。
 
 ## 依赖关系
 
-- 依赖：无（不依赖Dependence/Core内核代码）。
-- 被谁依赖：被`AForeverFrameworkActor`在构造函数里用`CreateDefaultSubobject`创建并持有。
+- 依赖：无(基类不依赖Dependence/Core)。
+- 被谁依赖：`AForeverFrameworkActor`(创建并持有全部子类)。
 
 ## 待办/后续阶段
 
-无——9个域组件均已有独立文档，这份共用文档只剩基类本身的说明。
+- 无。

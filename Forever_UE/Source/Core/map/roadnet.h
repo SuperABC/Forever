@@ -95,7 +95,7 @@ public:
 
 	// 地形挖洞标记(隧道口用)，值拷贝自mod->hatches
 	const std::vector<TerrainHatch>& GetHatches() const;
-	// 线路(Route::Build)的隧道口也记进来：UE层的侧壁和存档都只认这里的hatches，见Map::AddTunnelWallHatch。
+	// 线路(Route::Build)的隧道口也记进来：UE层的侧壁和存档都只认这里的hatches，见Map::AddRouteHatch。
 	void AppendHatch(const TerrainHatch& hatch);
 
 	// 地形贴合请求，值拷贝自mod->terrainFits，由Map::ApplyTerrainFits烤进地形高度，不进存档

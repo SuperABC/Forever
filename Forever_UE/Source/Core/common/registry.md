@@ -34,9 +34,8 @@
 
 ## `CheckModRegistered(id)`：主线剧情`.script`的`mod_dependences`校验用
 
-对全部23个Factory各查一次`CheckRegistered(id)`，只要有任意一个认得这个id就返回`true`——mod id不带concept
-前缀，不能靠字符串猜它属于哪个concept(`"building_clean"`完全可能是个Job mod)，所以不按concept分流，直接
-全局OR匹配，供`AForeverFrameworkActor::ValidateMainStoryDependencies()`校验用，见`Core/story/script.md`。
+对全部23个Factory各查一次`CheckRegistered(id)`，只要有任意一个认得这个id就返回`true`——不解析id里的
+concept前缀(`<concept>_<name>`只是命名约定，Core不依赖它)，直接全局OR匹配，供`AForeverFrameworkActor::ValidateMainStoryDependencies()`校验用，见`Core/story/script.md`。
 
 **"注册"和"启用"是两件不同的事**：`configuredArgs`(`SetModArgs`存的"id->参数字符串"表，来自`config.json`
 每个`"<concept>_mods"`数组)不只是提供参数字符串——19个Factory(除`RoadnetFactory`/`NameFactory`，见下)的

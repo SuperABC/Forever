@@ -11,7 +11,7 @@
 
 // Core -> mod 的只读输入/mod -> Core 的输出结构。全部只含字符串和数值，Dependence看不到Citizen/Room。
 // 约定：Core传给mod的容器mod只读；mod的输出写进mod自己的成员，Core读走(复制)，Core绝不修改mod的容器
-// (跨DLL分配器，见memory cross_dll_allocator_crash)，所以输出容器由mod在自己的方法开头自己clear。
+// (跨DLL分配器，见CONVENTIONS.md第4节)，所以输出容器由mod在自己的方法开头自己clear。
 
 // 一项政策的当前值(Core给mod看的快照)。
 struct PolicyValue {

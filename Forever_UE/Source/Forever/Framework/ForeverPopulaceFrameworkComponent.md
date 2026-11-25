@@ -2,7 +2,7 @@
 
 ## 职责
 
-对应旧Framework Actor `Populace`（C++ Base:`PopulaceBase`）。**按玩家距离流式生成/销毁
+**按玩家距离流式生成/销毁
 `ACitizenElement`**，并负责市民走路（异步寻路）、瞬移、到达通知、存档位置同步。不像
 `ABuildingElement`那样"开局全建好、常驻到关卡结束"——人口规模比建筑数量大得多。
 

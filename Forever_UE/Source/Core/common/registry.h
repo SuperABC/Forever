@@ -45,7 +45,7 @@ public:
 	// 只刷新"mod id -> 参数字符串"表，不重新加载dll
 	void ReloadModArgs();
 
-	// 任意一个Factory认得这个id即true(id不带concept前缀)
+	// 任意一个Factory认得这个id即true(不解析id里的concept前缀，直接问全部Factory)
 	bool CheckModRegistered(const std::string& id) const;
 
 	TerrainFactory& GetTerrainFactory() { return terrainFactory; }

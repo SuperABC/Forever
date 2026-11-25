@@ -17,7 +17,7 @@ class Industry;
 class Economy;
 
 // 经济报表：城市生成结果，以及政府/个人/组织/外部四类账户在某个时期（开局或每个月）的收入、支出、
-// 结余和余额分布。同时写到标准输出和报表文件。详见report.md。
+// 结余和余额分布。同时写到标准输出和报表文件。详见econ_report.md。
 class Reporter {
 public:
 	Reporter(Map& city, Populace& populace, Society& society, Industry& industry, const std::string& filePath);

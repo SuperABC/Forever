@@ -16,7 +16,7 @@
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`。
-- 被谁依赖：`product_factory.h`创建它；`Core/industry/product.h`/`manufacture.h`消费它；具体实现在`Source/Basic/industry/product_basic.*`和外部mod里。
+- 被谁依赖：`product_factory.h`创建它；`Core/industry/product.h`/`manufacture.h`消费它；具体实现在`Source/Basic/industry/product_*.h/.cpp`和外部mod里。
 
 ## 待办/后续阶段
 

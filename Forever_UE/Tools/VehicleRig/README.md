@@ -97,12 +97,12 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
 
 照 `Source/Basic/traffic/vehicle_basic.{h,cpp}` 里 `SedanVehicle`/`BusVehicle`/`TruckVehicle` 的写法：
 
-1. `vehicle_sedan.h/.cpp` 新加一个 `XxxVehicle : VehicleMod`：
+1. 在 `Source/Basic/traffic/` 新建 `vehicle_xxx.h/.cpp/.md`(每个 mod 一组以 id 命名的文件，照 `vehicle_sedan.*` 写，记得加进 `Basic.vcxproj` 和 `.filters`)，里面是 `XxxVehicle : VehicleMod`：
    - `GetId()`（`vehicle_xxx`，id 必须 `<concept>_<name>`）、`GetCategory()`（种类，停车位按种类挑车型）、`GetType()`、`GetName()`（static 计数器 + id）。
    - `SetProperty()` 里填：`blueprintPath`（`/Game/.../BP_XxxElement.BP_XxxElement_C`）、`sizeX/Y/Z`（包围盒）、`scriptModName="script_empty"` 和 `milestoneNames`（可驾驶的车复用 `vehicle_basic`，即靠近弹出"上车"）、`exitOffsetX/Y/Z`（下车点，车身局部坐标，Z 默认 100，站不下人会拒绝下车）、`drivable=true`。
 2. `basic.cpp` 三处：依赖表里加 `{ XxxVehicle::GetId(), { kScriptEmpty } }`；`GetModVehicles` 的列表；`RegisterModVehicles` 里 `factory->RegisterVehicle(...)`。
 3. `Resource/Config/config.json` 的 `vehicle_mods` 里加 `"vehicle_xxx"`。
-4. 想让它在停车场刷出来：`Source/Basic/map/room_basic.cpp` 里 `ParkingRoom` 的 `parkingSpots` 种类列表加上这个种类（每个车位在列表里等概率随机挑种类，再从该种类的车型里随机挑一个；该种类没有已启用车型时这个车位本轮落空）。
+4. 想让它在停车位刷出来：车位接受哪些种类由建筑 mod 在 `Layout()` 里用 `AssignParking(..., { 种类... })`/`AssignStockedParking(...)` 声明(如 `Source/Basic/map/building_industry_high.cpp`)。`AssignStockedParking` 的车位开局各预置一辆(种类里随机挑、再从该种类已启用的车型里随机挑，没有已启用车型就空着)；普通车位的车由 `Core/traffic/traffic.cpp` 的 `Traffic::AssignVehicles` 按人分配，目前只分配 `car`(市民)和 `truck`(组织)两个种类，别的种类不会被自动分配。
 5. `build.bat` 全量编译（Basic 是运行时 DLL）。重启编辑器。
 
 ## 七、测试

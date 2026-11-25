@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-// 里程碑：Script的最小调度单元。触发/对话/变化三个列表的指针语义见Dialog.h/Change.h整体
+// 里程碑：Script的最小调度单元。触发/对话/变化三个列表的指针语义见dialog.h/change.h整体
 // 注释——triggers/dialogs/changes都是Milestone自己new出来、自己在析构时delete的本体
 // (OBJECT_HOLDER)，别处引用它们一律用裸指针，不重复delete。
 class Milestone {
@@ -63,7 +63,7 @@ private:
 	// 里程碑目标文本
 	std::string goal;
 
-	// 关联变更列表（持有所有权，先于dialogs执行，见Milestone.md"changes在dialogs之前"一节）
+	// 关联变更列表（持有所有权，先于dialogs执行，见milestone.md"changes在dialogs之前"一节）
 	std::vector<Change*> changes;
 
 	// 关联对话列表（持有所有权，延迟求值）

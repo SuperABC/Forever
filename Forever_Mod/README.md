@@ -9,7 +9,7 @@
   - `Yuanshen/Cpp/Yuanshen/`(`Yuanshen.dll`)：`YuanshenBuilding`(id `building_yuanshen`，中心lot里自适应贴角的6x6、14层)和空壳`YuanshenScript`(id `script_yuanshen`)，配`Yuanshen/Resource/ys.script`。
   - `Yuanshen/UE/Yuanshen/`：迷你UE工程，插件`Yuanshen`里是角色头像贴图(挂载成`/Yuanshen/<名字>`)，`pak.bat`打成`Plugins/Yuanshen_Pak/Yuanshen.pak`。
 - `Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(`main_story`用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`；另有`WxdjPuzzle`(id `puzzle_wxdj`，回合制战斗小游戏，战斗内核在`Wxdj/Cpp/Wxdj/battle/`，招式表`Wxdj/Resource/act/xiaohua.txt`)，开局由脚本`start_puzzle`触发。
-- `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id为`<concept>_empty`)，用来验证`config.json`按mod id配置的命令行式参数能一路传到mod：构造函数直接接收参数字符串，拼进`GetName()`，详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
+- `Empty/Cpp/Empty/`——22个concept(23个里除Weapon外)各一个`Empty<Concept>`(id为`<concept>_empty`)，用来验证`config.json`按mod id配置的命令行式参数能一路传到mod：构造函数直接接收参数字符串，拼进`GetName()`，详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
 
 ## 目录结构约定
 
@@ -36,7 +36,7 @@
 ## 每个mod DLL必须导出的三个函数
 
 以`Building`概念为例(其余概念符号名把`Buildings`换成对应复数,参见
-`Forever_UE/Source/Core/common/loader.md`的20符号表):
+`Forever_UE/Source/Core/common/loader.md`的23个concept符号表):
 
 ```cpp
 extern "C" __declspec(dllexport) void* GetModBuildings();                    // 返回该dll提供的static id列表
@@ -50,7 +50,7 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory*);   //
 释放对象,保证分配和释放发生在同一模块,不能宿主直接`delete`一个mod `new`出来的对象。
 
 **参数直接交给creator,不经过任何"创建后"钩子**——`config.json`里`"building_mods"`数组
-按id配置的命令行式参数(如`"pengzhan --density 1.0"`)由`BuildingFactory::CreateBuilding(id)`
+按id配置的命令行式参数(如`"building_pengzhan --density 1.0"`)由`BuildingFactory::CreateBuilding(id)`
 在创建实例那一刻,作为参数直接传给注册的creator函数;`RegisterModBuildings`导出函数签名
 不需要、也不会带参数——参数只在creator被调用时才出现。mod的creator决定怎么用这个参数
 (最常见的做法是转发给具体子类的构造函数,如`[](const std::string& args) -> BuildingMod* {

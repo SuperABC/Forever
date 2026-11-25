@@ -12,7 +12,7 @@
 - **Script配置**：`scriptModName`(成员默认空串=不建自定义ScriptMod；Basic的各车型在`SetProperty`里显式设为`script_empty`)+`milestoneNames`，和`JobMod`同一模式；用来驱动"靠近车辆弹出'上车'选项"，车辆自己的milestone脚本在`game_start`时`add_option`，选中后`enter_vehicle`。
 - **下车点**：`exitOffsetX/Y/Z`，车身局部坐标(UE单位，X前/Y右/Z上)，默认车身左侧。下车前用它算世界坐标并检测站不站得下人，站不下就拒绝下车。`exitOffsetZ`默认100而不是0：车身Actor原点在车轮接地点附近，碰撞检测胶囊体是以给定点为中心，若用贴地高度当中心，胶囊下半截会整个扎进地板，永远报"被挡住"。
 - **车型分类不是实例字段**：每个具体子类提供`static const char* GetCategory()`，通过`VehicleFactory::RegisterVehicle`的`CategoryFunc`注册，Core用`VehicleFactory::GetCategory(id)`/`GetIdsByCategory(category)`查，不需要为读种类创建临时实例。多个车型可共用一个种类名，停车位(`ParkingSlot::categories`)按种类挑车型。
-- **操控/搭乘**：`drivable`/`boardable`/`capacity`。公共交通车辆是运动学地沿线路移动的展示物，不接受玩家直接操控。
+- **操控/搭乘**：`boardable`决定线路车辆能否搭乘(UE层`ATransitVehicleElement`据此提供上下车)；`drivable`/`capacity`目前Core和UE层都没有读取——能不能驾驶实际由车辆脚本给不给"驾驶"选项决定。线路车辆运动学地沿线路移动，不接受玩家直接操控。
 - **立方体占位外观**：`sizeX/Y/Z`——`transitMeshPath`为空时，`ATransitVehicleElement`按这个缩放`/Engine/BasicShapes/Cube`。
 - **`transitMeshPath`+`meshTransform`**：公交/火车/飞机这类线路载具的真实网格路径(不给小汽车用，两个字段服务两种外观机制，不要混用)；非空时直接`LoadObject`这个路径当外观，不再按`sizeX/Y/Z`缩放立方体。`meshTransform`只修正这条路径加载出的mesh(缩放+`yawOffsetDegrees`朝向修正)；Actor自身朝向每帧仍由行驶方向决定，两者各管一段。
 - 带存档钩子(含命名计数器)，默认不存任何东西，见`common/mod_state.md`。
@@ -20,7 +20,7 @@
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`。
-- 被谁依赖：`vehicle_factory.h`创建它；`Core/traffic/vehicle.h`消费它；`Source/Forever/Element/VehicleElement`/`TransitVehicleElement`渲染它；具体实现在`Source/Basic/traffic/vehicle_basic.*`。
+- 被谁依赖：`vehicle_factory.h`创建它；`Core/traffic/vehicle.h`消费它；`Source/Forever/Element/VehicleElement`/`TransitVehicleElement`渲染它；具体实现在`Source/Basic/traffic/vehicle_*.h/.cpp`。
 
 ## 待办/后续阶段
 

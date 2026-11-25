@@ -11,7 +11,7 @@
 1. 启用插件 **Skeletal Mesh Editing Tools**，对门的静态网格右键 **Convert to Skeletal Mesh**（Create New 骨架，网格原点会有一根 root 骨）。
 2. 用 Bone Creation 加一根骨（比如`door`），放在门扇的运动原点（平开=铰链处，推拉=门扇中心）；用 Skin Weight 工具把门扇权重 100% 刷给它，门框留在 root。
 3. 新建动画蓝图：父类选 **DoorAnimInstance**，骨架选刚创建的。AnimGraph 里对门扇骨用 Transform (Modify) Bone（旋转/平移量由`OpenProgress`驱动，需要的话乘`OpenSide`）→ Output Pose；也可以用 Sequence Evaluator 把`OpenProgress`映射到动画时间。
-4. 把骨骼网格和动画蓝图类（`…_C`）的路径填进 Basic 的 `door_assets.h`（当前所有门共用一对），重启编辑器。
+4. 把骨骼网格和动画蓝图类（`…_C`）的路径填进对应建筑/园区 mod 的 `doorSpecs[<门标签>]`（`Layout()` 里，见 `Dependence/map/building_mod.md`），重新编译 mod。
 
 ## 注意
 - 骨骼网格的包围盒必须是整扇门（含门框）。Forever 层按包围盒把它对齐门洞：X、Y 等比缩放到门宽，Z 独立缩放到门高。

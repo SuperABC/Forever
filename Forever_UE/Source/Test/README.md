@@ -24,7 +24,7 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - perform：各阶段耗时、路线规划 p50/p95/max、每日 tick 耗时，预算见 `budgets.json`(只告警)。
 - world：多种子世界不变量(建筑/房间/车行与步行连通——飞机位不计/人口/账本/股份)；机场恰2个机位且各停一架飞机，港口恰1个船位且停一艘船，所有 stocked 车位(`AssignStockedParking`)开局都停了车。
 - polit：政治域(2026-11-21)，长期行为(选举、政策演化、党代会、权力)全靠它验证，PIE只看第一天的党内选举。纯函数/目录检查；带两党的世界推进>=13个月(步长<=1小时覆盖每月1号12:00~15:00的党代会窗口)，模拟党员按月轮换的出席(全到/部分/没人)，逐步检查选举时点、政策单次变化幅度<=10%且在[min,max]内、执政期数、执政党不开会、start/end通知成对、党首只能是到场者、权力只属于执政党党员、账本总和恒0；跳时间补发、党员死亡被移出、会议室重叠兜底(最多4次)；完整政治日志写到`<out>/polit_logs/polit_seed<S>_<tag>.log`并解析日志交叉验证；同种子两次日志逐字节一致；没启用党派时政策值始终是默认值。世界/econ/save/perf套件也带两党跑。
-- econ：每月经济报表(原 EconSim 的 Reporter，`econ_report.*`)写到 `<out>/econ_digests/econ_report_seed<S>.txt`；分红、倒闭重启场景作为检查项。`Tools/EconSim` 已移除。
+- econ：每月经济报表(`econ_report.*` 的 `Reporter`)写到 `<out>/econ_digests/econ_report_seed<S>.txt`；分红、倒闭重启场景作为检查项。`Tools/EconSim` 已移除。
   用 Core `WorldStep`(与 UE StepWorld 同一份)按日推进，逐日账本守恒，同种子逐日摘要必须一致。
 - save：存档幂等、容器序列化/截断/损坏不崩、人口/社会段读回再存、随机流恢复。
 

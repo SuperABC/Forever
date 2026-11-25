@@ -96,7 +96,7 @@ public:
 	// 当前正在走的指令的目标房间，没有则nullptr（存档时用来把走路中的市民记成"已经到了"）。
 	Room* GetCurrentDestination() const;
 	// 当前FollowPath指令的剩余路径（世界坐标，第一个点是市民当前位置）和目标房间。没有可走的指令返回false。
-	// 市民被流式销毁时用它把行进交还给Core（Citizen::ResumeWalk），"你在去哪"折线也用它。
+	// 市民被流式销毁时用它把行进交还给Core（Citizen::BeginWalk/BeginWalkToGreen），"你在去哪"折线也用它。
 	// 目的地是绿化区时outDestination为空、outGreen/outGreenCircle有值(不关心绿化区的调用方可以不传后两个，但这时要自己判断返回true且outDestination为空的情况)。
 	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination, Green** outGreen = nullptr, int32* outGreenCircle = nullptr) const;
 	// 当前正在走的指令的目的地是绿化区的圆时返回true。

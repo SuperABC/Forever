@@ -15,7 +15,7 @@
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`。
-- 被谁依赖：`asset_factory.h`创建它；`Core/player/asset.h`/`player.h`消费它；具体实现在`Source/Basic/player/asset_basic.*`。
+- 被谁依赖：`asset_factory.h`创建它；`Core/player/asset.h`/`player.h`消费它；具体实现在`Source/Basic/player/asset_*.h/.cpp`。
 
 ## 待办/后续阶段
 

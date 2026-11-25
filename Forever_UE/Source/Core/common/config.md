@@ -94,8 +94,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   "多选一激活"（和`main_story`单独一个字段、决定主线挂载哪个`ScriptMod`是两件事）。
 - **`IsModIdEnabled`/`IsDllActive`/`GetActiveDllPaths`/`GetModDependences`**：给游戏启动
   配置界面的依赖校验用。`IsModIdEnabled(id)`不看concept，只要id在任意一个已启用的
-  `(concept, modId)`里出现过就算数（mod id不带concept前缀，不能靠字符串猜它属于哪个
-  concept）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
+  `(concept, modId)`里出现过就算数（不解析id里的concept前缀）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
   加载/不加载，这个函数只管"要不要加载这个DLL"，和下面的依赖声明粒度无关）；
   `GetModDependences(modId)`按modId查`AddDllPath`探测阶段缓存的、来自
   `GetModDependences()`导出符号的依赖声明——粒度是单个mod id，不是DLL：同一个DLL
@@ -153,7 +152,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - `<concept>_mods`条目里的`--seed N`：该mod自己的随机流种子，如`"building_residence_high --seed 7"`；不写=随机。实际用到的种子在开局时打到日志(`Random: ...`)，想复现就把它填回去。
 
 ## 地图大小
-- 顶层`"map_size"`：新开局的地图边长(地图元素，1元素=10m)。写一个数=正方形(`"map_size": 256`)，写`[宽,高]`=长方形；不是正整数或格式不对就告警当没配置。`Config::GetMapSize`只做格式解析，"必须是2的整数次幂"由`AForeverFrameworkActor`校验(不满足告警并用默认1024)。读档时地图大小来自存档，不受它影响。`SaveConfig`会原样写回。
+- 顶层`"map_size"`：新开局的地图边长(地图元素，1元素=10m)。写一个数=正方形(`"map_size": 256`)，写`[宽,高]`=长方形；不是正整数或格式不对就告警当没配置。`Config::GetMapSize`只做格式解析，"必须是2的整数次幂"由`AForeverFrameworkActor`校验(不满足告警并用默认1024)。读档时地图大小来自存档，不受它影响。`WriteConfig`会原样写回。
 
 ## 参数字符串读写（GetModArgs / SetModArgs）
 `GetModArgs/SetModArgs(conceptKey, modId[, args])`读写某个mod的整串参数（如`--path=x --skip`）。已启用的mod读写`conceptMods`；**未启用的读写内存暂存表`stashedModArgs`**（key=jsonKey+'

@@ -256,7 +256,7 @@ vector<ScriptAction> Script::MatchEvent(Event* event, ScriptContext context, Pos
 	}
 	actives.insert(actives.end(), tmps.begin(), tmps.end());
 
-	// WrapScript返回的是mod->actionStack这一层的引用（本体活在mod自己的堆上，见ScriptMod.h），
+	// WrapScript返回的是mod->actionStack这一层的引用（本体活在mod自己的堆上，见script_mod.h），
 	// 这里立刻拷贝成Script/Core自己分配的vector（ScriptAction只是两个裸指针的variant，拷贝本身
 	// 不跨堆），再AutoPop弹出mod那一层——拷贝必须在AutoPop之前，AutoPop一旦执行，前面这个引用
 	// 就失效了。

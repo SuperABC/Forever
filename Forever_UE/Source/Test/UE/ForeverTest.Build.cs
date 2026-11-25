@@ -1,6 +1,6 @@
 using UnrealBuildTool;
 
-// 带画面的UE自动化测试模块：只在命令行带 -ForeverTest=<套件> 时才激活，见 ForeverTestSubsystem.md。
+// 带画面的UE自动化测试模块：只在命令行带 -ForeverTest=<套件> 时才激活，见 Source/Test/README.md。
 // 独立模块(不在Forever模块目录里)，依赖Forever的导出类；不进发行包。
 public class ForeverTest : ModuleRules
 {

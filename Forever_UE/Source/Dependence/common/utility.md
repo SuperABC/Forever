@@ -5,15 +5,15 @@
 提供跨全部domain复用的原语——`ValueType`（脚本引擎的值类型，
 `std::variant<int, double, bool, std::string>`）及其与字符串的相互转换（`ToInt`/`ToDouble`/
 `ToBool`/`ToString`/`FromString`）、`Container`键值查询接口、`Time`日期时间类、`Counter`倒计时
-计数器、`debugf`调试输出、`GetRandom`/`GetRandomNormal`随机数。`story/condition.h`（脚本
+计数器、`debugf`调试输出、`GetRandom`/`GetRandomNormal`随机数。`story/expression.h`（脚本
 表达式引擎）、`map/general_geometry.h`（几何原语）都直接依赖这里的`ValueType`/`OBJECT_HOLDER`宏。
 
 ## 关键设计
 
 - **头文件不`#include <windows.h>`/`<strsafe.h>`**——`debugf`签名是
   `debugf(const char* format, ...)`，`<windows.h>`（`OutputDebugStringA`实现用）只在
-  `utility.cpp`里出现。这个头文件会被`condition.h`/`general_geometry.h`间接include，进而被
-  `story_mod.h`等Dependence层Mod接口headers传递依赖，最终被`Forever_Mod`下的Mod DLL和
+  `utility.cpp`里出现。这个头文件会被`expression.h`/`general_geometry.h`间接include，进而被
+  `script_mod.h`等Dependence层Mod接口headers传递依赖，最终被`Forever_Mod`下的Mod DLL和
   UE侧`Forever`模块都间接include——和`Core/common/loader.md`"头文件不
   `#include <windows.h>`，句柄只在.cpp里出现"的约定一致，避免和UE的`CoreMinimal.h`宏
   冲突。

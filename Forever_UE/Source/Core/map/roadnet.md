@@ -82,7 +82,7 @@
     锚点时用的是同一个公式，两处必须保持一致。
   - **`roadMargin`不需要判断lot落在road哪一侧**——既然两侧最外缘到连线的距离永远都等于
     `GetTotalWidth()/2`，margin不管lot在哪一侧结果都一样，直接`road.GetTotalWidth()*0.5f`
-    即可，不需要分side。`ForeverRoadnetFrameworkComponent.cpp`的`BuildOpeningMeshes`按
+    即可，不需要分side。`ForeverRoadnetFrameworkComponent.cpp`的`BuildRoadInstances`(开口部分)按
     "cube以连线为中心对称展开"写（`cx±perp*halfWidth`），`totalWidth`来源是
     `road->GetTotalWidth()`。
 - **路口高度（`curbZ`）：路缘角点/导航锚点的基准点是沿road实际曲线采样出来的点，不是

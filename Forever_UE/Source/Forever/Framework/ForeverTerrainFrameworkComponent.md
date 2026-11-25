@@ -2,7 +2,7 @@
 
 ## 职责
 
-对应旧Framework Actor `Terrain`（C++ Base: `TerrainBase`）。负责动态LOD（clipmap式）地形网格、
+负责动态LOD（clipmap式）地形网格、
 隧道口侧壁mesh的生成，以及随玩家位置更新LOD；同时用`FTerrainMaterialBuilder`生成唯一的地形材质实例(见"地形材质"一节)。
 
 ## 关键设计
@@ -44,9 +44,7 @@
 落在某条边外侧的确定在矩形外，收进`survivingPieces`；4条边都在内侧的才是洞，丢弃；每个格子独立裁剪，不依赖"hatch完全落在单一格子内"。
 没被切到的小格仍是共享网格顶点的普通两个三角形，完全在洞里的丢弃，被切到的保留洞外部分——角点复用网格顶点（无裂缝、法线连续，包含格子里的细化高度），
 只有矩形边上的交点追加新顶点，高度是原三角形平面上的3D线性插值（落在原渲染表面上，含LOD接缝修正）。绕序和主网格同一套(`(p0,p[i+1],p[i])`)。
-- **已删除**：原先对`construction`格子(平地)在`levelIdx<=1`用`LookupTerrain`整格替换成"一格一个正方形面片"的简化(没有hatch的construction格子只有2个三角形)。
-  它的格子边只有四角高度，和邻格的细分顶点对不上，相邻格子之间会出现缝隙；`clipGridCell`的裁剪已经能在稠密网格上正确处理hatch，所以整套`LookupTerrain`/`FTerrainTri2D`/`FanTriangulate`都去掉了，
-  construction格子现在和别的地形一样走稠密网格(代价：近处construction区域的三角形数比原来多，要看PIE帧率)。
+- **`construction`格子(平地)和别的地形一样走稠密网格**，不做"一格一个正方形面片"的简化：简化后的格子边只有四角高度，和邻格的细分顶点对不上，相邻格子之间会出现缝隙(不要再这样做)；hatch由`clipGridCell`在稠密网格上裁剪。代价是近处construction区域的三角形数多一些。
 - **不要改回"轴对齐外接矩形减矩形+角落补丁三角形"的近似**：它假定hatch整个落在单一格子内，而隧道口hatch（一段Connection的长度，1.5~2.5地图单位）经常跨2~3个格子，
   会挖出AABB粗糙洞、缺角落垫平，玩家沿路走进隧道口会因缺失的地形碰撞穿模掉下去。
 
@@ -67,7 +65,7 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 
 ## 地形材质
 
-一张材质`M_Terrain`负责所有LOD、所有地形(旧的Near/Far两套材质、CPU生成的近处控制纹理、`NearTerrainBlend`、`terrainIndexMap`已全部删除，没有兜底)。
+一张材质`M_Terrain`负责所有LOD、所有地形(没有Near/Far两套材质，也没有CPU生成的控制纹理，没有兜底)。
 材质**不读网格UV**，全部用世界坐标(`AbsoluteWorldPosition/1000`=element坐标)；`CreateMeshSection`不传UV。数据侧在`TerrainMaterialBuilder.h/.cpp`，材质图是`Tools/TerrainMaterial/terrain_material.hlsl`(单个Custom节点)，生成脚本见`Tools/TerrainMaterial/README.md`。
 
 **材质声明在各地形mod里**：`TerrainMod::SetupTexture()`里调`SetMaterial(...)`声明1~2层(UE贴图资产路径、平铺米数、是否三向投影)和选择器(`None`/`Slope`坡度/`WaterDepth`水深)及范围；
@@ -103,7 +101,7 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 - 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针；`GetTerrainAppearances`、`GetWater`）、`Source/Core/map/terrain_coverage.h`（覆盖图烘焙、mip降采样，纯标准库）、
   UE的`ProceduralMeshComponent`/`Water`插件模块（见`Forever.Build.cs`）、`Content/Asset/Terrain/M_Terrain.uasset`(脚本生成)、
   各地形mod声明的贴图(`Content/3rdParty/Megascans/Surfaces/*`、`Content/Asset/Terrain/Plain/*`)。
-- 被谁依赖：`AForeverFrameworkActor`（`CreateDefaultSubobject`创建、`EnsureTerrainGenerated()`里调用`GenerateTerrain`）、
+- 被谁依赖：`AForeverFrameworkActor`（`CreateDefaultSubobject`创建、`GenerateTerrainMesh()`里调用`GenerateTerrain`）、
   `AForeverPlayerGameMode`（`GetMapCenterWorldLocation()`算出生点）、`UForeverTrafficFrameworkComponent`（`IsInsideLodLevel`）。
 
 ## 待办/后续阶段

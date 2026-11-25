@@ -4,7 +4,7 @@
 
 ## 1. `.md`配对文档模板
 
-每个逻辑独立的`.h`/`.cpp`(一个类或紧密相关的一组类)配一份同名`.md`,记录设计思路,取代代码里的大段中文块注释。**Dependence/Core/Basic层强制要求**;Forever UE模块层的类也建议配,尤其是逻辑不止"数据搬运"的类。一批没有独特逻辑的空实现(如早期的`<Concept>Mod`/`<Concept>Basic`占位骨架)可以共用一份文档,避免大量重复样板文字;某个成员从占位升级为真正实现后,要从共用文档"毕业",改配自己的独立`.md`。
+每个逻辑独立的`.h`/`.cpp`(一个类或紧密相关的一组类)配一份同名`.md`,记录设计思路,取代代码里的大段中文块注释。**Dependence/Core/Basic层强制要求**;Forever UE模块层的类也建议配,尤其是逻辑不止"数据搬运"的类。一批没有独特逻辑的同类实现(如`Forever_Mod/Empty`里各concept的`Empty<Concept>`占位、Basic里同一批小游戏)可以共用一份文档,避免大量重复样板文字;某个成员从占位升级为真正实现后,要从共用文档"毕业",改配自己的独立`.md`。
 
 ```
 # <ClassOrFileName>
@@ -35,9 +35,9 @@
 - 文件名、domain文件夹名:snake_case(如`building_mod.h`、`map/`)
 - 只用`std::`容器和纯C++类型,**不出现任何UE头文件/类型**(`FString`/`TArray`/`UObject`等一律禁止),因为Mod侧是不依赖UE运行时的纯Win32 DLL,依赖二进制兼容
 - 函数级中文说明移入配对`.md`,代码里不再写块注释;非显而易见的行内WHY注释仍可保留
-- 前向引用集中在`Core/common/class.h`:按domain分组(`// Common`/`// Map`/`// Populace`/`// Society`/`// Story`/`// Industry`/`// Traffic`/`// Player`)声明所有跨文件用到的`class Foo;`。Core下其余`.h`/`.cpp`不再自己写任何前向引用,一律`#include "class.h"`(项目IncludePath已把`Core/common`加进去,不用带`common/`前缀);新增一个需要前向引用的类型时,直接加进`class.h`对应分组,不要在具体文件里就地声明
-- **每个concept的`.h`必须配一份同名`.cpp`,哪怕逻辑全写在`.h`里(纯虚接口+inline构造函数之类)也要建**——让每个头文件都有一个专属的编译单元:①验证头文件本身`#include`齐全、不依赖"被别的头文件带出来的东西"才能编译(header self-contained检查);②和`.md`配对文档、vcxproj里`ClCompile`/`ClInclude`成对出现的既有习惯保持一致。新增一个`<Concept>Mod`/`<Concept>Factory`/`<Concept>Basic`时,`.h`/`.cpp`要一起建,`.cpp`记得同步加进对应`.vcxproj`的`ClCompile`和`.vcxproj.filters`的对应Filter——这一项反复出现过筛选器/编译列表漏加的问题,新建文件后务必两处一起检查。
-- **文件头`#include`顺序+空行规则**(完整示例见`Core/map/map.h`/`.cpp`和`Basic/map/terrain_basic.*`/`Dependence/map/terrain_mod.h`/`terrain_factory.*`):
+- 前向引用集中在`Core/common/class.h`:按domain分组(`// Common`/`// Map`/`// Populace`/`// Society`/`// Story`/`// Industry`/`// Traffic`/`// Player`/`// Polit`)声明所有跨文件用到的`class Foo;`。Core下其余`.h`/`.cpp`不再自己写任何前向引用,一律`#include "class.h"`(项目IncludePath已把`Core/common`加进去,不用带`common/`前缀);新增一个需要前向引用的类型时,直接加进`class.h`对应分组,不要在具体文件里就地声明
+- **每个concept的`.h`必须配一份同名`.cpp`,哪怕逻辑全写在`.h`里(纯虚接口+inline构造函数之类)也要建**——让每个头文件都有一个专属的编译单元:①验证头文件本身`#include`齐全、不依赖"被别的头文件带出来的东西"才能编译(header self-contained检查);②和`.md`配对文档、vcxproj里`ClCompile`/`ClInclude`成对出现的既有习惯保持一致。新增一个`<Concept>Mod`/`<Concept>Factory`或Basic里的一个mod时,`.h`/`.cpp`要一起建,`.cpp`记得同步加进对应`.vcxproj`的`ClCompile`和`.vcxproj.filters`的对应Filter——这一项反复出现过筛选器/编译列表漏加的问题,新建文件后务必两处一起检查。
+- **文件头`#include`顺序+空行规则**(完整示例见`Core/map/map.h`/`.cpp`和`Basic/map/terrain_ocean.*`/`Dependence/map/terrain_mod.h`/`terrain_factory.*`):
   - `.h`:`#pragma once`,空一行,`#include "class.h"`(仅Core层、且这个文件确实用到前向引用类型时才有这一条),空一行,Dependence的`#include`(本文件直接用到的Dependence头,只在文件内部之间不空行),空一行,Core的`#include`(同上,只有Core层文件才可能有这一组),空一行,`<>`系统头(`<string>`等,组内不空行)。以上每一组如果本来就是空的直接跳过,不留空行占位。
   - `.cpp`:先`#include "同名.h"`(自己的头),空一行,再按`.h`同一套顺序(class.h/Dependence/Core/系统头)继续写。
   - 所有`#include`写完之后,如果这个文件有`#define`,紧跟一个空行再写`#define`块(块内的多组`#define`之间可以按语义拆成小节、组间各空一行,这是普通代码分段,不是这条规则管的范围)。
@@ -55,6 +55,8 @@
 - `Source/Dependence`、`Source/Core`:两个独立的VS静态库工程(`.vcxproj`),与UE完全无关的纯C++,产出`.lib`到工程根目录`x64/<Config>/`。用独立的`Source/Framework.sln`维护,和UE自动生成的`Forever.sln`完全解耦。
 - `Source/Basic`:**动态库工程**(`ConfigurationType=DynamicLibrary`),产出`Basic.dll`到同一个`x64/<Config>/`目录,但**不会**被`Forever.Build.cs`静态链接——它是内置的默认Mod集合,和`Forever_Mod/`下的第三方Mod地位完全相同,由`Config`/`ModLoader`在运行时扫描`Basic.dll`导出的`GetMod<Concept>`/`RegisterMod<Concept>`/`FinishMod<Concept>`符号加载。因此`Source/Basic`下的代码要遵守和Mod DLL相同的约束(只`#include` Dependence头文件、只链接`Dependence.lib`、不出现任何UE类型),不能反过来依赖`Source/Core`。
 - `Source/Forever`:UE Runtime模块,通过`Forever.Build.cs`的`PublicAdditionalLibraries`手动链接`Dependence.lib`/`Core.lib`,不链接也不需要链接`Basic`(它在运行时以dll形式被发现)。
+- `Source/Test`:测试。`Test/Core`是`Framework.sln`里的`CoreTest`(不带UE直接跑Core+真实mod dll);`Test/UE`是带画面的UE测试模块`ForeverTest`。用法见`Source/Test/README.md`。
+- **Core和Forever(UE)层不感知任何具体mod**:只处理所有mod共性的内容——通过`<Concept>Mod`基类的字段/虚方法、Factory注册的静态函数指针、脚本词汇表(Change/Event)和mod打交道,不出现具体mod的id、类型名或只对某个mod成立的分支;某个mod需要的新能力要抽象成所有mod都能用的共性接口再加进Dependence。
 - Mod(`Forever_Mod/`下各独立目录,以及`Source/Basic`本身)编译成不依赖UE运行时的纯Win32 DLL,源码级include Dependence头文件+链接`Dependence.lib`来继承`BuildingMod`等抽象基类,运行时被`LoadLibrary`/`GetProcAddress`加载。这是Dependence/Core必须保持engine-agnostic、Basic和Mod必须只依赖Dependence的根本原因。
 - 非UE资源(`layouts`/`story`脚本等)放在`Forever_UE/Resource`下,与`Source`、`Content`平级,不挂在`Source`目录里;任何读取这类资源路径的代码都要用这个位置。
 
@@ -71,7 +73,7 @@
 ## 5. `<Concept>Mod`/`<Concept>Factory`可扩展点的既定设计
 
 - `<Concept>Factory`和对应的`<Concept>Mod`**同放在`Source/Dependence`,不放在`Source/Core`**——Mod DLL只链接`Dependence.lib`,如果`Factory`的方法实现编译进`Core.lib`,Mod就无法调用`factory->RegisterXxx(...)`这个方法。
-- **`GetId()`不放进`<Concept>Mod`基类**,只是具体mod子类自己的静态方法约定(如`PengzhanBuilding::GetId()`),不通过基类指针调用,也不是DLL导出符号本身。
+- **`GetId()`不放进`<Concept>Mod`基类**,只是具体mod子类自己的静态方法约定(如`ResidenceHighBuilding::GetId()`),不通过基类指针调用,也不是DLL导出符号本身。**所有mod id一律是`<concept>_<name>`**(如`building_residence_high`),每个concept的占位mod叫`<concept>_empty`;`Source/Basic`里每个mod一组以自己id命名的文件(`<id>.h/.cpp/.md`)。
 - **给mod传参数的唯一路径是`Factory::SetModArgs`+`Create<Concept>(id)`创建实例那一刻把参数字符串直接传给注册的creator函数**,不经过DLL导出函数的参数,也不经过创建后再调用的钩子方法。`config.json`里每个concept一个`"<concept>_mods"`数组,元素是`"id"`或`"id 参数..."`(命令行式写法);`CreateFunc`的函数指针类型是`<Concept>Mod*(*)(const std::string&)`,`RegisterX`只登记creator/deleter,不复制参数;mod自己的creator决定怎么用参数(传给具体子类构造函数最常见)。**参数串统一用`Dependence/common/mod_args.h`的`ModArgs`解析**(`--key value`/`--key=value`/`--flag`，取值带默认值和范围夹取，见`mod_args.md`)，mod里不要再自己`istringstream`/`find("--xxx")`手写解析。**两个被否掉的方案不要重新尝试**:按`dll_paths`根目录配一份共用参数经导出函数传给mod(和"每个mod id有自己的参数"的真实需求对不上);创建实例**之后**再调用`instance->ApplyArgs(args)`钩子(此时构造函数已经跑完,`const`成员没法再赋值,参数到手已经太晚)。
 - **所有`XxxMod`具体子类的`GetName()`返回值必须在整个进程生命周期内全局唯一**——不能是固定的类型名字符串,同一类型创建多个实例时每个实例的名字都要不一样。统一用`static int count`+构造函数`id(count++)`+`GetName()`里现拼`name = <前缀> + std::to_string(id)`返回`name.data()`这个固定模式实现:
 
@@ -94,7 +96,7 @@ const char* OceanTerrain::GetName() {
 
 ## 6. Player类的资产引用方式
 
-Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverGameMode`/`ForeverPlayerState`)不建Blueprint外壳,直接是可用类,用`ConstructorHelpers::FObjectFinder`/`FClassFinder`在构造函数里引用默认资产(骨骼网格、动画蓝图、Input Mapping Context/Action等)。这只是设置默认值,不影响后续换资产或走向运行时数据驱动换装——子类或运行时代码随时可以覆盖这些`EditDefaultsOnly`属性。
+Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverPlayerGameMode`/`ForeverPlayerState`)不建Blueprint外壳,直接是可用类,用`ConstructorHelpers::FObjectFinder`/`FClassFinder`在构造函数里引用默认资产(骨骼网格、动画蓝图、Input Mapping Context/Action等)。这只是设置默认值,不影响后续换资产或走向运行时数据驱动换装——子类或运行时代码随时可以覆盖这些`EditDefaultsOnly`属性。
 
 ## 7. Enhanced Input映射上下文挂在被占有的Pawn上,不挂在Controller上
 
@@ -106,11 +108,12 @@ Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverGameM
 
 ## 9. 外部Mod插件(`Forever_Mod/*`)不在`Framework.sln`里,改公共头文件要记得单独重新编译
 
-`Forever_Mod/Empty`、`Forever_Mod/Test`、`Forever_Mod/Wxdj`各自是独立的`.sln`工程,产出自己的DLL,运行时由`Config`/`ModLoader`按`config.json`的`dll_paths`扫描加载——它们`#include`和`Source/Basic`相同的`Dependence`头文件,但**不会**随`Framework.sln`的编译自动重新生成。修改任何`Source/Dependence`下的头文件(尤其是`<Concept>Mod`基类新增字段)后,除了重新编译`Framework.sln`,**必须额外手动编译这几个外部Mod工程**,否则它们的DLL仍然按旧的(更短的)结构体布局分配对象,Core之后按新布局读取这些对象会读到越界内存,容易表现成"看似随机但其实是读到了旧对象末尾之外的内存"的诡异崩溃或读数(实测复现过一次:一个被追加了新字段的`Mod`基类,某个外部Mod插件没跟着重新编译,导致该插件创建的实例在读取新字段时读出一个看起来合理却完全是垂悬数据的数字)。
+`Forever_Mod/Empty`、`Forever_Mod/Test`、`Forever_Mod/Yuanshen`、`Forever_Mod/Wxdj`各自是独立的`.sln`工程,产出自己的DLL,运行时由`Config`/`ModLoader`按`config.json`的`dll_paths`扫描加载——它们`#include`和`Source/Basic`相同的`Dependence`头文件,但**不会**随`Framework.sln`的编译自动重新生成。修改任何`Source/Dependence`下的头文件(尤其是`<Concept>Mod`基类新增字段)后,除了重新编译`Framework.sln`,**必须额外手动编译这几个外部Mod工程**,否则它们的DLL仍然按旧的(更短的)结构体布局分配对象,Core之后按新布局读取这些对象会读到越界内存,容易表现成"看似随机但其实是读到了旧对象末尾之外的内存"的诡异崩溃或读数(实测复现过一次:一个被追加了新字段的`Mod`基类,某个外部Mod插件没跟着重新编译,导致该插件创建的实例在读取新字段时读出一个看起来合理却完全是垂悬数据的数字)。
 
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "<repo>\Forever_Mod\Empty\Cpp\Empty.sln" /p:Configuration=Release /p:Platform=x64 /m
 & "...\MSBuild.exe" "<repo>\Forever_Mod\Test\Cpp\Test.sln" /p:Configuration=Release /p:Platform=x64 /m
+& "...\MSBuild.exe" "<repo>\Forever_Mod\Yuanshen\Cpp\Yuanshen.sln" /p:Configuration=Release /p:Platform=x64 /m
 & "...\MSBuild.exe" "<repo>\Forever_Mod\Wxdj\Cpp\Wxdj.sln" /p:Configuration=Release /p:Platform=x64 /m
 ```
 

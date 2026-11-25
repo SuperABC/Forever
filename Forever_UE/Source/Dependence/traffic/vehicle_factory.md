@@ -6,7 +6,7 @@
 
 ## 关键设计
 
-- **最小注册表**：没有`Temp`暂存区+`MergeTemp()`两段式注册——全部公开方法(含析构函数)都是`virtual`，调用永远落在构造这个Factory实例的那一侧，registries内部节点的分配和析构使用同一侧的堆分配器，不会跨DLL堆损坏。详见`Source/Dependence/README.md`"关键设计"一节。
+- **最小注册表**：只有`registries`(id->注册项)和`liveInstances`(实例->id)两张表；全部公开方法(含析构函数)都是`virtual`，调用永远落在构造这个Factory实例的那一侧，registries内部节点的分配和析构使用同一侧的堆分配器，不会跨DLL堆损坏。详见`Source/Dependence/README.md`"关键设计"一节。
 - **`creator`/`deleter`是裸函数指针，不用`std::function`**：mod侧注册的都是无捕获lambda，天然可以转成函数指针；`std::function`内部堆缓冲由一侧分配、另一侧释放，实测会在Factory析构时崩溃。
 - **`DestroyVehicle`必须走注册时mod提供的`deleter`**，不能Factory直接`delete`：通过`liveInstances`反查实例对应的注册id再取出`deleter`调用，保证跨DLL的`new`/`delete`成对。
 - **"启用"的含义**：已注册且在`config.json`的`vehicle_mods`数组里列出(即`configuredArgs`里有这个id)才算启用，`CreateVehicle`/`CheckRegistered`/`GetRegisteredIds`都据此判断，见`Source/Core/story/script.md`"mod_dependences"一节。

@@ -100,7 +100,7 @@ private:
 	struct FileCache {
 		std::vector<std::string> nameReserve;
 		std::unordered_map<std::string, ValueType> globalSettings;
-		std::vector<std::string> modDependences; // mod id，不带concept前缀
+		std::vector<std::string> modDependences; // mod id(完整id，如"building_residence_high")
 		std::unordered_map<std::string, Milestone*> milestones;
 	};
 

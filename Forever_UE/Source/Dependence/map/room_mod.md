@@ -9,16 +9,16 @@
 - **不参与地块竞争**：`Room`永远是`Building`在`Layout()`里通过`AssignRoom`/`ArrangeRow`显式创建的，不需要`Assign`/`RandomAcreage`/`GetPower`那套static机制，接口保持`GetType()`/`GetName()`。
 - **`SetProperty()`两段式**：具体子类在这里填下面所有字段，不在构造函数里赋值，Core创建完实例后立刻调一次。
 - **能力声明字段**：`isResidence`+`residenceCapacity`(床位数)、`isWorkspace`+`workspaceCapacity`(工位数)、`isStorage`+`storageType`(StorageMod id)、`rent`(每日房租，分)、`isManufacture`+`manufactureTypes`(产线类型)。各域按这些字段消费(Populace分配住所、Society分配工位、Industry挂仓库/工坊)。
-- **停车位不在这里**：`RoomMod`没有`isParking`/`parkingSpots`。车位几何来自layout的`parkings`，由`BuildingMod::AssignParking`指定挂到哪个房间(见`building_mod.md`)，Core在`Building::Layout`里生成`ParkingSlot`(见`Core/map/room.md`)；`room_parking`只是语义类型。
+- **停车位不在这里**：`RoomMod`不声明车位。车位几何来自layout的`parkings`，由`BuildingMod::AssignParking`指定挂到哪个房间(见`building_mod.md`)，Core在`Building::Layout`里生成`ParkingSlot`(见`Core/map/room.md`)；`room_parking`只是语义类型。
 - **脚本**：`scriptModName`(默认`script_empty`)+`milestoneNames`；非空才创建`Script`。玩家进出这个房间的enter/leave事件只发给它自己的`Script`，不广播，见`Core/map/map.md`"实体脚本"一节。
 - **门**：`doorSpecs`(tag -> `DoorSpec`)，负责`single`/`row`实例化出的房间的门，同一个`RoomMod`类型的所有房间共用这张表，查找规则和建筑门一致，见`feature_spec.h`/`Core/map/door.md`。
-- **家具布局 `Layout(const RoomLayoutInfo&)`**：虚函数，默认空(不影响其他room mod)。Core在`Building::AssignRoom`/`ArrangeRow`里、房间位置/朝向/门窗都设好之后调用，`RoomLayoutInfo`给出房间局部系(u沿正面墙、v朝正面)的宽/深/层高(米)和门窗洞(`RoomOpening`：哪面墙、沿墙起止、离地高度、tag，见`feature_spec.md`)。mod里调**非虚**`AddFurniture(FurnitureSpec)`登记摆放(网格软路径+房间局部u/v/z米+yaw度+缩放)，和`BuildingMod::AddDecoration`同一模式；`furniture`成员在mod里，Core只读(换算成世界坐标存到`Room`)，**Core不得清空/改写这个vector**(跨DLL堆，见`cross_dll_allocator`约定)。Core在`RandomScope(RandomRegistry::GetInstanceStream(mod))`里调`Layout`，所以`GetRandom`可`--seed`复现。结果随地图存档，读档不再重新布局。
+- **家具布局 `Layout(const RoomLayoutInfo&)`**：虚函数，默认空(不影响其他room mod)。Core在`Building::AssignRoom`/`ArrangeRow`里、房间位置/朝向/门窗都设好之后调用，`RoomLayoutInfo`给出房间局部系(u沿正面墙、v朝正面)的宽/深/层高(米)和门窗洞(`RoomOpening`：哪面墙、沿墙起止、离地高度、tag，见`feature_spec.md`)。mod里调**非虚**`AddFurniture(FurnitureSpec)`登记摆放(网格软路径+房间局部u/v/z米+yaw度+缩放)，和`BuildingMod::AddDecoration`同一模式；`furniture`成员在mod里，Core只读(换算成世界坐标存到`Room`)，**Core不得清空/改写这个vector**(跨DLL堆，见`CONVENTIONS.md`第4节)。Core在`RandomScope(RandomRegistry::GetInstanceStream(mod))`里调`Layout`，所以`GetRandom`可`--seed`复现。结果随地图存档，读档不再重新布局。
 - 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
 
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`、`map/feature_spec.h`、`map/general_geometry.h`。
-- 被谁依赖：`room_factory.h`创建它；`Core/map/room.h`/`building.h`消费它；具体实现在`Source/Basic/map/room_basic.*`和外部mod里。
+- 被谁依赖：`room_factory.h`创建它；`Core/map/room.h`/`building.h`消费它；具体实现在`Source/Basic/map/room_*.h/.cpp`(每个房间类型一组文件)和外部mod里。
 
 ## 待办/后续阶段
 

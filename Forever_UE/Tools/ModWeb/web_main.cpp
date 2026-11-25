@@ -1,11 +1,12 @@
-// ModWeb：把真实的C++ puzzle/app(Basic的puzzle_basic.cpp/app_basic.cpp)+游戏里的Phone外壳
+// ModWeb：把真实的C++ puzzle/app(Basic的player/puzzle_*.cpp、app_*.cpp)+游戏里的Phone外壳
 // 编译成WebAssembly，网页只负责显示Canvas像素和转发鼠标/触摸/键盘事件。构建见build_web.bat。
 
 #include <emscripten.h>
 
 #include "host_core.h"
 #include "common/registry.h"
-#include "player/puzzle_basic.h"
+#include "player/puzzle_tetris.h"
+#include "player/puzzle_anykey.h"
 #include "player/puzzle_poker.h"
 #include "player/puzzle_burger.h"
 #include "player/puzzle_miner.h"
@@ -16,19 +17,30 @@
 #include "player/puzzle_coins.h"
 #include "player/puzzle_dance.h"
 #include "player/puzzle_dodge.h"
-#include "player/app_basic.h"
+#include "player/app_bounce.h"
+#include "player/app_notes.h"
 
+#include <cstdarg>
+#include <cstdio>
 #include <string>
 #include <vector>
 
 
 using namespace std;
 
-// Dependence/common/utility.cpp依赖<windows.h>，网页版不编它，这里只提供mod用到的GetRandom。
+// Dependence/common/utility.cpp依赖<windows.h>，网页版不编它，这里只提供用到的GetRandom和debugf。
 int GetRandom(int range) {
 	if (range <= 0) return 0;
 	int value = static_cast<int>(emscripten_random() * range);
 	return value >= range ? range - 1 : value;
+}
+
+// 原生版走OutputDebugString；网页版打到stderr(浏览器控制台)。
+void debugf(const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	vfprintf(stderr, format, args);
+	va_end(args);
 }
 
 namespace {

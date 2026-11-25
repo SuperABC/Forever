@@ -21,7 +21,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   按路径查/建），不是每条Road各自一个ISM——目前所有Road都用同一个`default_1_1`，只会建
   一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
 - **曲线上的节间补缝**：每节是刚性的直段，曲线上相邻两节朝向差`delta`，外侧会张开楔形缝（内侧重叠）。`BuildRoadInstances`把内部接缝处每节的两端各沿自身轴向多伸`e=(W/2)·tan(delta/2)`（`W`=路总宽，`delta`取该节两端切线的水平夹角，`e`不超过节长一半），外侧的角正好碰上；这一段首尾（靠路口/开口）的那一端不伸。直路`delta=0`不变。内侧会有重叠，路面材质按世界坐标取样所以不闪，但没在PIE里确认。**头尾倾斜(2026-11-20)**：每节实例的头抬高、尾压低`ROAD_TILE_TILT`(1e-5地图单位=0.01cm，中心高度不变)，整节微微倾斜，内侧重叠处后一节的头压在前一节的尾上，避免共面z-fighting(开口旁的免人行道单段同样处理)；是权宜办法，要根治得用样条网格(`USplineMeshComponent`，弯路节用、直路仍ISM)或材质WPO形变。ISM是刚性实例，做不到像样条网格那样真正沿曲线弯曲，要彻底消除得改成CPU变形的程序网格。
-- **开口按侧处理**（`BuildRoadInstances`一并完成，原来的`BuildOpeningMeshes`已删）：同一条路上重叠的`RoadOpening`先合并成一段
+- **开口按侧处理**（`BuildRoadInstances`一并完成）：同一条路上重叠的`RoadOpening`先合并成一段
   （同一物理开口的车行/行人两条同t同宽，合并后只处理一次），每段记录落在哪一侧（`RoadOpening.forwardSide`，true=side0）。
   - **开口只在一侧、这侧有人行道、且`Road::GetSidewalkFreeMesh(side)`配了无人行道资产（能加载）**：开口段不画整宽cube，
     改成**一个**拉伸到开口长度的无人行道资产实例（开口一般不大，不重复铺），另一侧人行道原样保留，缺的人行道区域
@@ -52,10 +52,10 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   （私有实现，给车行/行人各调一次），由`bShowNavigationDebug`（`EditAnywhere`，目前默认false）开关控制，
   关闭时显式`ClearMeshSection(0)`（不是跳过不生成，避免旧可视化mesh残留在场景里）。公开成
   独立方法是因为运行时往导航图里新增锚点/边之后需要能重新调用它刷新可视化。
-  - `AppendQuadDoubleSided`（匿名namespace自由函数）：四个角点无论以什么环绕顺序传入，两个
+  - `RoadnetAppendQuadDoubleSided`（匿名namespace自由函数）：四个角点无论以什么环绕顺序传入，两个
     方向的三角形都画一遍——debug mesh的box/ribbon朝向五花八门，不值得为每个面单独推导
     "哪个环绕顺序才是正面朝上"，双面画一遍最省心，只是调试用不追求正确光照。
-  - `AppendNavBox`：给每个锚点画一个轴对齐的小长方体（6个面都调`AppendQuadDoubleSided`），
+  - `AppendNavBox`：给每个锚点画一个轴对齐的小长方体（6个面都调`RoadnetAppendQuadDoubleSided`），
     水平半边长`NAV_DEBUG_NODE_HALF_SIZE=40`，竖直范围`[锚点真实Z+ROADNET_HEIGHT_EPSILON,
     该值+NAV_DEBUG_HEIGHT]`——用锚点自己的真实Z（不是固定0），隧道场景下的锚点会正确显示
     在地下。`AppendNavEdgeRibbon`：两端锚点的box顶面高度之间连一条细双面ribbon
@@ -85,7 +85,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 这几条约束是路口mesh和开口cube正确衔接的前提，改动相关代码时要留意：
 
 - **三角形环绕顺序**：UE（左手坐标系）要求从上方看是"顺时针"（标准数学XY凸包意义下的负向
-  面积）才是正面朝上——`BuildOpeningMeshes`/`BuildJunctionMeshes`的顶点顺序要和
+  面积）才是正面朝上——`BuildJunctionMeshes`的顶点顺序要和
   `ForeverTerrainFrameworkComponent::BuildLevel`已验证过的`(v00,v11,v10)/(v00,v01,v11)`
   模式一致。道路本身用真实静态网格资产（`default_1_1`），环绕顺序是资产自带的，不受这条
   约束影响。

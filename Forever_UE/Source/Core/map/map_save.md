@@ -114,6 +114,5 @@ Building 在 `lodMaterialPath` 之后多存一个字符串 `gapMaterialPath`（�
 
 ## 车位
 
-房间段里`isParking`/`parkingSpots`已删，改写车位列表：每个车位存几何(centerX/Y、halfWidth/Depth)、direction、categories、导航节点id；
-占用(`reservedBy`/`parkedVehicle`)不存，读档时由`traffic_save`按车辆的`parkState`/`parkingSlotIndex`重建。楼层段新增`parkings`矩形列表。
-(按项目约定没有bump版本、没有迁移，旧档会不兼容。)
+房间段写车位列表：每个车位存几何(centerX/Y、halfWidth/Depth)、direction、categories、导航节点id；
+占用(`reservedBy`/`parkedVehicle`)不存，读档时由`traffic_save`按车辆的`parkState`/`parkingSlotIndex`重建。楼层段有`parkings`矩形列表。

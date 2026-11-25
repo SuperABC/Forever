@@ -29,7 +29,7 @@
 ### 开火：每颗弹丸一条射线、一个事件
 - `FireHitscan`：起点是摄像机位置(保证"看哪打哪")，`pelletCount`颗弹丸各在`baseSpread`圆锥内随机方向打一条射线，先把所有弹丸的结果都算好(只读场景)，再依次发事件(事件里的Change可能让市民死亡、换枪，每发之前核对武器还在)。
 - `ApplyRecoil`一次开火只踢一次(下一发的朝向)。`fire`取`GetActiveMuzzleWorldLocation`(没有模型退回摄像机位置)，`asset`取`GetActiveWeaponWorldLocation`(武器模型位置，没有退回角色位置)。
-- 没有飞行弹道/曳光线(2026-11-17删了`UForeverBulletSubsystem`)，枪口到命中点的光线以后由脚本放特效Change实现。
+- 没有飞行弹道/曳光线，枪口到命中点的光线以后由脚本放特效Change实现。
 
 命中点特效不再由C++放：`Resource/Story/weapon_*.script`每次开火在`hit`处`spawn_effect`枪击特效蓝图(`/Game/Asset/Effects/BP_BulletImpact`)，打墙/地面/市民都放。目前没有枪口火光的真实VFX资产。
 

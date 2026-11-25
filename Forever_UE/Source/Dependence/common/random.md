@@ -11,7 +11,7 @@
 ## 谁来设作用域
 - 带mod id的：各Factory在Create时`BindInstance(instance, id)`，宿主包装类(Terrain/Roadnet/Zone/Building/Name/App/Puzzle)调mod虚函数前`RandomScope scope(RandomRegistry::GetInstanceStream(mod))`；static函数指针入口(`BuildingFactory::RandomAcreage/Assign/...`、`ZoneFactory::Assign`)在Factory里按id取流。mod代码里的`GetRandom(n)`一个字不用改。
 - Core域级入口：函数开头`CORE_RANDOM_SCOPE("core.map")`(map/populace/society/polit/traffic/weather/story；政治域选举/党首投票/抽党员/平票裁决用`core.polit`)。UE层`ForeverTrafficFrameworkComponent`里选线路/车位也用`core.traffic`。
-- 漏包的随机会退回不可控随机并计入`UnscopedDraws()`；开局最后一个生成阶段、EconSim结尾都会打出这个数(应为0)。新增mod虚函数里要用GetRandom时，记得宿主调用点包作用域。
+- 漏包的随机会退回不可控随机并计入`UnscopedDraws()`；UE开局最后一个生成阶段会打出这个数，CoreTest也检查它(应为0)。新增mod虚函数里要用GetRandom时，记得宿主调用点包作用域。
 
 ## 种子
 - `<concept>_mods`条目`--seed N` → 该mod流；顶层`"seed"` → Core各域(`hash(seed,域名)`)。不给=`random_device`，实际种子写日志`Random: <key> seed=N`。

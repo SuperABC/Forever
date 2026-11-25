@@ -1632,7 +1632,7 @@ void UForeverStoryFrameworkComponent::ShowCurrentItem() {
 
 	// 对话展示期间切UIOnly:Pawn的Enhanced Input收不到输入，Jump/Move/MeetOption不会误触发(GameAndUI下按空格推进对话角色会跳)。
 	// 代价是SectionSpeaking的空格推进改走NativeOnKeyDown，所以widgetToFocus必须是当前显示的Widget才能拿到键盘焦点
-	// (见USectionSpeakingWidget.h)。每次都设一遍，重复设置无副作用。
+	// (见UI/SectionSpeakingWidget.h)。每次都设一遍，重复设置无副作用。
 	playerController->bShowMouseCursor = true;
 	UWidgetBlueprintLibrary::SetInputMode_UIOnlyEx(playerController, widgetToFocus, EMouseLockMode::DoNotLock, false);
 }

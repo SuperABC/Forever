@@ -79,7 +79,7 @@ MeetOption交互选项。
 ## 待办/后续阶段
 
 - 骨骼组件+动画实例比静态网格贵；每帧生成/销毁数量由`ForeverDoorFrameworkComponent`的`maxSpawnsPerFrame`(4)/`maxDespawnsPerFrame`(8)限流，PIE看卡顿再调。
-- 所有门（entrance/room/home/园区门）目前共用同一个测试门资产，见`Basic/map/door_assets.h`；之后按尺寸/用途分资产。
+- 门的骨骼网格/动画蓝图路径由各建筑/园区mod在`Layout()`里按门标签填进`doorSpecs`(如`doorSpecs["entrance"]`)，Basic里目前大多数建筑共用同一对测试门资产；之后按尺寸/用途分资产。
 - NPC寻路不按门的开合/门禁绕路；挡板关着时NPC靠触发盒开门通过。
 
 ## 包围盒

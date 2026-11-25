@@ -72,7 +72,7 @@ namespace {
 		return report;
 	}
 
-	// 从EconSim搬来的场景：分红路径、倒闭->股东集资重启。每个场景后账本总和仍必须为0。
+	// 经济场景：分红路径、倒闭->股东集资重启。每个场景后账本总和仍必须为0。
 	void RunEconScenarios(TestWorld& world, const WorldDomains& domains) {
 		TestRun& run = TestRun::Get();
 		Ledger& ledger = world.society->GetLedger();
@@ -144,7 +144,7 @@ void EconSuiteBody(TestWorld& world, const TestOptions& options) {
 	Reporter::ServiceTotals totals;
 	hooks.onImmigrated = [&](Citizen* arrived) { immigrantSet.insert(arrived); finance.immigrated++; };
 
-	// 月度经济报表(EconSim的Reporter)：只在父进程第一遍("a")写，同一份摘要比对不受影响。
+	// 月度经济报表(econ_report.h的Reporter)：只在父进程第一遍("a")写，同一份摘要比对不受影响。
 	unique_ptr<Reporter> reporter;
 	const string reportDir = EnvOr("CORETEST_ECON_DIR", "");
 	if (!reportDir.empty() && EnvOr("CORETEST_ECON_RUN", "a") == "a") {

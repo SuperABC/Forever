@@ -67,7 +67,7 @@
 
 把玩家操控权切到指定姓名（`name`，表达式）的市民。Core不知道`AActor`/`APlayerController`，所以由Forever层拦截处理
 （`UForeverStoryFrameworkComponent::ApplyControlChange`：求值姓名 → `FindOrSpawnCitizenByName` → `Possess`），
-见`Forever/Framework/ForeverStoryFrameworkComponent.md`。典型用法是`test.json`里放`{"type":"place_holder","label":"control"}`，
+见`Forever/Framework/ForeverStoryFrameworkComponent.md`。典型用法是剧情`.script`里放`{"type":"place_holder","label":"control"}`，
 `EmptyScript::WrapScript`向Core要一个随机citizen姓名后构造`ChangeControlChange`替换占位（`Forever_Mod/Empty/Cpp/Empty/empty_mods.h`）；
 被替换进去的对象必须由mod长期持有（`EmptyScript`的成员），不能是每次现场`new`的临时对象。
 
@@ -98,7 +98,7 @@
 - `vehicle_navigate`(vehicle, destination)：让载具由Controller开到`destination`（房间地址表达式；字面量`"random"`=随机一个有车行节点的地下室房间，目前只有工厂）。
   到达后给这辆车自己的script发`vehicle_arrive`事件，在该事件里再发`vehicle_navigate`就是连续随机导航（可用来写随机导航压力测试）。
   UE层`UForeverTrafficFrameworkComponent::NavigateVehicle`执行：请求入队、每帧按`maxVehicleSpawnsPerFrame`处理，必要时生成车辆Actor。
-- `visualize_navigation`(address)：给玩家显示到某个房间(目前只支持房间地址，表达式)的导航线。玩家步行按人行道画，开车按车道画（车到不了的房间画到该建筑1楼外部连接点附近的车道），其它Pawn（公交乘客等）不画；切换操控自动刷新，玩家进入目标房间后消失。UE层`UForeverTrafficFrameworkComponent::StartGuide`执行。合并了原来的`test_navigate_vehicle`/`test_navigate_citizen`。
+- `visualize_navigation`(address)：给玩家显示到某个房间(目前只支持房间地址，表达式)的导航线。玩家步行按人行道画，开车按车道画（车到不了的房间画到该建筑1楼外部连接点附近的车道），其它Pawn（公交乘客等）不画；切换操控自动刷新，玩家进入目标房间后消失。UE层`UForeverTrafficFrameworkComponent::StartGuide`执行。
 - 以上全部只能在UE层执行，`AForeverFrameworkActor::ApplyChange`里`dynamic_cast`转发给对应Component。
 - **注意**：同名的`enter_vehicle`/`leave_vehicle`也是事件类型（见`event.md`），事件是"发生了"的通知，Change是"去做"的指令，
   `BuildEvent`/`BuildChanges`各自识别，互不冲突。

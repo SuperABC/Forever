@@ -16,7 +16,7 @@ struct WorldStage {
 };
 
 // 一个完整的无画面世界(和AForeverFrameworkActor同一个编排顺序，去掉UE可视化步骤)。
-// 故意不析构：Core对象之间互相持有裸指针，进程随后就退出，和EconSim一致。
+// 故意不析构：Core对象之间互相持有裸指针，进程随后就退出。
 struct TestWorld {
 	Map* map = nullptr;
 	Populace* populace = nullptr;

@@ -10,7 +10,7 @@
   - 为什么必须是Plugin而不是普通文件夹:UE资产只能通过已注册的挂载点访问,原始文件夹不是合法的挂载对象。详见`Source/Core/common/config.md`"GetPlugins/GetPakFiles"一节。
 - **`Initialize()`和`EnsureModsRegistered()`拆成两阶段**:前者只读取/回退扫描,给配置界面(Story/Mod/Resource三screen)立刻有数据可展示;后者才是真正有副作用的挂载/注册,推迟到用户在配置界面点"开始游戏"、`UForeverConfigBridgeSubsystem::ValidateAndStartGame`的依赖校验全部通过之后才执行,校验失败不会触碰任何真实状态。
 - **用`UGameInstanceSubsystem`而不是塞进`AForeverPlayerGameMode::BeginPlay`**:参照`UForeverKeyBindingSubsystem`的既定模式,生命周期覆盖菜单关卡→`OpenLevel`切到`World.World`的整个过程,不受关卡切换影响。
-- **`EnsureModsRegistered()`不持有任何成员对象**:`ModLoader`和16个`<Concept>Factory`全部是函数内的局部变量,注册+校验完就在同一次调用里`modLoader.UnloadAll()`卸载所有dll句柄。真正持久的Factory归属属于对应的Core领域系统类(如Terrain已经转移给`Source/Core/map/map.h`的`Map`类持有,不在这16个之内)。
+- **`EnsureModsRegistered()`不持有任何成员对象**:`ModLoader`和16个`<Concept>Factory`全部是函数内的局部变量,注册+校验完就在同一次调用里`modLoader.UnloadAll()`卸载所有dll句柄。这里的Factory只用于开局前的注册校验(逐个id创建一个临时实例打日志);游戏真正使用的23个Factory由`Source/Core/common/registry.h`的`Registry`单例持有,dll也由它常驻加载。Terrain/Roadnet/Zone/Green/Building/Weapon/Party这7个concept没有在这里校验。
 - **`ValidateFactory`是模板辅助函数,用lambda传入create/destroy**:16个`<Concept>Factory`的`Create<Concept>`/`Destroy<Concept>`方法名各不相同,没有共同基类可以多态调用,用lambda参数化"怎么创建/怎么销毁"避免写16份几乎相同的校验循环。
 - **每个concept块在`RegisterConcept`之前先调用`factory.SetModArgs(...)`**:参数来自`Config::GetConceptMods("<concept>_mods")`,经`ToArgsMap`转成`id->参数`表后传给Factory;mod调用`RegisterX(id, ...)`时Factory按id查表、把参数存进注册项,`CreateX(id)`创建实例时把参数字符串传给注册的creator函数。详见`Source/Dependence/README.md`和`Source/Core/common/config.md`。
 
@@ -19,9 +19,8 @@
 - 被谁依赖:`UForeverConfigBridgeSubsystem::ValidateAndStartGame`(依赖校验通过后调用`EnsureModsRegistered()`,再`OpenLevel`)、`UForeverSaveSubsystem::RequestLoad`(读档时应用存档的mod集合后调用)。UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`,`Initialize()`不需要手动触发。
 
 ## 待办/后续阶段
-- 随着更多领域系统在Core里落地,仍留在本类里长期验证的Factory实例可以继续转移给对应领域系统类持有(参照Terrain已转移给`Map`的先例)。
+- 这套局部Factory校验和`Registry`重复:同一批dll被注册两遍,且每个id多创建一个临时实例(mod的命名计数器`static count`会多走一格)。可以改成直接对`Registry`里的Factory做校验,并补齐没覆盖的7个concept。
 - 回菜单后再开始游戏：新增的dll路径会被`Registry::RefreshMods()`补加载，从配置里移除的dll不卸载（保持加载、因不在启用表而被禁用）。
-- 目前"参数"只是Core透传的原始字符串,mod自己决定怎么解析;如果要支持结构化的命令行式参数(如`--density 1.0 --max 1000`),可以在Dependence层加一个共享的小型参数解析工具函数,避免每个mod自己重复写tokenize逻辑。
 
 ## ReloadConfigFrom(path)
 

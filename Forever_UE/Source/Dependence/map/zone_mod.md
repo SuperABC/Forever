@@ -30,7 +30,7 @@
 ## 依赖关系
 
 - 依赖：`map/general_geometry.h`、`map/feature_spec.h`、`common/mod_state.h`。
-- 被谁依赖：`zone_factory.h`、`Source/Core/map/zone.h`/`map.h`、`Source/Basic/map/zone_basic.*`、`Forever_Mod/Empty`的`EmptyZone`、`Source/Forever/Framework/ForeverZoneFrameworkComponent`(读`Zone::GetWalls()`渲染围墙)。
+- 被谁依赖：`zone_factory.h`、`Source/Core/map/zone.h`/`map.h`、`Source/Basic/map/zone_*.h/.cpp`、`Forever_Mod/Empty`的`EmptyZone`、`Source/Forever/Framework/ForeverZoneFrameworkComponent`(读`Zone::GetWalls()`渲染围墙)。
 
 ## 待办/后续阶段
 

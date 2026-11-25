@@ -10,7 +10,7 @@ class UEditableTextBox;
 class UButton;
 
 // 一行=一个mod id的勾选框。被依赖(bLocked)且已勾选时整行变灰不能取消；被依赖但未勾选时文字标红。
-// 切换时调ForeverConfigBridgeSubsystem::SetModEnabled，再回调拥有者ModPanelWidget::RefreshAllRows做级联刷新。
+// 切换时调ForeverConfigBridgeSubsystem::SetModEnabled，再调SetRowData传入的回调(拥有者UModPanelWidget刷新列表)做级联刷新。
 UCLASS()
 class FOREVER_API UModCheckRowWidget : public UUserWidget
 {

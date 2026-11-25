@@ -6,7 +6,7 @@
 
 ## 关键设计
 
-- **没有`Fire()`/`ApplyRecoil()`这类虚方法**：开火/命中判定整个放在Forever层的`UForeverWeaponComponent`里，直接读这些字段计算，不需要`WeaponMod`反过来调用UE接口。伤害不在`WeaponMod`里：开火后每颗弹丸向武器自己的脚本发`weapon_fire`事件，特效和伤害由脚本的`spawn_effect`/`single_damage`等Change完成(2026-11-17，原`damage`/`ComputeDamage`/`muzzleVelocity`/`bulletGravityScale`已删)。`scriptModName`/`milestoneNames`指定武器脚本(同`AssetMod`)，都空则没有脚本、开火事件不发。
+- **没有`Fire()`/`ApplyRecoil()`这类虚方法**：开火/命中判定整个放在Forever层的`UForeverWeaponComponent`里，直接读这些字段计算，不需要`WeaponMod`反过来调用UE接口。伤害不在`WeaponMod`里：开火后每颗弹丸向武器自己的脚本发`weapon_fire`事件，特效和伤害由脚本的`spawn_effect`/`single_damage`等Change完成。`scriptModName`/`milestoneNames`指定武器脚本(同`AssetMod`)，都空则没有脚本、开火事件不发。
 - **`SetProperty()`两段式**：具体子类在这里填字段，不在构造函数里赋值；调用点在Core层`Weapon::Weapon()`构造函数里，创建完实例后立刻调一次。
 - **武器和`Asset`背包系统靠"同一个id字符串"桥接**，不靠字段关联：`WeaponMod`自己不持有assetId，见`Core/player/player.h`的`ActivateShoulderWeapon()`/`Core/player/asset.md`。
 - **资产引用**：`firstPersonMeshPath`是UE软路径，以`_C`结尾=整件武器的Actor Blueprint类，否则=单个StaticMesh；留空=没有模型，开火/伤害/换弹逻辑不受影响。

@@ -16,7 +16,8 @@ using namespace std;
 
 namespace {
 	constexpr float PI = 3.14159265358979323846f;
-	// 游戏内秒/真实秒：默认timeFlowRatio=2.0对应的系数，easeSeconds是真实秒，运动学全部按游戏秒算。
+	// 游戏内秒/真实秒：按timeFlowRatio=2.0写死的系数(Player的默认值是10.0，剧情脚本常设成1，倍率不是2.0时
+	// easeSeconds/停站剩余时间/交给UE的每真实秒速度都不准，待改成读实际倍率)。easeSeconds是真实秒，运动学全部按游戏秒算。
 	constexpr float kGameSecondsPerRealSecond = 120.f;
 
 	float ToDegrees(float radians) { return radians * (180.f / PI); }

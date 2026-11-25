@@ -6,7 +6,7 @@
 
 ## 关键设计
 
-- **最小注册表**：没有`Temp`暂存区+`MergeTemp()`两段式注册——全部公开方法(含析构函数)都是`virtual`，调用永远落在构造这个Factory实例的那一侧，registries内部节点的分配和析构使用同一侧的堆分配器，不会跨DLL堆损坏。详见`Source/Dependence/README.md`"关键设计"一节。
+- **最小注册表**：只有`registries`(id->注册项)和`liveInstances`(实例->id)两张表；全部公开方法(含析构函数)都是`virtual`，调用永远落在构造这个Factory实例的那一侧，registries内部节点的分配和析构使用同一侧的堆分配器，不会跨DLL堆损坏。详见`Source/Dependence/README.md`"关键设计"一节。
 - **`creator`/`deleter`是裸函数指针，不用`std::function`**：mod侧注册的都是无捕获lambda，天然可以转成函数指针；`std::function`内部堆缓冲由一侧分配、另一侧释放，实测会在Factory析构时崩溃。
 - **`DestroyScript`必须走注册时mod提供的`deleter`**，不能Factory直接`delete`：通过`liveInstances`反查实例对应的注册id再取出`deleter`调用，保证跨DLL的`new`/`delete`成对。
 - **`RegisterScript`重复注册同一id会拒绝覆盖并`debugf`警告**（保持第一次注册的creator/deleter）：已存活实例必须用创建它的那个deleter释放，覆盖会让它们被另一个mod的deleter释放。

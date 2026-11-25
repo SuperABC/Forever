@@ -31,7 +31,7 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   `ModLoader`按dll路径工作,根本不知道一次`RegisterMod<Concept>`调用会注册哪些id,没法把
   "哪个id对应哪份参数"这件事做对,已验证过和"按mod id配参数"的真实需求对不上。
 - **跨DLL new/delete安全体现在这里**:`RegisterModBuildings`等导出函数把
-  `[]() { return new PengzhanBuilding(); }`和`[](BuildingMod* b) { delete b; }`成对注册进
+  `[](const std::string& args) { return new ResidenceHighBuilding(); }`和`[](BuildingMod* b) { delete b; }`成对注册进
   Factory(见`Forever_Mod/README.md`),两者都在mod自己的DLL里,`Factory::Destroy<Concept>`
   调用的正是这对函数指针里的deleter,而不是Factory自己`delete`——保证分配和释放发生在同一
   模块。`ModLoader`本身不直接涉及对象生命周期,只负责把这对函数指针"运进"Factory。
@@ -70,7 +70,7 @@ concept前缀。给游戏启动配置界面的依赖校验用，见`config.md`�
 - 被谁依赖:`Source/Core/common/config.cpp`(用`GetModConceptDescriptors()`做探测)、
   `Source/Core/common/registry.cpp`(持有全部23个concept唯一的`ModLoader`实例，`RegisterMods`里
   对每个concept各调一次`RegisterConcept`，见`registry.md`)、
-  `Source/Forever/Mod/ForeverModSubsystem.cpp`(验证用途,构造独立的临时`ModLoader`
+  `Source/Forever/Mod/ForeverModSubsystem.cpp`(开局前校验用,构造独立的临时`ModLoader`
   实例,和`Registry`那份互不相关)。
 
 ## 待办/后续阶段

@@ -66,8 +66,8 @@
    "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
    "puzzle_mods" : [],
    "resource_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test/Plugins",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story"
    ],
    "roadnet_mods" : [
@@ -88,7 +88,7 @@
       "room_train_station",
       "room_meeting"
    ],
-   "route_mods" : [ "route_air", "route_train --skip", "route_bus --skip" ],
+   "route_mods" : [ "route_air --skip", "route_train --skip", "route_bus --skip" ],
    "scheduler_mods" : [ "scheduler_basic" ],
    "script_mods" : [ "script_empty", "script_test" ],
    "station_mods" : [ "station_air", "station_train", "station_bus" ],

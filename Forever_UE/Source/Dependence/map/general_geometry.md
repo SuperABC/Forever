@@ -141,9 +141,9 @@
   `InitBuildings`直接调用`Lot::RequestPlacement`/`FillRemainder`）；`Source/Dependence/map/
   zone_mod.h`/`building_mod.h`（`LotPlacementRequest`定义在这里，两个mod头文件共用）。
 
-## ParkingSpot(已删除)
+## 停车位
 
-车位不再是房间mod里的`ParkingSpot`。停车位矩形来自layout的`parkings`(`{rect:[8], direction}`)，`BuildingMod::AssignParking`指定挂到哪个房间，Core生成`ParkingSlot`(`Core/map/room.h`)，见`Core/map/room.md`"停车位"。layout车辆导航端点类型`"parking"`见`Core/map/building.md`。
+这里没有车位类型。停车位矩形来自layout的`parkings`(`{rect:[8], direction}`)，`BuildingMod::AssignParking`指定挂到哪个房间，Core生成`ParkingSlot`(`Core/map/room.h`)，见`Core/map/room.md`"停车位"。layout车辆导航端点类型`"parking"`见`Core/map/building.md`。
 
 ## WallStyle
 `struct WallStyle { std::string tags[4]; std::string materials[4]; }`：一面墙四个侧面（下标=FACE_DIRECTION，0西 1东 2北 3南，表示该侧面朝向的方向）的 layout 标签与 Core 查表得到的材质实例软路径；`HasTag()/HasMaterial()` 判断是否有设置。

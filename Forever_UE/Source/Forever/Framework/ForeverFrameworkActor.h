@@ -150,8 +150,9 @@ protected:
 	// 生成期间驱动生成阶段;生成完后驱动全局时钟、天空/天气/植被风/路灯和各域Tick,见.md"Tick"。
 	virtual void Tick(float DeltaTime) override;
 
-	// 必须在这里同步delete各域,不能只靠析构函数:析构时机取决于UObject垃圾回收,可能晚于下一次PIE,
-	// 旧mod dll没卸载干净会让下一次LoadLibrary拿到旧镜像(代码改了编译了PIE里跑的还是旧逻辑)。
+	// 必须在这里同步delete各域,不能只靠析构函数:析构时机取决于UObject垃圾回收,可能晚于下一局开始——
+	// 各域持有的mod实例登记在进程级的Registry里(Factory::liveInstances/RandomRegistry),不及时释放会和下一局
+	// 的实例混在一起(存档按live实例收集mod状态)。mod dll本身由Registry常驻加载,不随EndPlay卸载。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 读档:第一次调用时从UForeverSaveSubsystem取走等待中的读档请求(之后一直返回同一份,没有读档返回nullptr)。

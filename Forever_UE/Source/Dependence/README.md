@@ -3,8 +3,10 @@
 ## 职责
 
 `Source/Dependence`是和UE完全无关的纯C++静态库，为每个domain的每个concept提供一套
-`<Concept>Mod`(可扩展接口)+`<Concept>Factory`(创建/销毁/枚举)。`common/`放`error.h/.cpp`
-(异常类)、`json.h/.cpp`(JSON解析器)这类不属于任何具体concept的共享支持代码。
+`<Concept>Mod`(可扩展接口)+`<Concept>Factory`(创建/销毁/枚举)，共23个concept。`common/`放`error.h/.cpp`
+(异常类)、`json.h/.cpp`(JSON解析器)、`mod_args`(mod参数串解析)、`mod_state`(mod存档读写器)、
+`mod_test`(mod单元测试接口)、`random`(可复现随机流)、`save_archive`(存档二进制归档)这类不属于任何
+具体concept的共享支持代码。
 
 ## concept对照表
 
@@ -20,6 +22,7 @@
 | player | Asset | `player/asset_mod.h` → `AssetMod` | `player/asset_factory.h/.cpp` → `AssetFactory` | `GetModAssets` |
 | player | App | `player/app_mod.h` → `AppMod` | `player/app_factory.h/.cpp` → `AppFactory` | `GetModApps` |
 | player | Puzzle | `player/puzzle_mod.h` → `PuzzleMod` | `player/puzzle_factory.h/.cpp` → `PuzzleFactory` | `GetModPuzzles` |
+| player | Weapon | `player/weapon_mod.h` → `WeaponMod` | `player/weapon_factory.h/.cpp` → `WeaponFactory` | `GetModWeapons` |
 | populace | Name | `populace/name_mod.h` → `NameMod` | `populace/name_factory.h/.cpp` → `NameFactory` | `GetModNames` |
 | populace | Scheduler | `populace/scheduler_mod.h` → `SchedulerMod` | `populace/scheduler_factory.h/.cpp` → `SchedulerFactory` | `GetModSchedulers` |
 | society | Job | `society/job_mod.h` → `JobMod` | `society/job_factory.h/.cpp` → `JobFactory` | `GetModJobs` |
@@ -38,12 +41,14 @@
 
 ## 关键设计
 
-- **每个`<Concept>Mod`只声明`GetType()`/`GetName()`两个纯虚接口**，业务接口因concept而异，
-  分别在各自的`<concept>_mod.h`/对应`.md`里定义。参数不经过Mod基类的任何钩子方法——
+- **每个`<Concept>Mod`共有的接口只有`GetType()`/`GetName()`、`UnitTest()`(见`common/mod_test.md`)和
+  存档相关的`SaveState`/`LoadState`/`GetStateVersion`/`GetInstanceCounter`/`SetInstanceCounter`
+  (见`common/mod_state.md`)**——这几项在每个`<concept>_mod.h`里各写一份，没有公共基类；业务接口因
+  concept而异，分别在各自的`<concept>_mod.h`/对应`.md`里定义。参数不经过Mod基类的任何钩子方法——
   `Create<Concept>(id)`创建实例那一刻直接把参数字符串传给注册的creator函数，mod自己决定
   怎么用(传给具体子类的构造函数最常见)，见下面"Mod参数传递"一条。
 - **`GetId()`不放进`<Concept>Mod`基类**，只是具体mod子类自己的静态方法约定(如
-  `PengzhanBuilding::GetId()`)，不通过基类指针调用，也不是DLL导出符号本身。
+  `ResidenceHighBuilding::GetId()`)，不通过基类指针调用，也不是DLL导出符号本身。
 - **`<Concept>Factory`和`<Concept>Mod`同放在Dependence，不在Core**——Mod DLL只链接
   `Dependence.lib`，若`Factory`的方法实现只编译进`Core.lib`，Mod就无法调用
   `factory->RegisterXxx(...)`这个非虚方法。
@@ -72,10 +77,11 @@
 - **Mod参数传递**：给mod传参数走`Factory::SetModArgs`，`Create<Concept>(id)`创建实例那
   一刻直接把参数字符串传给注册的creator函数，不经过DLL导出函数的参数，也不经过创建后再
   调用的钩子方法。`config.json`里每个concept一个`"<concept>_mods"`数组，元素是`"id"`或
-  `"id 参数..."`(命令行式写法)。流程：`ForeverModSubsystem`调用
-  `Config::GetConceptMods("<concept>_mods")`解析出`(id, 参数)`列表，转成map后调用
-  `factory.SetModArgs(...)`，存进`Factory::configuredArgs`(整个Factory生命周期内不再
-  变化)；`CreateFunc`的函数指针类型是`<Concept>Mod*(*)(const std::string&)`，`RegisterX`
+  `"id 参数..."`(命令行式写法)。流程：`Registry::ReloadModArgs()`(每局开始由
+  `Registry::RefreshMods()`触发)对每个concept调用`Config::GetConceptMods("<concept>_mods")`
+  解析出`(id, 参数)`列表，剥掉其中的`--seed N`登记给`RandomRegistry`，其余转成map后调用
+  `factory.SetModArgs(...)`，存进`Factory::configuredArgs`(下一次`ReloadModArgs`前不变)；
+  参数串统一用`common/mod_args.h`的`ModArgs`解析；`CreateFunc`的函数指针类型是`<Concept>Mod*(*)(const std::string&)`，`RegisterX`
   只登记creator/deleter，不复制参数(`Entry`没有`args`字段，避免同一份参数存两份)。
   `Factory::Create<Concept>(id)`创建实例时按`id`查`configuredArgs`，把参数字符串传给
   `it->second.creator(args)`，mod自己的creator决定怎么用(传给具体子类构造函数最常见，
@@ -87,10 +93,11 @@
 ## 依赖关系
 
 - 依赖：无(纯C++，不依赖UE、不依赖Core内容)。
-- 被谁依赖：`Source/Basic/<domain>/<concept>_basic.h`(继承`<Concept>Mod`提供默认实现)、
-  `Source/Forever/Mod/ForeverModSubsystem.cpp`(`#include`各`<domain>/<concept>_factory.h`，
-  为每个concept构造一个局部Factory、验证注册结果)、`Forever_Mod/`下的各示例Mod(继承
-  `<Concept>Mod`、调用`<Concept>Factory::Register<Concept>`)。
+- 被谁依赖：`Source/Core`(`common/registry.h`的`Registry`单例持有全部23个Factory，各域管理类通过
+  它取引用)、`Source/Basic/<domain>/<mod id>.h`(内置mod，每个mod一组以id命名的文件，继承
+  `<Concept>Mod`)、`Source/Forever/Mod/ForeverModSubsystem.cpp`(开局时为其中16个concept各构造一个
+  局部Factory、逐个创建实例验证注册结果)、`Forever_Mod/`下的各外部Mod(继承`<Concept>Mod`、调用
+  `<Concept>Factory::Register<Concept>`)。
 - Mod可扩展点：任何Mod DLL，只要`#include`对应`<domain>/<concept>_mod.h`+
   `<domain>/<concept>_factory.h`、链接`Dependence.lib`，就能实现自己的`<Concept>Mod`
   子类并通过`RegisterMod<Concept>`导出函数注册进宿主的Factory实例。
@@ -113,9 +120,12 @@
 - `common/handle.h/.cpp`：`PostHandle`跨模块查询接口，详见`common/handle.md`。
 - `map/general_geometry.h/.cpp`：`Node`/`Connection`/`Quad`/`Lot`等几何与导航图原语，详见
   `map/general_geometry.md`。
-- `story/condition.h/.cpp`、`story/change.h/.cpp`、`story/event.h/.cpp`：通用脚本表达式
-  引擎+"动作"/"事件"词汇表，详见各自同名`.md`。这三个文件不是某个具体concept本身
-  (`Script`才是)，是`Script`会用到的底层机制。
+- `story/expression.h/.cpp`、`story/change.h/.cpp`、`story/event.h/.cpp`、`story/dialog.h/.cpp`：
+  通用脚本表达式引擎+"动作"/"事件"词汇表+对话结构，详见各自同名`.md`。这几个文件不是某个具体
+  concept本身(`Script`才是)，是`Script`会用到的底层机制。
+- `map/feature_spec.h`(mod向Core声明树/家具/装饰/门等摆放请求的结构)、`map/polygon_util.h`、
+  `map/transit_data.h`(编辑器手工线路数据)、`polit/policy_ids.h`(可调政策id)、`player/canvas.h`
+  (App/Puzzle的软件画布)。
 
 `utility.h`把`debugf`的`LPCSTR`参数改成了`const char*`并将`<windows.h>`挪进`.cpp`，避免
 头文件污染(其余均原样移植)。

@@ -28,7 +28,7 @@ Core: RouteStationInfo(站点位置+世界坐标端口)  ───┘
 
 - `stationType`（接哪类站点）、`vehicleType`、`useRoadnet`（公交：不给 links/externs，Core 用路网车辆寻路图拼路线，每站只有 stop 0）、`instantiate`（火车：Core 调 `BuildTrack` 并转发 hatch/terrainFit/拆除、UE 侧铺轨）、`trackWidth`、`lineVehicleCounts`(`LayoutRoute` 里按 `lines` 的下标给每条线路指定车辆数，缺项或<=0时按 1 辆)、`tiltAlongPath`、`dwellSeconds`。
 - **三个绝对速度**（地图单位/游戏秒，非路网线路用）：`normalSpeed` 正常运行；`sameStationSpeed` 同站内运行（从降落跑道滑到起飞跑道这种同站 run）；`passSpeed` 通过但不停站（穿过中间站的站内直通连线时的上限）。公交只用 `normalSpeed`。
-- **速度单位是游戏内秒，不是真实秒**：`Traffic::Tick` 喂给 `Route::Update` 的 `elapsedSeconds` 来自 `Player::Tick()` 里 `time->AddMilliseconds(delta*60*1000*timeFlowRatio)`，默认 `timeFlowRatio=2.0`，1 真实秒=120 游戏内秒。新增线路类型要按这个换算校准。
+- **速度单位是游戏内秒，不是真实秒**：`Traffic::Tick` 喂给 `Route::Update` 的 `elapsedSeconds` 来自 `Player::Tick()` 里 `time->AddMilliseconds(delta*60*1000*timeFlowRatio)`，`Core/traffic/route.cpp` 的 `kGameSecondsPerRealSecond=120` 按 `timeFlowRatio=2.0`(1 真实秒=120 游戏内秒)写死，而 `Player` 的默认值是 10.0、剧情脚本常设成 1——真实速度会跟着 `timeFlowRatio` 变，`easeSeconds`/停站剩余时间/交给 UE 的每真实秒速度在 `timeFlowRatio!=2.0` 时不准(待改成读实际倍率)。
 - **`easeSeconds`（真实秒）**：从 0 加速到 `normalSpeed` 用多久，Core 据此得到统一加速度 `a = normalSpeed / (easeSeconds*120)`，三个速度共用。run 太短来不及加速到限速时 Core 自动退化成三角形速度曲线（峰值低于限速）。
 
 ## 运动学（Core 预算，mod 只给选项）

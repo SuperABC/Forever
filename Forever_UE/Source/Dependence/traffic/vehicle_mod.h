@@ -34,7 +34,8 @@ public:
 
 	// 车型分类不是实例字段:子类提供static const char* GetCategory(),经RegisterVehicle注册,见vehicle_mod.md。
 
-	// 操控/搭乘:公共交通车辆是纯展示物,真正的搭乘交互未实现。
+	// 操控/搭乘:boardable=线路车辆能否搭乘(UE层ATransitVehicleElement据此提供上下车);drivable/capacity目前Core和UE层都没有读取
+	// (能不能驾驶实际由车辆脚本给不给"驾驶"选项决定)。
 	bool drivable = false;
 	bool boardable = false;
 	int capacity = 0;

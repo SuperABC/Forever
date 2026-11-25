@@ -19,4 +19,3 @@ mod的概念，指向的是已经存在的`Zone`/`Building`/`Room`，本身不�
 ## 注意
 
 - 组织不能拥有不动产（房产`owner`只能是市民，`stated`=政府），所以组织的资产列表里没有`EstateAsset`。
-- 旧的`Player::estateAssets`从未被填充，已删除。

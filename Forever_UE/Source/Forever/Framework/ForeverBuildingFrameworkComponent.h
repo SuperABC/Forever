@@ -51,7 +51,7 @@ public:
 
 	// PIE停止/退出游戏时置空map——这个组件自己的TickComponent只用来重置每帧LOD操作预算，
 	// 不解引用任何Building*/Map*，理论上不置空也不会崩，但和其它Framework组件保持同一套
-	// 约定(见AForeverFrameworkActor::EnsureMapGenerated的Map生命周期说明)。
+	// 约定(见AForeverFrameworkActor::EndPlay的说明：各域在EndPlay里同步delete)。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 供ABuildingElement调用——按BuildingMod软路径覆盖返回对应的材质/网格，路径为空或加载

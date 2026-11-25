@@ -23,7 +23,8 @@ build_web.bat                    # 产出 dist\forever_mods.html
 - `../ModHost/host_core.cpp`:和原生 ModHost 共用的宿主(Puzzle / Phone 驱动)。
 - `Dependence/player/canvas.cpp`:`#ifdef __EMSCRIPTEN__` 分支用浏览器 2D canvas 画文字(字体 Microsoft YaHei → PingFang SC → Noto Sans CJK 回退),其余绘图仍是同一份 CPU 光栅代码。
 - `index.template.html` + `make_html.py`:页面模板,把 emcc 产出的 js 内联进去。
-- `Dependence/common/utility.cpp` 依赖 windows.h,网页版不编,`GetRandom` 在 `web_main.cpp` 里提供。
+- `Dependence/common/utility.cpp` 依赖 windows.h,网页版不编,`GetRandom`/`debugf` 在 `web_main.cpp` 里提供。
+- `build_web.bat` 里的源文件清单是手写的:Basic 的 puzzle/app 改名或新增、Dependence/Core 给这条链路加了新的 `.cpp`(如 `common/random.cpp`、`common/mod_test.cpp`)时要同步改这里和 `web_main.cpp` 的 `#include`/注册,否则编译或链接失败。
 
 ## 注意
 

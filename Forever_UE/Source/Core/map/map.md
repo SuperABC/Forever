@@ -207,7 +207,7 @@
 ## 逃跑选路（2026-11-19）
 `StartPedestrianFlee(x,y,awayX,awayY)`：遍历行人图所有边取离(x,y)最近的线(点到线段水平距离)，两端点里选更背离目标的作下一个节点(另一端点记prev)；
 `NextPedestrianFlee(nodeId,prevId,awayX,awayY)`：邻接里选终点方向与"目标→当前节点"方向点积最大的，不回头走prev，死胡同才回头。返回`FleeStep{ok,nodeId,prevNodeId,x,y,z}`(地图单位)。
-`EnsureNodeIndex()`从`FindPedestrianPath`里抽出，两者共用。CoreTest route套件`CheckFlee`覆盖(每步选得出、度数>=2不回头)。
+`EnsureNodeIndex()`从`FindPedestrianPath`里抽出，两者共用。逃跑目前没有CoreTest覆盖，只在UE测试(`Source/Test/UE/ForeverTestSuites.inl`)里跑。
 
 隧道口hatch(wall=true)存档多了`startWall/startWallBottom/endWall/endWallBottom`(端墙，见Dependence/map/roadnet_mod.md)。
 
