@@ -51,6 +51,10 @@ public:
 	// 顶层"seed"(Core各域随机流的种子来源)；没配置返回false。数字或字符串都接受。
 	static bool GetGlobalSeed(unsigned long long& seed);
 
+	// 顶层"map_size"(新开局的地图边长，单位=地图元素，1元素=10m)：写一个数=正方形，写[宽,高]=长方形；
+	// 没配置/格式不对返回false(不兜底默认值，由调用方决定)。只做格式解析(正整数)，2的整数次幂等业务约束由调用方校验。
+	static bool GetMapSize(int& width, int& height);
+
 	// 目前固定是bare名"test"，集中在这里避免字面量重复
 	static std::string GetMainStoryScriptPath();
 
@@ -168,6 +172,10 @@ private:
 
 	static bool hasGlobalSeed;
 	static unsigned long long globalSeed;
+
+	static bool hasMapSize;
+	static int mapWidth;
+	static int mapHeight;
 
 	// "<concept>_mods" key -> (id, 参数字符串)列表，既是SetModArgs的参数来源，也是启用状态的唯一真相
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> conceptMods;

@@ -47,5 +47,7 @@
 - 行道树的位置/间距/缩放都是粗估，还没有避开建筑出入口(RoadOpening)。
 - 运行时增删目前只有组件接口，还没有接到Story/Change之类的调用方。
 
+**摇摆权重用每棵树的根高度（2026-11-25）**：材质(`Mossy_Tree/Materials/base`)里权重是`saturate((顶点世界Z-树根Z)/TreeHeight)^p`。原来树根Z用的`Object Position`，在ISM上是整个组件包围盒的中心而不是每棵树的根，所以高海拔处(如贴合路面抬高的地形)的树根权重不为0、树根也跟着摇。现在每个树ISM设`NumCustomDataFloats=1`，`GenerateVegetation`/`AddTree`把树根世界Z(cm)写进自定义数据0，材质的Subtract的B改接`PerInstanceCustomData[0]`(脚本改的，原材质备份过)。
+
 ## 天气对风的影响
 `SetWindScale(strengthScale, speedScale)`由`UForeverWeatherFrameworkComponent`每帧写入：`WindStrength`写MPC时乘`strengthScale`，相位累加乘`speedScale`。`GetWindDirection()`给雨雪粒子借用风向。1=微风基准。

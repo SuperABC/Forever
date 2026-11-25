@@ -51,7 +51,7 @@ public:
 		float startWallBottom = kNoEndWall, float endWallBottom = kNoEndWall);
 
 	// 工具方法(非虚):请求把地形贴合到connection上[t1,t2]的路面高度,立即采样成折线进terrainFits,不保留指针。
-	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff);
+	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, bool capStart = true, bool capEnd = true);
 
 	std::vector<Node> externs;
 	std::vector<Intersection> intersections;

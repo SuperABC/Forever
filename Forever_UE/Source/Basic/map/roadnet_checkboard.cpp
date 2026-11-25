@@ -50,8 +50,10 @@
 using namespace std;
 
 namespace {
-		// 路口缩进(写进Road::SetSetback)：必须在所有路的车道都配好之后调用，宽度是后改的。规则同roadnet_jing.cpp的同名函数
-		// (复制而来，改一边要同步另一边)：两侧都是平角缩进0；两侧最小夹角是直角取构成直角的路(含自己)半宽最大值；有锐角取构成锐角的路半宽最大值的两倍。
+		// 路口缩进(写进Road::SetSetback)：必须在所有路的车道都配好之后调用，宽度是后改的。对每个路口的每条连接路，
+		// 分别看它和左侧、右侧相邻路的夹角：夹角<=直角时精确算缩进(本路和对方路缘线交点沿本路中线的距离)，夹角>直角时缩进=对方半宽，
+		// 夹角>=平角(减容差)那一侧不缩进；每条路取两侧较大值，再按0.45倍路长封顶。只连两条路的路口，夹角离平角5度以内不缩进，其余同上。
+		// 三份(jing/checkboard/file)逻辑一致，改一处要同步另外两处。
 		void AssignJunctionSetbacks(vector<Road>& roads, const vector<Intersection>& intersections) {
 			const float PI = 3.14159265358979f;
 			const float EPS = 0.05f;  // 约3度的角度容差
@@ -73,50 +75,22 @@ namespace {
 			}
 			for (auto& [nodeId, arms] : armsByNode) {
 				sort(arms.begin(), arms.end(), [](const Arm& a, const Arm& b) { return a.angle < b.angle; });
-				// 只连两条路的路口(拐角)：缩进按两条路的夹角phi和各自半宽算，让两条路朝向对方那侧的路缘线正好在角点相交、不再重叠：
-				// 沿本路中线的缩进 = (对方半宽 + 本路半宽*cos(phi)) / sin(phi)，等宽时就是 半宽/tan(phi/2)；平角(phi>=PI-EPS)不缩进。
-				if (arms.size() == 2) {
-					float phi = arms[1].angle - arms[0].angle;
-					while (phi < 0.f) phi += 2.f * PI;
-					if (phi > PI) phi = 2.f * PI - phi;
-					for (size_t k = 0; k < 2; k++) {
-						float setback = 0.f;
-						if (phi < PI - EPS && phi > 1e-3f) {
-							setback = max(0.f, (arms[1 - k].halfWidth + arms[k].halfWidth * cosf(phi)) / sinf(phi));
-						}
-						float length = arms[k].road->CalcDistance();
-						if (length > 1e-6f) setback = min(setback, length * 0.45f);
-						arms[k].road->SetSetback(arms[k].isStart, setback);
-					}
-					continue;
-				}
-				size_t count = arms.size();
+				// 每条路在路口每一侧(逆时针/顺时针方向的相邻路)各算一个缩进，取较大的：和这一侧相邻路的夹角theta<=直角时精确算——
+				// 本路和对方朝向对方那一侧的路缘线在路口里的交点，沿本路中线的距离 = (对方半宽 + 本路半宽*cos(theta)) / sin(theta)；
+				// theta>直角时直接取对方半宽；theta>=平角(减容差)那一侧没有重叠，不缩进。再按0.45倍路长封顶(同Core的tFrac clamp)。
+				// 只连两条路(拐角)的路口平角容差放宽到5度：两条路接近一条直线(夹角>=175度)时不缩进，其余同上。
+				const size_t count = arms.size();
+				const float flatTolerance = count == 2 ? 5.f * PI / 180.f : EPS;
 				for (size_t k = 0; k < count; k++) {
-					// 逆时针方向到下一条、顺时针方向到上一条的夹角，只有一条路时两侧都是整圈。
-					auto gapTo = [&](size_t other, bool counterClockwise) {
-						if (other == k) return 2.f * PI;
+					auto sideSetback = [&](size_t other, bool counterClockwise) {
+						if (other == k) return 0.f;
 						float gap = counterClockwise ? arms[other].angle - arms[k].angle : arms[k].angle - arms[other].angle;
 						while (gap <= 0.f) gap += 2.f * PI;
-						return gap;
-						};
-					float nextGap = gapTo((k + 1) % count, true), prevGap = gapTo((k + count - 1) % count, false);
-					float nextWidth = arms[(k + 1) % count].halfWidth, prevWidth = arms[(k + count - 1) % count].halfWidth;
-					float minGap = min(nextGap, prevGap);
-					float setback = 0.f;
-					if (minGap >= PI - EPS) {
-						setback = 0.f;
-					}
-					else if (minGap < PI * 0.5f - EPS) {
-						setback = arms[k].halfWidth;
-						if (nextGap < PI * 0.5f - EPS) setback = max(setback, nextWidth);
-						if (prevGap < PI * 0.5f - EPS) setback = max(setback, prevWidth);
-						setback *= 2.f;
-					}
-					else {
-						// 直角/钝角：只看两侧夹角<180度的邻路半宽，不含自己。
-						if (nextGap < PI - EPS) setback = max(setback, nextWidth);
-						if (prevGap < PI - EPS) setback = max(setback, prevWidth);
-					}
+						if (gap >= PI - flatTolerance) return 0.f;
+						if (gap > PI * 0.5f) return arms[other].halfWidth;
+						return max(0.f, (arms[other].halfWidth + arms[k].halfWidth * cosf(gap)) / max(sinf(gap), 1e-3f));
+					};
+					float setback = max(sideSetback((k + 1) % count, true), sideSetback((k + count - 1) % count, false));
 					float length = arms[k].road->CalcDistance();
 					if (length > 1e-6f) setback = min(setback, length * 0.45f);
 					arms[k].road->SetSetback(arms[k].isStart, setback);

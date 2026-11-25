@@ -24,6 +24,9 @@ unordered_map<string, vector<string>> Config::pakPaths = {};
 string Config::mainStoryScriptModName = "";
 bool Config::hasGlobalSeed = false;
 unsigned long long Config::globalSeed = 0;
+bool Config::hasMapSize = false;
+int Config::mapWidth = 0;
+int Config::mapHeight = 0;
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
 unordered_map<string, string> Config::stashedModArgs = {};
 unordered_map<string, vector<pair<string, string>>> Config::dllConceptIds = {};
@@ -128,6 +131,8 @@ void Config::ReadConfig(const string& path) {
 	mainStoryScriptModName.clear();
 	hasGlobalSeed = false;
 	globalSeed = 0;
+	hasMapSize = false;
+	mapWidth = mapHeight = 0;
 	conceptMods.clear();
 	stashedModArgs.clear();
 	dllConceptIds.clear();
@@ -189,6 +194,34 @@ void Config::ReadConfig(const string& path) {
 	else if (root["seed"].IsNumeric()) {
 		hasGlobalSeed = true;
 		globalSeed = static_cast<unsigned long long>(root["seed"].AsDouble());
+	}
+
+	// map_size：数字=正方形，[宽,高]=长方形；非正整数/格式不对打警告并当没配置。
+	{
+		const JsonValue& sizeValue = root["map_size"];
+		int w = 0, h = 0;
+		bool present = false, valid = false;
+		if (sizeValue.IsNumeric()) {
+			present = true;
+			w = h = sizeValue.AsInt();
+			valid = true;
+		}
+		else if (sizeValue.IsArray()) {
+			present = true;
+			if (sizeValue.size() == 2 && sizeValue[0u].IsNumeric() && sizeValue[1u].IsNumeric()) {
+				w = sizeValue[0u].AsInt();
+				h = sizeValue[1u].AsInt();
+				valid = true;
+			}
+		}
+		if (present && (!valid || w <= 0 || h <= 0)) {
+			cerr << "[Config] Warning: \"map_size\" must be a positive integer or [width, height], ignored.\n";
+		}
+		else if (present) {
+			hasMapSize = true;
+			mapWidth = w;
+			mapHeight = h;
+		}
 	}
 
 	for (const auto& scriptPath : root["story_scripts"]) {
@@ -454,6 +487,12 @@ string Config::GetResourceFilePath(const string& fileName) {
 bool Config::GetGlobalSeed(unsigned long long& seed) {
 	seed = globalSeed;
 	return hasGlobalSeed;
+}
+
+bool Config::GetMapSize(int& width, int& height) {
+	width = mapWidth;
+	height = mapHeight;
+	return hasMapSize;
 }
 
 string Config::GetMainStoryScriptModName() {
@@ -751,6 +790,12 @@ void Config::WriteConfig(const string& path) {
 
 	root["main_story"] = JsonValue(mainStoryScriptModName);
 	if (hasGlobalSeed) root["seed"] = JsonValue(to_string(globalSeed));
+	if (hasMapSize) {
+		JsonValue sizeArr(DATA_ARRAY);
+		sizeArr.append(JsonValue(mapWidth));
+		sizeArr.append(JsonValue(mapHeight));
+		root["map_size"] = sizeArr;
+	}
 
 	JsonValue storyArr(DATA_ARRAY);
 	for (const string& script : storyScriptPaths) {

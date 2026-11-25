@@ -52,7 +52,9 @@ void UForeverVegetationFrameworkComponent::GenerateVegetation(Map* inMap) {
 		TArray<int32> indices = meshComponents[meshIndex]->AddInstances(transforms[meshIndex], true, true, false);
 		for (int32 k = 0; k < indices.Num() && k < treeIds[meshIndex].Num(); k++) {
 			RegisterInstance(treeIds[meshIndex][k], meshIndex, indices[k]);
+			meshComponents[meshIndex]->SetCustomDataValue(indices[k], 0, static_cast<float>(transforms[meshIndex][k].GetLocation().Z), false);
 		}
+		meshComponents[meshIndex]->MarkRenderStateDirty(); // 自定义数据逐个写入时没有各自刷新渲染状态，这里统一刷新一次
 		total += indices.Num();
 	}
 	UE_LOG(LogTemp, Log, TEXT("UForeverVegetationFrameworkComponent: %d meshes, %d trees."), meshComponents.Num(), total);
@@ -69,8 +71,10 @@ int32 UForeverVegetationFrameworkComponent::AddTree(const FString& meshPath, flo
 	}
 	if (meshIndex == INDEX_NONE) return -1;
 
-	int32 instanceIndex = meshComponents[meshIndex]->AddInstance(MakeTreeTransform(mapX, mapY, yaw, scale), true);
+	const FTransform treeTransform = MakeTreeTransform(mapX, mapY, yaw, scale);
+	int32 instanceIndex = meshComponents[meshIndex]->AddInstance(treeTransform, true);
 	if (instanceIndex == INDEX_NONE) return -1;
+	meshComponents[meshIndex]->SetCustomDataValue(instanceIndex, 0, static_cast<float>(treeTransform.GetLocation().Z), true);
 	int32 treeId = nextTreeId++;
 	RegisterInstance(treeId, meshIndex, instanceIndex);
 	return treeId;
@@ -143,6 +147,9 @@ int32 UForeverVegetationFrameworkComponent::GetOrCreateMesh(const FString& meshP
 	ism->SetStaticMesh(mesh);
 	ism->SetMobility(EComponentMobility::Static);
 	ism->SetRemoveSwap();
+	// 自定义数据0=树根的世界Z(cm)：材质里摇摆权重要用"顶点高度-树根高度"，Object Position在ISM上是整个组件包围盒的
+	// 中心而不是每棵树的根，用它算会让高海拔处(比如贴合路面抬高的地形)的树根也跟着摇。
+	ism->NumCustomDataFloats = 1;
 	ism->SetCullDistances(cullDistanceStart, cullDistanceEnd);
 	ism->SetupAttachment(owner->GetRootComponent());
 	ism->RegisterComponent();

@@ -121,10 +121,10 @@
   灯行放在行道树**外侧**：`LAMP_SIDEWALK_RATIO`(0.9，树是0.25)，间距`LAMP_SPACING`(1.5格=15m)，蓝图路径`LAMP_BLUEPRINT_PATH`
   (`/Game/3rdParty/Stylized_street_light/Actor/BP_StreetLight.BP_StreetLight_C`)。朝向=沿路方向角 + (side0:-90 / side1:+90) +
   `LAMP_YAW_OFFSET`，所以两排自然差180度，两排都朝向路面；`LAMP_YAW_OFFSET`统一补偿蓝图里灯臂的初始朝向。
-- **路口缩进(`AssignJunctionSetbacks`，`DistributeRoadnet`最后调用)**：所有路的车道配好之后，对每个Intersection的每条连接路，看它在路口两侧
-  与相邻路的夹角（容差约3°）：两侧都是平角(≥180°)缩进0；两侧最小夹角是直角(或钝角)取两侧夹角<180°的邻路半宽的最大值(不含自己)；
-  两侧有锐角取构成锐角的几条路(含自己)半宽最大值的两倍。再按0.45倍路长封顶，用`Road::SetSetback(isStart, value)`写进Road，
-  Core的`RoadJunction::Build`和行道树/路灯`LayoutRows`都读它。`roadnet_checkboard.cpp`有一份复制，改一边要同步。
+- **路口缩进(`AssignJunctionSetbacks`，`DistributeRoadnet`最后调用，2026-11-25改写)**：所有路的车道配好之后，对每个Intersection的每条连接路，分别看它和左侧、右侧相邻路的夹角theta：
+  theta<=直角时精确算缩进=`(对方半宽 + 本路半宽*cos(theta)) / sin(theta)`(本路和对方朝向对方那侧的路缘线交点沿本路中线的距离)；theta>直角时缩进=对方半宽；
+  theta>=平角(减容差约3°)的那一侧没有重叠，不缩进。每条路取两侧缩进的较大值，再按0.45倍路长封顶，用`Road::SetSetback(isStart, value)`写进Road，
+  Core的`RoadJunction::Build`和行道树/路灯`LayoutRows`都读它。只连两条路的路口同一套规则，但平角容差放宽到5°(夹角>=175°不缩进)，其余按标准路口算。`roadnet_checkboard.cpp`、`roadnet_file.cpp`有拷贝，改一边要同步。
 
 ## 依赖关系
 

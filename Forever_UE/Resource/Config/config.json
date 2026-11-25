@@ -54,6 +54,7 @@
    ],
    "main_story" : "script_test",
    "manufacture_mods" : [ "manufacture_farm", "manufacture_ranch", "manufacture_food" ],
+   "map_size" : [ 256, 256 ],
    "name_mods" : [ "name_chinese" ],
    "organization_mods" : [
       "organization_shop",
@@ -70,7 +71,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story"
    ],
    "roadnet_mods" : [
-      "roadnet_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/large.roadnet"
+      "roadnet_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/small.roadnet"
    ],
    "room_mods" : [
       "room_empty",
@@ -101,7 +102,7 @@
       "terrain_beach",
       "terrain_river --skip",
       "terrain_empty",
-      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/large.terrain"
+      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/small.terrain"
    ],
    "vehicle_mods" : [
       "vehicle_plane",

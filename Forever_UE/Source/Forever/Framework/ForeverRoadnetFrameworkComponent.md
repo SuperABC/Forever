@@ -12,7 +12,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **道路正常路段的可见效果直接来自`Road::mesh`本身**——`mesh`资产（默认`default_1_1`）本身
   已经画好了车道+人行道横断面，`vehicleLanes`/`parkingLanes`/`pedestrianLanes`这几组宽度数据
   只用于结构计算（导航锚点偏移、路口路缘角点、开口cube宽度），不驱动任何单独的procedural
-  条带或材质。`BuildRoadInstances`的分段数量算法是"缩放后的mesh长度落在[0.8,1.2]×原始长度
+  条带或材质。`BuildRoadInstances`的分段数量算法是"缩放后的mesh长度落在[0.75,1.5]×原始长度
   区间内，取最接近total/unit的整数段数"；不需要自建弧长采样表——`Connection::GetPoint(f)`
   本身就是弧长参数化的（`Source/Dependence/map/general_geometry.cpp`的`ResolveArcLengthParam`，
   128点惰性缓存），直接按`f=k/n`取点就已经是等弧长分段。用`UInstancedStaticMeshComponent`
@@ -128,4 +128,8 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 
 - **路面ISM的自定义数据**：`GetOrCreateRoadISM`给每个ISM设`NumCustomDataFloats=2`，`BuildRoadInstances`每加一个实例写入沿路方向的水平单位向量`(cos, sin)`(索引0/1)。材质里用`PerInstanceCustomData`读出来：沿路方向=`(c, s)`，横向=`(-s, c)`，与世界坐标XY点乘得到顺着路的UV(材质的`TransformVector`在ISM上不带实例旋转，不能用)。
 
+- **坡度+转弯时的接缝台阶与扭转系数（2026-11-25）**：路既转弯又有坡时，相邻两节(各自横轴水平的刚性平面)在接缝线上高度差为`s·delta·w`(`s`=坡度，`delta`=两节转角，`w`=离中轴的横向距离)，两侧符号相反，所以一侧前高后低、另一侧前低后高。**绕中轴线整体转一个角(roll)解决不了**：相邻两节转一样的角，高度差原样保留；要的是沿节长的扭转(z偏移 = `s·kappa·x·y`，x沿路、y横向，以节中心为原点，`kappa`=偏航角变化率，右转为正)。`BuildRoadInstances`算出`k = s·delta/弧长(cm)`写进路面ISM的自定义数据2(`NumCustomDataFloats`=3)，材质WPO里把`k · x · y`加到世界Z上即可：x=`dot(世界位置XY-(自定义数据3,4), (c,s))`、y=`dot(世界位置XY-(自定义数据3,4), (-s,c))`(自定义数据3/4是节中心世界XY；不能用Object Position，它在ISM上是组件原点，x、y会变成到原点的距离、偏移大几十米)，(c,s)是自定义数据0/1(沿路水平方向)，单位cm。材质(`Content/Asset/Roadnet/Default/Material`里的Road/Pavement等)没接这一项前行为不变。
+- **扭转改成精确形式（2026-11-25）**：每节两端为补外侧楔形缝会伸出`e`，伸出的端头沿自己的平面延伸，和邻节穿插。点(沿路x，横向y)实际落在中轴线弧长`x/(1-kappa*y)`的截面上，所以WPO的Z偏移取`s*kappa*x*y/(1-kappa*y)`(自定义数据2=`s*kappa`、5=`kappa`，x用世界坐标量因此包含伸出部分)，伸出的端头被拉回真实路面。分母在材质里限幅到不小于0.5。不考虑上下曲率对伸出量的影响(顶棚高度未知，曲率大时伸出量会失控)。
+- **单节拉伸范围放宽到[0.75,1.5]*unit（2026-11-25）**：原来是[0.8,1.2]，unit=5m时6~8m(和小于4m)的一段放不下任何整数节，会退化成灰色`AppendFlatRoadCube`矩形。现在由`ROAD_TILE_SCALE_MIN/MAX`控制(unit=5m时每节3.75~7.5m)，能放下的长度区间从第一节起连续(n节可放长度[3.75n,7.5n]，n>=1时相邻区间首尾相接)，只有小于3.75m的一小段还会退化成平板。Core的`Map::LaneSplitKnots`镜像同一套规则，已同步。
+- **补缝半宽与坡度取弦（2026-11-25）**：(补缝半宽按mesh包围盒取的做法已撤销，仍按路宽/2。)每节的坡度取弦(首尾两点连线)而不是中点切线，节两端正好落在曲线上，竖向有曲率时相邻节中轴线高度也严格相接；水平朝向仍取切线。
 - **路与路交界处的补缝（2026-11-20）**：编辑器把曲线(贴合地形/隧道口)切成很多条首尾相接的短路，交界处和节内接缝一样会张开楔形缝，而之前首尾一律不伸。现在整条路的首/尾若没连路口(`trim==0`且这一节是路的真正首/尾，不是开口旁边的)，也按本节曲率估计的 `e` 伸出去。连路口的一端不伸；死胡同端点只多伸很小一截。

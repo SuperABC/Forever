@@ -378,6 +378,10 @@ struct TerrainFitRequest {
 	std::vector<TerrainFitSample> centerline;
 	float width = 0.f;   // 整宽(地图element单位)
 	float falloff = 0.f; // 边缘向外渐变回原地形的距离
+	// 折线起/终端外侧是否贴合(圆帽)：true时端点之外半径(半宽+falloff)的圆也会被拉到端点路面高度；
+	// 端点连着桥/隧道等不贴地形的路时设false，免得圆帽把地形抬到盖住桥头(桥面往下降时地形会戳出桥面)。
+	bool capStart = true;
+	bool capEnd = true;
 };
 
 // 拆除请求(RouteMod::AddDemolition产出)：沿折线centerline宽width的条带扫过的楼体(及其所在园区)全部拆除，
@@ -406,7 +410,8 @@ void BuildHatch(const Connection* connection, float t1, float t2, float width, b
 	float startWallBottom = kNoEndWall, float endWallBottom = kNoEndWall);
 
 // 把connection上[t1,t2]这一段沿弧长按固定间距采样成折线，追加一个TerrainFitRequest进out。
-void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, std::vector<TerrainFitRequest>& out);
+void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, std::vector<TerrainFitRequest>& out,
+	bool capStart = true, bool capEnd = true);
 
 enum AREA_TYPE : int {
 	AREA_NONE,

@@ -16,6 +16,10 @@
 #define ROAD_WORLD_SCALE 1000.f
 // 道路单元(每节tiling实例)头尾的高度偏移(地图单位)：头抬高、尾压低各这么多，见BuildRoadInstances。
 #define ROAD_TILE_TILT 1e-5f
+// 每节路面单元沿路方向拉伸后的长度范围(相对unit)：[MIN,MAX]*unit。范围太窄会让某些长度(如unit=5m时6~8m)一节也放不下而退化成灰矩形，
+// 改这里要同步Core的Map::LaneSplitKnots(同一套分段数规则)。
+#define ROAD_TILE_SCALE_MIN 0.75f
+#define ROAD_TILE_SCALE_MAX 1.5f
 // 开口cube/路口mesh等的高度偏移，避免和地形网格共面z-fighting
 // (和ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON同类问题)；相对10m一格的尺度可忽略。
 #define ROADNET_HEIGHT_EPSILON 10.f
@@ -352,7 +356,7 @@ UInstancedStaticMeshComponent* UForeverRoadnetFrameworkComponent::GetOrCreateRoa
 	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
 	ism->SetStaticMesh(mesh);
 	// 每个实例带2个自定义数据：沿路方向的水平单位向量(cos,sin)，供材质把世界UV转到顺着路的坐标系，见.md。
-	ism->NumCustomDataFloats = 2;
+	ism->NumCustomDataFloats = 6; // 0/1=沿路水平方向(cos,sin)，2=扭转系数s*kappa，3/4=本节中心世界XY(cm)，5=偏航曲率kappa(1/cm)(2~5给材质WPO用，见BuildRoadInstances)
 	ism->SetupAttachment(owner->GetRootComponent());
 	ism->RegisterComponent();
 	owner->AddInstanceComponent(ism);
@@ -422,18 +426,18 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 		keepRanges = next;
 	}
 
-	// 分段数量：缩放后的单节长度落在[0.8,1.2]*unit内，取最接近rangeLen/unit的整数；
+	// 分段数量：缩放后的单节长度落在[ROAD_TILE_SCALE_MIN,ROAD_TILE_SCALE_MAX]*unit(0.75~1.5)内，取最接近rangeLen/unit的整数；
 	// Connection::GetPoint(f)本身是弧长参数化的，按t=rangeStart+(rangeEnd-rangeStart)*k/n取点即等弧长分段。
 	auto tileRange = [&](float rangeStart, float rangeEnd) {
 		float rangeLen = totalLen * (rangeEnd - rangeStart);
 		if (rangeLen <= 0.f) return;
 
-		int nLow = FMath::CeilToInt(rangeLen / (1.2f * unit));
-		int nHigh = FMath::FloorToInt(rangeLen / (0.8f * unit));
+		int nLow = FMath::CeilToInt(rangeLen / (ROAD_TILE_SCALE_MAX * unit));
+		int nHigh = FMath::FloorToInt(rangeLen / (ROAD_TILE_SCALE_MIN * unit));
 		int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(rangeLen / unit), nLow, nHigh) : 0;
 		if (n <= 0) {
 			// 这一段(比如两个开口之间、或端点和第一个开口之间剩下的那一小截)连一节
-			// default_x_x_x实例都铺不出来(短于0.8*unit)——不留空隙，退化成贴RoadPlain材质的
+			// default_x_x_x实例都铺不出来(短于0.75*unit)——不留空隙，退化成贴RoadPlain材质的
 			// 扁平cube填满，和道路开口一样处理。
 			float centerT = (rangeStart + rangeEnd) * 0.5f;
 			AppendFlatRoadCube(road, centerT, rangeLen, road->GetTotalWidth(), outVertices, outTriangles, outUvs);
@@ -458,11 +462,21 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 
 			FVector fwd = FVector(dx, dy, dz).GetSafeNormal();
 			if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
+			// 水平朝向取切线，坡度取弦(首尾两点连线)：节两端正好落在曲线上，相邻两节在中轴线上的高度才严格相接
+			// (用中点切线的坡度，竖向有曲率时两端高度会和曲线差一点，相邻节对不上)。
+			{
+				const float chordHorizontal = FMath::Sqrt(FMath::Square(endW.X - startW.X) + FMath::Square(endW.Y - startW.Y));
+				const FVector2D tangentXY = FVector2D(fwd.X, fwd.Y).GetSafeNormal();
+				if (chordHorizontal > 1e-3f && !tangentXY.IsNearlyZero()) {
+					fwd = FVector(tangentXY.X, tangentXY.Y, (endW.Z - startW.Z) / chordHorizontal).GetSafeNormal();
+				}
+			}
 
 			// 曲线上相邻两节朝向差delta，刚性的直段在外侧会张开一个楔形缝(内侧则互相重叠)。
 			// 把内部接缝处每节的两端各沿自身轴向多伸 e=(W/2)*tan(delta/2)，外侧的角正好碰上，缝就合上了；
 			// 路段首尾(靠路口/开口)的那一端不伸，免得戳进路口mesh或开口里。直路delta=0，e=0，不变。
 			float extStart = 0.f, extEnd = 0.f;
+			float twistK = 0.f, kappaCm = 0.f; // 扭转系数(1/cm)，见下面写入自定义数据2处
 			{
 				float ax, ay, az, bx, by, bz;
 				road->GetTangent(t0, ax, ay, az);
@@ -471,6 +485,18 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 				ta = ta.GetSafeNormal(); tb = tb.GetSafeNormal();
 				if (!ta.IsNearlyZero() && !tb.IsNearlyZero()) {
 					float delta = FMath::Acos(FMath::Clamp(FVector2D::DotProduct(ta, tb), -1.f, 1.f));
+						// 既转弯又有坡度时，相邻两节(各自是水平横轴的刚性平面)在接缝线上高度差为 s*delta*w(w=离中轴的横向距离，
+						// 两侧符号相反)，这就是"一侧前高后低、另一侧反过来"的台阶。要让两节在接缝处都回到水平截面，每节需要沿节长扭转：
+						// z偏移 = s*kappa*x*y(x沿路、y横向，以本节中心为原点，单位cm)。kappa=带符号的偏航角变化率(右转为正，y=右手方向)，
+						// s=坡度。单纯绕中轴线转一个角(roll)没用：相邻两节转一样的角，高度差原样保留。
+						// 这里算 s*kappa(1/cm)，写进自定义数据2，材质WPO用 k*x*y(x、y为到实例中心的世界cm距离)作为Z偏移。
+						{
+							const float signedDelta = FMath::Atan2(ta.X * tb.Y - ta.Y * tb.X, FVector2D::DotProduct(ta, tb));
+							const float horizontal = FMath::Sqrt(fwd.X * fwd.X + fwd.Y * fwd.Y);
+							const float slope = horizontal > 1e-6f ? FMath::Clamp(fwd.Z / horizontal, -1.f, 1.f) : 0.f;
+							kappaCm = FMath::Clamp(signedDelta, -0.6f, 0.6f) / (actualSegLen * ROAD_WORLD_SCALE);
+							twistK = slope * kappaCm;
+						}
 					float e = FMath::Min(road->GetTotalWidth() * 0.5f * FMath::Tan(delta * 0.5f), actualSegLen * 0.5f);
 					// 整条路的首尾若没连路口(不收缩)，也要伸：编辑器把一段曲线(贴合地形/隧道口等)切成很多条首尾相接的短路，路和路的交界处
 					// 和节内接缝一样会张开楔形缝；这里按本节的曲率估计交界处的转角(相邻两条路是C1连续的)。连着路口的一端(收缩过)不伸；
@@ -494,6 +520,11 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 			if (dirXY.IsNearlyZero()) dirXY = FVector2D(1.f, 0.f);
 			ism->SetCustomDataValue(instanceIndex, 0, dirXY.X, false);
 			ism->SetCustomDataValue(instanceIndex, 1, dirXY.Y, false);
+			ism->SetCustomDataValue(instanceIndex, 2, twistK, false);
+			// 材质里的Object Position在ISM上返回的是组件原点而不是实例中心，所以把节中心直接传进去。
+			ism->SetCustomDataValue(instanceIndex, 3, mid.X, false);
+			ism->SetCustomDataValue(instanceIndex, 4, mid.Y, false);
+			ism->SetCustomDataValue(instanceIndex, 5, kappaCm, false);
 		}
 		};
 

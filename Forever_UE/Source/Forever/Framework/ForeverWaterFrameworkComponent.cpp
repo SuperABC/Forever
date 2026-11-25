@@ -13,6 +13,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverSkyFrameworkComponent.h"
 
+#include "Water/WaterQuery.h"
 #include "map/map.h"
 
 using namespace std;
@@ -134,7 +135,8 @@ void UForeverWaterFrameworkComponent::UpdateWaterParameters() {
 		const auto mapSize = map->GetSize();
 		const int cellX = FMath::FloorToInt(cameraLocation.X / kWorldScale);
 		const int cellY = FMath::FloorToInt(cameraLocation.Y / kWorldScale);
-		if (cellX >= 0 && cellY >= 0 && cellX < mapSize.first && cellY < mapSize.second) {
+		if (cellX >= 0 && cellY >= 0 && cellX < mapSize.first && cellY < mapSize.second
+				&& !ForeverWater::IsBelowTerrain(map, cameraLocation)) { // 相机在地形表面以下(海底隧道里)不算在水里：不开水下后处理，也不隐藏水面
 			const auto [hasWater, level] = map->GetWater(cellX, cellY);
 			if (hasWater) {
 				baseLevel = level * kWorldScale;

@@ -1287,8 +1287,25 @@ void AForeverFrameworkActor::FinishTimeSkip()
 namespace {
 		// 默认地图尺寸(地图元素,1元素=10m)，必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，
 		// 且width*height/(512*512)必须大于1才会生成山，详见Source/Basic/map/terrain_mountain.md。
+		// config.json顶层"map_size"(数字或[宽,高])可覆盖；不写、格式不对或不是2的整数次幂时用默认值。
 	constexpr int kDefaultMapWidth = 1024;
 	constexpr int kDefaultMapHeight = 1024;
+
+	bool IsPowerOfTwo(int value) { return value > 0 && (value & (value - 1)) == 0; }
+
+	void ResolveMapSize(int& width, int& height) {
+		width = kDefaultMapWidth;
+		height = kDefaultMapHeight;
+		int configWidth = 0, configHeight = 0;
+		if (!Config::GetMapSize(configWidth, configHeight)) return;
+		if (!IsPowerOfTwo(configWidth) || !IsPowerOfTwo(configHeight)) {
+			UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: config map_size %dx%d is not a power of two, using default %dx%d."),
+				configWidth, configHeight, kDefaultMapWidth, kDefaultMapHeight);
+			return;
+		}
+		width = configWidth;
+		height = configHeight;
+	}
 }
 
 FForeverPendingLoad* AForeverFrameworkActor::FetchActiveLoad()
@@ -1329,7 +1346,10 @@ void AForeverFrameworkActor::BuildMapTerrain()
 	}
 
 	if (!map) {
-		map = new Map(kDefaultMapWidth, kDefaultMapHeight);
+		int mapWidth = 0, mapHeight = 0;
+		ResolveMapSize(mapWidth, mapHeight);
+		UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: new map %dx%d."), mapWidth, mapHeight);
+		map = new Map(mapWidth, mapHeight);
 		map->InitTerrains();
 	}
 }
@@ -1417,7 +1437,9 @@ void AForeverFrameworkActor::GenerateLampMesh()
 FVector AForeverFrameworkActor::GetDefaultSpawnLocation()
 {
 	// 地图正中心;高度只是过渡值(地形还没生成)，玩家真正位置由game_start/RestoreControlledPawn决定。
-	return FVector(kDefaultMapWidth * 500.f, kDefaultMapHeight * 500.f, 200.f);
+	int mapWidth = 0, mapHeight = 0;
+	ResolveMapSize(mapWidth, mapHeight);
+	return FVector(mapWidth * 500.f, mapHeight * 500.f, 200.f);
 }
 
 void AForeverFrameworkActor::EnsurePopulaceGenerated()

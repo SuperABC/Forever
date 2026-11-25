@@ -706,7 +706,7 @@ function drawOverlay() {
 		g.moveTo(sx0, sy0);
 		if (S.road.shape === 'curve') {
 			if (ctrl) { const [cx, cy] = toScreen(ctrl[0], ctrl[1]); const [ex, ey] = toScreen(end[0], end[1]); g.quadraticCurveTo(cx, cy, ex, ey); }
-			else { const [ex, ey] = toScreen(end[0], end[1]); g.lineTo(ex, ey); }
+			else { const cs = ctrlSnap(m); const cp = cs ? cs.point : m; const [ex, ey] = toScreen(cp[0], cp[1]); g.lineTo(ex, ey); }
 		} else { const [ex, ey] = toScreen(end[0], end[1]); g.lineTo(ex, ey); }
 		g.stroke(); g.setLineDash([]);
 		// 头/尾高度标注
@@ -729,12 +729,15 @@ function drawOverlay() {
 			g.textAlign = 'left';
 		}
 		// 吸附角度的引导线：直线看终点，曲线在选控制点阶段看控制点。
-		const guide = S.road.shape === 'line' ? roadSnap.angleSnap : (!ctrl ? angleSnap(m) : null);
+		const guide = S.road.shape === 'line' ? roadSnap.angleSnap : (!ctrl ? ctrlSnap(m) : null);
 		if (guide) {
-			const reach = Math.hypot(guide.point[0] - guide.origin[0], guide.point[1] - guide.origin[1]) + 2;
-			const [gx0, gy0] = toScreen(guide.origin[0] - guide.dir[0] * 2, guide.origin[1] - guide.dir[1] * 2);
-			const [gx1, gy1] = toScreen(guide.origin[0] + guide.dir[0] * reach, guide.origin[1] + guide.dir[1] * reach);
-			g.save(); g.setLineDash([2, 4]); g.strokeStyle = '#ffd24c'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(gx0, gy0); g.lineTo(gx1, gy1); g.stroke();
+			g.save(); g.setLineDash([2, 4]); g.strokeStyle = '#ffd24c'; g.lineWidth = 1.5;
+			for (const gd of (guide.guides || [guide])) {
+				const reach = Math.hypot(guide.point[0] - gd.origin[0], guide.point[1] - gd.origin[1]) + 2;
+				const [gx0, gy0] = toScreen(gd.origin[0] - gd.dir[0] * 2, gd.origin[1] - gd.dir[1] * 2);
+				const [gx1, gy1] = toScreen(gd.origin[0] + gd.dir[0] * reach, gd.origin[1] + gd.dir[1] * reach);
+				g.beginPath(); g.moveTo(gx0, gy0); g.lineTo(gx1, gy1); g.stroke();
+			}
 			if (S.road.shape === 'curve') { const [cx, cy] = toScreen(guide.point[0], guide.point[1]); g.setLineDash([]); g.fillStyle = '#ffd24c'; g.beginPath(); g.arc(cx, cy, 4, 0, Math.PI * 2); g.fill(); }
 			g.restore();
 		}
@@ -776,6 +779,63 @@ function angleSnap(w) {
 	if (!S.road.snapAngle || !p || !p.a.ref) return null;
 	const origin = p.a.ref.node !== undefined ? { node: p.a.ref.node } : (p.a.ref.road !== undefined ? { road: p.a.ref.road, t: p.a.ref.t } : null);
 	return origin ? ME.angleSnapAt(S.model, origin, w[0], w[1], ANGLE_SNAP_DEG) : null;
+}
+// 曲线选控制点阶段的吸附：
+//  1) 起点的直角/平角射线(同直线终点的 angleSnap)；
+//  2) 鼠标附近(地图距离20单位内)各个node的"延长线"(沿已连道路方向反向延出去的射线)——用曲线连另一条路的端点时，控制点落在它的延长线上才能和那条路平角连接；
+//  3) 两者同时够得着时，吸到两条线的交点(控制点既满足起点方向又满足终点方向)。
+// 返回 {point, dir, origin, guides:[{origin,dir}], both}，没吸到返回null。
+const CTRL_SNAP_RANGE = 20;   // 只考虑鼠标这个地图距离(element)内的node
+const CTRL_LINE_TOL = 2;      // 鼠标离延长线/交点这么近(地图单位)才吸附；离得远就不吸，控制点跟着鼠标走
+function ctrlSnap(w) {
+	if (!S.road.snapAngle) return null;
+	const start = angleSnap(w);
+	const tol = CTRL_LINE_TOL, near = CTRL_SNAP_RANGE;   // 都是地图距离(element)，不随缩放变
+	const startNodeId = S.pending && S.pending.a.ref ? S.pending.a.ref.node : undefined;
+	const lines = [];
+	for (const n of S.model.nodes) {
+		if (n.id === startNodeId || Math.hypot(n.x - w[0], n.y - w[1]) > near) continue;
+		for (const r of S.model.roads) {
+			let toward = null;
+			if (r.a === n.id) toward = r.ctrl ? r.ctrl : (() => { const b = ME.nodeOf(S.model, r.b); return b ? [b.x, b.y] : null; })();
+			else if (r.b === n.id) toward = r.ctrl ? r.ctrl : (() => { const a = ME.nodeOf(S.model, r.a); return a ? [a.x, a.y] : null; })();
+			if (!toward) continue;
+			const dx = n.x - toward[0], dy = n.y - toward[1], len = Math.hypot(dx, dy);
+			if (len < 1e-9) continue;
+			lines.push({ origin: [n.x, n.y], dir: [dx / len, dy / len], node: n.id });
+		}
+	}
+	// 鼠标到各延长线(射线)的距离，取最近且在容差内的
+	let ext = null;
+	for (const L of lines) {
+		const vx = w[0] - L.origin[0], vy = w[1] - L.origin[1];
+		const along = vx * L.dir[0] + vy * L.dir[1];
+		if (along < 0.05) continue;
+		const dist = Math.abs(vx * L.dir[1] - vy * L.dir[0]);
+		if (dist <= tol && (!ext || dist < ext.dist)) ext = { L, dist, point: [L.origin[0] + L.dir[0] * along, L.origin[1] + L.dir[1] * along] };
+	}
+	// 起点射线和延长线的交点：离鼠标15像素内就吸过去。
+	if (start) {
+		const best = (() => {
+			let b = null;
+			for (const L of lines) {
+				const det = start.dir[0] * L.dir[1] - start.dir[1] * L.dir[0];
+				if (Math.abs(det) < 1e-4) continue;   // 平行没有交点
+				const qx = L.origin[0] - start.origin[0], qy = L.origin[1] - start.origin[1];
+				const ts = (qx * L.dir[1] - qy * L.dir[0]) / det;   // 沿起点射线
+				const tl = (qx * start.dir[1] - qy * start.dir[0]) / det;   // 沿延长线(node外侧为正)
+				if (ts < 0.05 || tl < 0.05) continue;   // 交点要在起点射线的前方、也要在延长线的正向(node外侧)
+				const pt = [start.origin[0] + start.dir[0] * ts, start.origin[1] + start.dir[1] * ts];
+				const d = Math.hypot(pt[0] - w[0], pt[1] - w[1]);
+				if (d <= CTRL_LINE_TOL * 1.5 && (!b || d < b.d)) b = { d, pt, L };
+			}
+			return b;
+		})();
+		if (best) return { point: best.pt, dir: start.dir, origin: start.origin, guides: [{ origin: start.origin, dir: start.dir }, { origin: best.L.origin, dir: best.L.dir }], both: true };
+		return Object.assign({}, start, { guides: [{ origin: start.origin, dir: start.dir }] });
+	}
+	if (ext) return { point: ext.point, dir: ext.L.dir, origin: ext.L.origin, guides: [{ origin: ext.L.origin, dir: ext.L.dir }] };
+	return null;
 }
 // 路工具的落点：吸附角度优先于路中间/自由点，但显式落在节点/城外连接点上时以那个目标为准。
 function snapPoint(w) {
@@ -1751,7 +1811,7 @@ function roadClick(w) {
 		S.dirty2d = true; return;
 	}
 	const p = S.pending;
-	if (R.shape === 'curve' && !p.ctrl) { const ra = angleSnap(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
+	if (R.shape === 'curve' && !p.ctrl) { const ra = ctrlSnap(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
 	const refB = Object.assign({}, sp.ref);
 	if (refB.node === undefined && refB.road === undefined) refB.z = previewZ(sp);
 	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: R.type, asset: R.asset || ME.DEFAULT_ASSET, lanes: ME.LANE_PRESETS[R.preset].lanes, name: R.name, tree: R.tree, lamp: R.lamp };

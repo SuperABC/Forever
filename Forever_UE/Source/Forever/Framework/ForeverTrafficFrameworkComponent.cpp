@@ -1336,10 +1336,10 @@ void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 				UInstancedStaticMeshComponent* ism = GetOrCreateTrackISM(segment.mesh);
 				if (!ism) continue;
 
-				// 同BuildRoadInstances：n夹在[0.8,1.2]*unit之内，scaleAlong把每块拉伸到实际段长。
+				// 同BuildRoadInstances：n夹在[0.75,1.5]*unit之内(ROAD_TILE_SCALE_MIN/MAX)，scaleAlong把每块拉伸到实际段长。
 				float segLen = conn->CalcDistance();
-				int nLow = FMath::CeilToInt(segLen / (1.2f * unit));
-				int nHigh = FMath::FloorToInt(segLen / (0.8f * unit));
+				int nLow = FMath::CeilToInt(segLen / (1.5f * unit));
+				int nHigh = FMath::FloorToInt(segLen / (0.75f * unit));
 				int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(segLen / unit), nLow, nHigh) : FMath::Max(1, FMath::RoundToInt(segLen / unit));
 				float scaleAlong = (segLen / n) / unit;
 

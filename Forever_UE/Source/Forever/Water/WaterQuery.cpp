@@ -27,3 +27,14 @@ bool ForeverWater::QuerySurface(Map* map, const FVector& worldLocation, double t
 	outBedZ = map->SampleHeight(worldLocation.X / kMapUnitCm, worldLocation.Y / kMapUnitCm) * kMapUnitCm;
 	return true;
 }
+
+bool ForeverWater::IsBelowTerrain(Map* map, const FVector& worldLocation)
+{
+	constexpr float kMapUnitCm = 1000.f;
+	if (!map) return false;
+	auto [width, height] = map->GetSize();
+	const float mapX = worldLocation.X / kMapUnitCm;
+	const float mapY = worldLocation.Y / kMapUnitCm;
+	if (mapX < 0.f || mapY < 0.f || mapX >= width || mapY >= height) return false;
+	return worldLocation.Z < map->SampleHeight(mapX, mapY) * kMapUnitCm;
+}

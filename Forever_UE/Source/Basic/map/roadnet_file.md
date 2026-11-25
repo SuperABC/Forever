@@ -29,8 +29,7 @@
 
 - **隧道口端墙**：`mouth` 的路可带 `wallFrom`/`wallTo`(bool，from=t1端/to=t2端)，编辑器导出时把"这一端节点连着 `tunnel` 路"的那端标 true(和两端高度无关，山坡上两端等高也行)，游戏侧据此给 `AddTunnelHatch` 传端墙墙底 "该端节点高度+`TUNNEL_ROOF_CLEARANCE`(1=10m，隧道资产房顶)"。不连隧道的 mouth 段(如 mouth→mouth→tunnel 里靠外的)不加。
 
-- **两条路的路口(拐角)的缩进（2026-11-20）**：`AssignJunctionSetbacks`里只连两条路的节点单独算：夹角phi(两条路离开节点方向的夹角，<=PI)，沿本路中线缩进 `(对方半宽 + 本路半宽*cos(phi)) / sin(phi)`(等宽时=半宽/tan(phi/2))，让两条路朝向对方那侧的路缘线正好在角点相交、不再重叠；平角(phi>=PI-EPS)缩进0，缩进不超过路长的45
-- **两条路的路口(拐角)的缩进（2026-11-20）**：`AssignJunctionSetbacks`里只连两条路的节点单独算：夹角phi(两条路离开节点方向的夹角，<=PI)，沿本路中线缩进 `(对方半宽 + 本路半宽*cos(phi)) / sin(phi)`(等宽时=半宽/tan(phi/2))，让两条路朝向对方那侧的路缘线正好在角点相交、不再重叠；平角(phi>=PI-EPS)缩进0，缩进不超过路长的45%。jing/checkboard/file三份同步。
+- **路口缩进规则已统一（2026-11-25）**：`AssignJunctionSetbacks`不再单独处理两条路的路口，所有路口(含拐角)每条路分别和左/右相邻路算缩进(夹角<=直角精确算、>直角取对方半宽、>=平角不缩进)取较大值；只连两条路时平角容差为5°。规则见`roadnet_jing.md`"路口缩进"，jing/checkboard/file三份同步。
 
 ## output.transit（2026-11-23）
 

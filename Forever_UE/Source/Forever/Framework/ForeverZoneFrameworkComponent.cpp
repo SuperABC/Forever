@@ -325,9 +325,9 @@ void UForeverZoneFrameworkComponent::BuildWallSegment(const ZoneWallSpec& wall, 
 	float unitWorld = wall.unit * ZONE_WORLD_SCALE;
 
 	// 分段数量算法照抄ForeverRoadnetFrameworkComponent::BuildRoadInstances的tileRange："scaled
-	// unit落在[0.8,1.2]*unit区间内"这条约束，取最接近rangeLen/unit的合法整数。
-	int nLow = FMath::CeilToInt(rangeLenWorld / (1.2f * unitWorld));
-	int nHigh = FMath::FloorToInt(rangeLenWorld / (0.8f * unitWorld));
+	// unit落在[0.75,1.5]*unit区间内"这条约束，取最接近rangeLen/unit的合法整数。
+	int nLow = FMath::CeilToInt(rangeLenWorld / (1.5f * unitWorld));
+	int nHigh = FMath::FloorToInt(rangeLenWorld / (0.75f * unitWorld));
 	int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(rangeLenWorld / unitWorld), nLow, nHigh) : 0;
 	if (n <= 0) return; // TODO：这段长度连一节unit都铺不出来时的退化兜底渲染，这次先跳过。
 

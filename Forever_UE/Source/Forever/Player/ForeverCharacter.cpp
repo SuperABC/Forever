@@ -491,6 +491,8 @@ bool AForeverCharacter::QueryWater(const FVector& worldLocation, float& outSurfa
 		cachedFramework = framework;
 	}
 	Map* map = framework ? framework->GetMap() : nullptr;
+	// 在地形表面以下(海底隧道里)不算在水中：格子有水但人在地下，不能入水(否则一进隧道就被浮力顶飞)。
+	if (ForeverWater::IsBelowTerrain(map, worldLocation)) return false;
 	// 格子范围/水位/波浪/水底的计算和船的浮力共用ForeverWater::QuerySurface(Water/WaterQuery.h)。
 	return ForeverWater::QuerySurface(map, worldLocation, GetWorld()->GetTimeSeconds(), outSurfaceZ, outBedZ, outBaseSurfaceZ);
 }

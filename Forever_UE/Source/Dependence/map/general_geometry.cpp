@@ -1657,7 +1657,8 @@ void BuildHatch(const Connection* connection, float t1, float t2, float width, b
 	out.push_back(hatch);
 }
 
-void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, vector<TerrainFitRequest>& out) {
+void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, vector<TerrainFitRequest>& out,
+	bool capStart, bool capEnd) {
 	if (!connection) return;
 
 	float length = connection->CalcDistance(t1, t2);
@@ -1666,6 +1667,8 @@ void BuildTerrainFit(const Connection* connection, float t1, float t2, float wid
 	TerrainFitRequest request;
 	request.width = width;
 	request.falloff = max(falloff, 0.f);
+	request.capStart = capStart;
+	request.capEnd = capEnd;
 	int segments = max(1, static_cast<int>(ceil(length / TERRAIN_FIT_SAMPLE_SPACING)));
 	for (int i = 0; i <= segments; i++) {
 		float t = t1 + (t2 - t1) * static_cast<float>(i) / static_cast<float>(segments);

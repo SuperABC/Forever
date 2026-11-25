@@ -38,6 +38,9 @@
 // 地板slab厚度(UE单位)，对应BuildingElement.cpp里kSlabThickness(0.02地图单位)。Ground slab中心在楼层底部+半个厚度，
 // 站人的表面(slab顶面)比floorBaseZ换算出的楼层底部高一个完整厚度，落脚点必须按顶面算，否则会陷进地板。
 #define CITIZEN_GROUND_SLAB_THICKNESS 20.f
+// 街上生成时找路面顶的竖直射线：从路网高度往上/往下各查多少(cm)，路面mesh厚20cm，顶面在路网高度之上。
+#define CITIZEN_SPAWN_TRACE_UP 60.f
+#define CITIZEN_SPAWN_TRACE_DOWN 20.f
 // 靠近检测碰撞盒尺寸(UE单位，纯UE层判定，与Core数据无关)：水平半宽~1.2m，垂直半高~0.9m，贴近"对话交互"的实际范围。
 #define CITIZEN_PROXIMITY_HALF_XY 120.f
 #define CITIZEN_PROXIMITY_HALF_Z 90.f
@@ -171,6 +174,19 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 		worldY = mapY * CITIZEN_WORLD_SCALE;
 		// Citizen记录的位置统一是脚底高度(和Core推算行走的路径点一致)，Actor位置是胶囊体中心，抬一个半高。
 		worldZ = mapZ * CITIZEN_WORLD_SCALE + GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+		// 在街上(不在房间/绿化区里)：路网高度是路面mesh的底面，mesh实际有20cm厚、顶面比它高20cm，直接按路网高度生成，
+		// 胶囊体就整个陷在路面实体里(三角面碰撞)，桥上没有地形兜底，被推出时会从底面掉到桥下。向下打一条线找到路面顶，脚底放上去。
+		if (!citizen->GetCurrentRoom() && !citizen->GetCurrentGreen()) {
+			if (UWorld* world = GetWorld()) {
+				FCollisionQueryParams traceParams(SCENE_QUERY_STAT(CitizenSpawnGround), false, this);
+				FHitResult hit;
+				const FVector feet(worldX, worldY, mapZ * CITIZEN_WORLD_SCALE);
+				if (world->LineTraceSingleByChannel(hit, feet + FVector(0.f, 0.f, CITIZEN_SPAWN_TRACE_UP),
+					feet - FVector(0.f, 0.f, CITIZEN_SPAWN_TRACE_DOWN), ECC_Visibility, traceParams)) {
+					worldZ = hit.ImpactPoint.Z + GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + CITIZEN_HEIGHT_EPSILON * 0.1f;
+				}
+			}
+		}
 	}
 	else {
 		// 换了新房间之后从未在场景里实例化过：房间中心+随机偏移+楼层高度换算落脚点，见

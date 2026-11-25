@@ -1887,11 +1887,11 @@ vector<float> Map::LaneSplitKnots(Road* road, float tA, float tB) {
 	float unit = road->GetUnit(), total = road->CalcDistance();
 	if (unit <= 0.f || total <= 0.f) return out;
 
-	// 和Forever BuildRoadInstances::tileRange同一套分段数规则(缩放后的单节长度落在[0.8,1.2]*unit，取最接近rangeLen/unit的整数)，
+	// 和Forever BuildRoadInstances::tileRange同一套分段数规则(缩放后的单节长度落在[0.75,1.5]*unit，取最接近rangeLen/unit的整数)，
 	// 在[tA,tB]上按t等分(t本身是弧长参数)，网格点就是路面单元的接缝。开口会把路面切成几段各自重新分节，这里不跟(静态没法知道)，只是大致对齐。
 	float rangeLen = total * (tB - tA);
-	int nLow = static_cast<int>(ceilf(rangeLen / (1.2f * unit)));
-	int nHigh = static_cast<int>(floorf(rangeLen / (0.8f * unit)));
+	int nLow = static_cast<int>(ceilf(rangeLen / (1.5f * unit)));
+	int nHigh = static_cast<int>(floorf(rangeLen / (0.75f * unit)));
 	int n = (nLow <= nHigh && nLow > 0) ? max(nLow, min(nHigh, static_cast<int>(roundf(rangeLen / unit)))) : 0;
 	if (n <= 1) return out;
 
@@ -2639,7 +2639,13 @@ void Map::ApplyTerrainFits(const vector<TerrainFitRequest>& fits) {
 				for (int gx = gx0; gx <= gx1; gx++) {
 					float px = static_cast<float>(gx) / sub, py = static_cast<float>(gy) / sub;
 					float t = 0.f;
-					if (len2 > 1e-12f) t = max(0.f, min(1.f, ((px - a.x) * abx + (py - a.y) * aby) / len2));
+					if (len2 > 1e-12f) {
+							float rawT = ((px - a.x) * abx + (py - a.y) * aby) / len2;
+							// 折线首/末端关掉圆帽：投影落在端点之外的格点不贴合(端点连着桥时，圆帽会把地形抬到盖住桥头)。
+							if (!fit.capStart && s == 0 && rawT < 0.f) continue;
+							if (!fit.capEnd && s + 1 >= segmentCount && rawT > 1.f) continue;
+							t = max(0.f, min(1.f, rawT));
+						}
 					float dx = px - (a.x + abx * t), dy = py - (a.y + aby * t);
 					float d = sqrtf(dx * dx + dy * dy);
 

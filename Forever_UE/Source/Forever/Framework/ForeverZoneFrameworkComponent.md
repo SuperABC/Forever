@@ -16,7 +16,7 @@
 - **`GetOrCreateWallISM`/围墙分段铺设算法照抄`ForeverRoadnetFrameworkComponent.cpp`的
   `GetOrCreateRoadISM`/`BuildRoadInstances`里的`tileRange`**：同一个mesh路径复用同一个
   `UInstancedStaticMeshComponent`（`wallMeshInstances`，`TMap<FString,...>`缓存，逻辑完全
-  照抄）；分段数量算法同样是"scaled unit落在`[0.8,1.2]*unit`区间内，取最接近`rangeLen/unit`
+  照抄）；分段数量算法同样是"scaled unit落在`[0.75,1.5]*unit`区间内，取最接近`rangeLen/unit`
   的合法整数`n`"，每个实例沿长度轴缩放`actualSegLen/unit`倍。和Road的区别是围墙是直线段（不是
   Bezier曲线），不需要`Connection::GetPoint`/`GetTangent`的弧长参数化，直接线性插值端点即可；
   `n<=0`（这段长度连一节unit都铺不出来）直接跳过，不做退化兜底渲染（代码里标了TODO）。

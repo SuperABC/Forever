@@ -634,7 +634,7 @@
 				if (!cross) continue;
 				const za = zAt(model, a, ctx, cross.t1), zb = zAt(model, b, ctx, cross.t2);
 				if (Math.abs(za - zb) < SAME_LEVEL) warnings.push(`路${a.id}与路${b.id}在(${cross.x.toFixed(1)},${cross.y.toFixed(1)})同层交叉但没有路口(隧道/桥不能从中间接路)`);
-				else if (Math.abs(za - zb) < 0.6) warnings.push(`路${a.id}与路${b.id}在(${cross.x.toFixed(1)},${cross.y.toFixed(1)})上下净空只有${Math.abs(za - zb).toFixed(2)}`);
+				else if (Math.abs(za - zb) < 0.5) warnings.push(`路${a.id}与路${b.id}在(${cross.x.toFixed(1)},${cross.y.toFixed(1)})上下净空只有${Math.abs(za - zb).toFixed(2)}`);
 			}
 		}
 		for (const n of model.nodes) {

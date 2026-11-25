@@ -23,8 +23,8 @@ void RoadnetMod::AddPier(const string& mesh, vector<vector<Connection>> chains, 
 	piers.push_back(std::move(request));
 }
 
-void RoadnetMod::AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff) {
-	BuildTerrainFit(connection, t1, t2, width, falloff, terrainFits);
+void RoadnetMod::AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, bool capStart, bool capEnd) {
+	BuildTerrainFit(connection, t1, t2, width, falloff, terrainFits, capStart, capEnd);
 }
 
 void RoadnetMod::AddTreeSingle(const PointParams& position, float scale, const string& meshPath) {

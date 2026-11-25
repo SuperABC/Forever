@@ -31,3 +31,4 @@
 ## 绿化区（2026-11-20）
 `WalkToGreen(waypoints, green, circle)`：同`WalkTo`，目的地是绿化区的圆。`TeleportToGreen`：Actor瞬移到圆内随机点(`ComputeGreenLandingSpot`，脚底高度=圆心节点Z)并`SetCurrentGreen`+记脚底位置。
 `GetWalkGreen(outCircle)`：正在去的绿化区(存档用)。`Init`：Citizen记录的位置统一是脚底高度(房间落点和`TeleportToRoom`也写脚底)，Actor位置补半个胶囊高。
+- **街上生成时贴路面顶（2026-11-25）**：路网高度是路面mesh的底面(mesh厚20cm，顶面高20cm，碰撞是三角面)，`Init`里在街上(无房间/绿化区)按路网高度生成会让胶囊体整个陷进路面实体，桥上没有地形兜底，被推出时从底面掉到桥下。现在`Init`向下打一条`ECC_Visibility`射线(从路网高度上60cm到下20cm)，命中就把脚底放在命中点上，没命中保持原高度。
