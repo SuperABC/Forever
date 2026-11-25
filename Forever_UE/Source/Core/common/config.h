@@ -55,10 +55,7 @@ public:
 	// 没配置/格式不对返回false(不兜底默认值，由调用方决定)。只做格式解析(正整数)，2的整数次幂等业务约束由调用方校验。
 	static bool GetMapSize(int& width, int& height);
 
-	// 目前固定是bare名"test"，集中在这里避免字面量重复
-	static std::string GetMainStoryScriptPath();
-
-	// Story screen的story_scripts列表非空时用它，否则只有GetMainStoryScriptPath()
+	// 主线脚本=Story screen的story_scripts列表(按顺序)。列表为空就是没有主线脚本，不兜底。
 	static std::vector<std::string> GetMainStoryScriptPaths();
 
 	// jsonKey形如"building_mods"，元素按第一个空格切成(id, 参数字符串)，参数原样返回不解析

@@ -27,8 +27,8 @@ Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const st
 		// Traffic::CreateVehicle里传入、Traffic用它做unordered_map键)，不是mod->GetName()，
 		// 因为多个Vehicle实例可能共享同一个VehicleMod子类，mod->GetName()不保证跨实例唯一。
 		script->SetValue("name", ValueType(name));
-		// $$self.on_route：这辆车是不是挂在公交线路上(SetRouteBinding时置1)。同一个VehicleMod既能
-		// 跑线路又能停车位(公交)，车辆script靠它区分要不要提供"驾驶"选项，见vehicle_bus.script。
+		// $$self.on_route：这辆车是不是挂在线路上(SetRouteBinding时置1)。同一个VehicleMod既能
+		// 跑线路又能停车位，车辆script靠它区分要不要提供"驾驶"选项。
 		script->SetValue("on_route", ValueType(0));
 	}
 }

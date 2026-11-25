@@ -96,7 +96,8 @@
   对范围内每个element用`isPointInQuad`(凸四边形叉积法，四条边同号即在内部)判断是不是真的
   落在这个lot内部，是的话就要求`isConstruction(x,y)`，只要有一个不是就整块
   lot放弃(`break`/跳过，不`emplace_back`)。严格只认可建设标记，不认`"plain"`——
-  可建设标记是`Map::InitTerrains`"周围3x3高度都为0"规则标出来的
+  可建设标记是`Map::InitTerrains`"周围3x3高度一致"规则标出来的(不保证在z=0，所以代码里用`isGround`：
+  `isConstruction`再加`getHeight`≈0，本路网只在z=0的地面上建)
   (见`Source/Core/map/map.md`，2026-11-21前是把地形名改成`"construction"`)，没被标记的那一圈格子，本质就是贴着mountain/river/
   ocean这类不规则地形的边缘地带；之前的做法(`isBuildable`)只抽样四个角、而且plain和
   construction都放过，会漏判——四个角都在晋升区内，lot中间却可能横穿一条贴着山体边缘的

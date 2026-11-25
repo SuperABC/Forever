@@ -28,6 +28,24 @@ namespace {
 		bool triplanar = false;
 	};
 
+	// 兜底材质：没有声明材质的地形(TerrainMaterialSpec::defined为false——没有mod的默认地形、没调SetMaterial的mod地形)都用它。
+	// 贴图是工程自带的/Game/Asset/Terrain/Plain(pak.bat会预处理这个目录)。
+	const TerrainMaterialSpec& FallbackTerrainMaterial() {
+		static const TerrainMaterialSpec material = [] {
+			TerrainMaterialLayer layer;
+			layer.name = "default_plain";
+			layer.diffuse = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
+			layer.normal = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
+			layer.roughness = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";
+			layer.tileMeters = 10.f;
+			TerrainMaterialSpec spec;
+			spec.defined = true;
+			spec.layers = { layer };
+			return spec;
+		}();
+		return material;
+	}
+
 	// 层贴图数组边长(必须等于prepare_terrain_textures.py里的RES)、覆盖图精度/模糊(材质的整体质量参数，改了要重启)
 	constexpr int32 kArrayResolution = 1024;
 	constexpr int32 kCoverageTexelsPerElement = 2;
@@ -329,7 +347,7 @@ UMaterialInstanceDynamic* FTerrainMaterialBuilder::Build(UObject* outer, Map* ma
 	std::map<std::string, uint8_t> typeIndex;
 	for (int32 i = 0; i < (int32)typeIds.size(); i++) typeIndex[typeIds[i]] = static_cast<uint8_t>(FMath::Min(i, typeCount - 1));
 
-	// ---- 层：只加载实际用到的，按首次出现顺序编号。材质声明来自各地形mod(TerrainMod::SetMaterial，Map::GetTerrainAppearances收集)。
+	// ---- 层：只加载实际用到的，按首次出现顺序编号。材质声明来自各地形mod(TerrainMod::SetMaterial，Map::GetTerrainAppearances收集)，没声明的用FallbackTerrainMaterial。
 	const auto& appearances = map->GetTerrainAppearances();
 	TArray<FString> layerOrder;
 	TMap<FString, FLayerSpec> layerSpecs;
@@ -340,11 +358,10 @@ UMaterialInstanceDynamic* FTerrainMaterialBuilder::Build(UObject* outer, Map* ma
 	for (int32 i = 0; i < typeCount; i++) {
 		const FString id = UTF8_TO_TCHAR(typeIds[i].c_str());
 		const auto appearance = appearances.find(typeIds[i]);
-		if (appearance == appearances.end() || !appearance->second.material.defined) {
-			UE_LOG(LogTerrainMaterial, Error, TEXT("terrain \"%s\" has no material declared (TerrainMod::SetMaterial); it is drawn gray"), *id);
-			continue;
-		}
-		const TerrainMaterialSpec& material = appearance->second.material;
+		// 没声明材质的地形统一用兜底材质，不算错。
+		const bool declared = appearance != appearances.end() && appearance->second.material.defined;
+		if (!declared) UE_LOG(LogTerrainMaterial, Log, TEXT("terrain \"%s\" declares no material, using the default one"), *id);
+		const TerrainMaterialSpec& material = declared ? appearance->second.material : FallbackTerrainMaterial();
 		const bool needsTwo = material.selector != TerrainMaterialSelector::None;
 		if (material.layers.size() != (needsTwo ? 2u : 1u)) {
 			UE_LOG(LogTerrainMaterial, Error, TEXT("terrain \"%s\" material needs %d layer(s) for its selector; it is drawn gray"), *id, needsTwo ? 2 : 1);

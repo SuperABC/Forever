@@ -106,8 +106,8 @@ Map::~Map() {
 void Map::InitTerrains() {
 	CORE_RANDOM_SCOPE("core.map");
 	// 这两个回调会传进Basic等mod DLL：std::string一律按引用传，由各自模块自己拷贝——按值返回/传参时
-	// 一边分配一边释放，mod的CRT堆和Forever模块(UE的FMemory)不是同一个，超过短字符串长度(15字符，
-	// 比如"terrain_mountain")就会在释放时崩溃。
+	// 一边分配一边释放，mod的CRT堆和Forever模块(UE的FMemory)不是同一个，超过短字符串长度(15字符)的
+	// 地形名就会在释放时崩溃。
 	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
 	auto setTerrain = [this](int x, int y, const string& terrain) -> bool {
 		return this->SetTerrain(x, y, terrain);
@@ -199,9 +199,9 @@ void Map::InitRoadnet() {
 	roadnet = new Roadnet(&roadnetFactory, activeId);
 
 	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
-	// 路网mod(棋盘格/井字)把"可建设"当成z=0的平地用，所以给它们的是"平且高度为0"的格子(IsGroundConstruction)；
-	// 非0高度的平台只有roadnet_file(编辑器路网)会用，它自己不看这个回调。
-	auto isConstruction = [this](int x, int y) -> bool { return this->IsGroundConstruction(x, y); };
+	// isConstruction只说"这一格是平的"(Element::construction，3x3范围内高度一致)，不管它在哪个高度；
+	// 高度由getHeight给。只想在某个高度(比如z=0)上建的路网mod自己再判断。
+	auto isConstruction = [this](int x, int y) -> bool { return this->IsConstruction(x, y); };
 	auto getWater = [this](int x, int y) -> pair<bool, float> { return this->GetWater(x, y); };
 	auto getHeight = [this](float x, float y) -> float { return this->SampleHeight(x, y); };
 	roadnet->DistributeRoadnet(width, height, getTerrain, isConstruction, getWater, getHeight, Node::GetCount());
@@ -251,8 +251,8 @@ void Map::InitRoadnet() {
 		externById[e->GetId()] = e;
 	}
 
-	// 还有一类端点既不是RoadJunction也不是extern：mod把一条路拆成多段独立Road时的中间分段点(如JingRoadnet隧道的flatNode/splitNode，
-	// 见roadnet_jing.md"隧道")。它们不是Intersection(走RoadJunction::Build会摆出强制水平的路口平面)，也不能像extern那样把所有车道
+	// 还有一类端点既不是RoadJunction也不是extern：mod把一条路拆成多段独立Road时的中间分段点(比如隧道口前后
+	// 坡段和平段的衔接点)。它们不是Intersection(走RoadJunction::Build会摆出强制水平的路口平面)，也不能像extern那样把所有车道
 	// 收成一点(两侧车道配置一致，应按真实宽度摆开)，所以现算"直接经过"锚点，详见map.md"InitRoadnet"。
 	// passthroughAnchorCache按(端点id,车行/行人,side,laneIndex)缓存，保证前后两段Road在分段点拿到同一个Node*；key用位运算压缩(节点id远小于2^47)。
 	unordered_map<int64_t, Node*> passthroughAnchorCache;
@@ -897,7 +897,7 @@ void Map::InitGreens() {
 
 float Map::ProjectPointOntoRoad(Road* road, float px, float py) {
 	if (road->GetControls().empty()) {
-		// 直线：Start到End，点到线段投影公式，O(1)精确——井字路网里绝大多数路段都是这种情况。
+		// 直线：Start到End，点到线段投影公式，O(1)精确——规则路网里绝大多数路段都是这种情况。
 		Node start = road->GetStart(), end = road->GetEnd();
 		float ax = start.GetX(), ay = start.GetY(), bx = end.GetX(), by = end.GetY();
 		float dx = bx - ax, dy = by - ay;
@@ -2458,11 +2458,6 @@ bool Map::IsConstruction(int x, int y) const {
 	return CheckXY(x, y) && At(x, y).construction;
 }
 
-bool Map::IsGroundConstruction(int x, int y) const {
-	// 3x3极差已小于kHeightEps，自身高度接近0就等于整片接近0。
-	return IsConstruction(x, y) && fabsf(At(x, y).height) <= kHeightEps;
-}
-
 string Map::GetTerrain(int x, int y) const {
 	if (!CheckXY(x, y)) {
 		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
@@ -3038,17 +3033,8 @@ int Map::DemolishAlongStrips(const vector<DemolishRequest>& strips, const functi
 const unordered_map<string, TerrainAppearance>& Map::GetTerrainAppearances() const {
 	if (terrainAppearancesBuilt) return terrainAppearances;
 	terrainAppearancesBuilt = true;
-	// 默认地形"plain"没有mod：材质固定为干砂地(PlainDiffuse/Normal/Roughness，UE资产)，地图颜色不指定(界面自己画)。
-	TerrainAppearance plain;
-	plain.material.defined = true;
-	TerrainMaterialLayer sand;
-	sand.name = "plain_sand";
-	sand.diffuse = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
-	sand.normal = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
-	sand.roughness = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";
-	sand.tileMeters = 10.f;
-	plain.material.layers = { sand };
-	terrainAppearances["plain"] = plain;
+	// 默认地形"plain"没有mod：不声明材质(material.defined=false)、不指定地图颜色，都由渲染层/界面兜底。
+	terrainAppearances["plain"] = TerrainAppearance();
 	for (const auto& id : terrainFactory.GetRegisteredIds()) {
 		Terrain terrain(&terrainFactory, id);
 		terrain.SetupTexture();

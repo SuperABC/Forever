@@ -113,8 +113,6 @@ public:
 	const std::string& GetTerrainRef(int x, int y) const;
 	// 该element是否可建设(Element::construction)，越界返回false。
 	bool IsConstruction(int x, int y) const;
-	// IsConstruction且高度为0(z=0的平地)：给DistributeRoadnet的isConstruction回调用，棋盘格/井字路网只会把建筑放在z=0的地面上。
-	bool IsGroundConstruction(int x, int y) const;
 
 	bool SetTerrain(int x, int y, const std::string& terrain);
 	float GetHeight(int x, int y) const;
@@ -153,7 +151,7 @@ public:
 	std::vector<Pier> GetRoadPiers() const;
 
 	// 地形类型 -> 外观(地图界面颜色+地表材质声明)。向已注册的地形mod收集(调SetupTexture)后缓存，所以新建的世界和读档后的世界都能用；
-	// 另含默认地形"plain"(没有mod，材质在Map里声明)。
+	// 另含默认地形"plain"(没有mod，不声明材质和地图颜色，由渲染层/界面兜底)。
 	const std::unordered_map<std::string, TerrainAppearance>& GetTerrainAppearances() const;
 
 	// 全图植被(InitVegetation里展开)，UE层UForeverVegetationFrameworkComponent一次性读取

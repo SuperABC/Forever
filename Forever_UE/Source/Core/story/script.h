@@ -104,7 +104,7 @@ private:
 	struct FileCache {
 		std::vector<std::string> nameReserve;
 		std::unordered_map<std::string, ValueType> globalSettings;
-		std::vector<std::string> modDependences; // mod id(完整id，如"building_residence_high")
+		std::vector<std::string> modDependences; // 这份脚本依赖的mod id(完整id)
 		std::unordered_map<std::string, Milestone*> milestones;
 	};
 

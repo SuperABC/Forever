@@ -407,16 +407,11 @@ SaveManifest SaveGame::BuildManifest(const SaveWorld& world) {
 		}
 	}
 
-	// 脚本：Story screen的脚本 + 主线脚本，只存名字(不含路径/扩展名)。
+	// 脚本：Story screen的脚本(也就是主线脚本)，只存名字(不含路径/扩展名)。
 	unordered_set<string> scriptSet;
 	for (const string& path : Config::GetStoryScripts()) {
 		string stem = FileStem(path);
 		manifest.storyScripts.push_back(stem);
-		if (scriptSet.insert(stem).second) manifest.scripts.push_back(stem);
-	}
-	string mainScript = Config::GetMainStoryScriptPath();
-	if (!mainScript.empty()) {
-		string stem = FileStem(mainScript);
 		if (scriptSet.insert(stem).second) manifest.scripts.push_back(stem);
 	}
 

@@ -205,7 +205,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 	for (Organization* organization : society.GetOrganizations()) {
 		if (!organization->GetMod() || !organization->GetScript() || organization->IsBankrupt()) continue;
 		sellers.push_back(organization);
-		// 在岗人数写进脚本(self.employees)，供没有库存的服务型组织(视频公司)算产能。
+		// 在岗人数写进脚本(self.employees)，供没有库存的服务型组织按人数算产能。
 		int employees = 0;
 		for (const Job* job : organization->GetJobs()) {
 			if (job && job->IsOpen() && job->GetOccupant()) employees++;
@@ -389,7 +389,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 			if (provider.sold <= 0) continue;
 			provider.organization->GetMod()->ApplyServiceUsage(provider.offer.name, provider.sold,
 				provider.organization->GetScript());
-			// 消费税即时缴纳：商店每笔销售当场把销售额的一部分交给政府。
+			// 消费税即时缴纳：卖方每笔销售当场把销售额的一部分交给政府。
 			int64_t consumptionTax = society.GetPolicy().Tax(provider.revenue, society.GetPolicy().consumptionTaxPercent);
 			society.GetLedger().Transfer(Holder::Of(provider.organization), Holder::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
 			stat.sold += provider.sold;

@@ -36,20 +36,6 @@ struct TerrainMaterialSpec {
 	float range0 = 0.f, range1 = 1.f;
 };
 
-// Megascans Surface(目录名folder，资产id)的层：路径按Fab导入的固定布局拼，2K的B/N/ORM三张。
-inline TerrainMaterialLayer MakeMegascansLayer(const std::string& name, const std::string& folder, const std::string& id,
-	float tileMeters, bool triplanar = false) {
-	const std::string base = "/Game/3rdParty/Megascans/Surfaces/" + folder + "/Medium/" + id + "_tier_2/Textures/T_" + id + "_2K_";
-	TerrainMaterialLayer layer;
-	layer.name = name;
-	layer.diffuse = base + "B.T_" + id + "_2K_B";
-	layer.normal = base + "N.T_" + id + "_2K_N";
-	layer.orm = base + "ORM.T_" + id + "_2K_ORM";
-	layer.tileMeters = tileMeters;
-	layer.triplanar = triplanar;
-	return layer;
-}
-
 // 设计见terrain_mod.md。
 class TerrainMod {
 public:
@@ -78,7 +64,7 @@ public:
 		const std::function<bool(int, int, bool, float)>& setWater,
 		const std::function<bool(int, int, const float*)>& setFineHeights) const = 0;
 
-	// 地表材质声明，SetupTexture()里用SetMaterial填充；没声明的地形在UE侧渲染成纯灰(并打Error)。
+	// 地表材质声明，SetupTexture()里用SetMaterial填充；没声明的地形由渲染层用默认地表材质兜底。
 	TerrainMaterialSpec materialSpec;
 	void SetMaterial(const TerrainMaterialLayer& only) {
 		materialSpec = TerrainMaterialSpec();

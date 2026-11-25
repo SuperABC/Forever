@@ -502,7 +502,7 @@ void Traffic::InitRoutes(Map* map) {
 
 void Traffic::InitStockedVehicles(Map* map) {
 	CORE_RANDOM_SCOPE("core.traffic");
-	// 机场的飞机、港口的船这类没有"主人"的载具：建筑mod用AssignStockedParking声明车位，开局每个这样的车位停一辆(不挂资产)。
+	// 没有"主人"、开局就该停在车位上的载具：建筑mod用AssignStockedParking声明车位，开局每个这样的车位停一辆(不挂资产)。
 	// 种类和车型都由车位自己的categories+VehicleFactory决定，这里不认识具体种类；普通停车位的车由AssignVehicles按人分配。
 	int parkedCount = 0;
 	for (auto& [buildingName, building] : map->GetBuildings()) {
@@ -551,8 +551,8 @@ VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, in
 
 void Traffic::AssignVehicles(const Populace& populace, const Society& society) {
 	CORE_RANDOM_SCOPE("core.traffic");
-	// 市民：每个成年人20%概率尝试在自己家所在的建筑里找一个空闲car车位(建筑里任何带车位的房间，和是不是
-	// room_parking无关)，没有就不分配。
+	// 市民：每个成年人20%概率尝试在自己家所在的建筑里找一个空闲car车位(建筑里任何带车位的房间，
+	// 不看房间类型)，没有就不分配。
 	int citizenVehicles = 0;
 	int currentYear = populace.GetCurrentYear();
 	for (Citizen* citizen : populace.GetCitizens()) {

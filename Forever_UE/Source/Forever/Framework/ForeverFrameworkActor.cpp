@@ -333,15 +333,9 @@ void AForeverFrameworkActor::GetLoadProgress(int32& outDone, int32& outTotal, FT
 }
 
 void AForeverFrameworkActor::ValidateMainStoryDependencies() {
-	// 优先用Story screen里玩家添加的脚本列表,为空才退回单路径(编辑器直接PIE不经过菜单)。
-	// 这是兜底二次校验,更早的校验在ForeverConfigBridgeSubsystem::ValidateAndStartGame。
+	// Story screen里的脚本列表(config.json的story_scripts)；列表为空就是没有主线脚本，不用校验。
+	// 这是兜底二次校验(编辑器直接PIE不经过菜单),更早的校验在ForeverConfigBridgeSubsystem::ValidateAndStartGame。
 	std::vector<std::string> scripts = Config::GetStoryScripts();
-	if (scripts.empty()) {
-		std::string fallback = Config::GetMainStoryScriptPath();
-		if (!fallback.empty()) {
-			scripts.push_back(fallback);
-		}
-	}
 
 	for (const std::string& scriptPath : scripts) {
 		for (const std::string& id : Script::GetModDependences(scriptPath)) {

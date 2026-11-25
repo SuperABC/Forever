@@ -20,7 +20,7 @@ using namespace std;
 // plateau套件：抹平出来的非0高度平台上的地块(Tools/MapEditor/samples/plateau.roadnet，由tests/make_plateau.js生成)。
 //   平台高度h(!=0)，平台上方框路(节点z=h)围着一块地块(corners带z)，放了建筑/园区预设；另有一条z=0的路贴着地块的另一条边。
 //   检查(对所有"所属地块z!=0"的建筑/园区)：
-//     - 地块自己的z、平台格子被标成construction但不是"z=0的平地"(IsGroundConstruction，路网mod用的回调)；
+//     - 地块自己的z、平台格子被标成construction但不在z=0(construction只表示平，路网mod要z=0得自己判断高度)；
 //     - Building/Zone::GetGroundZ()==所属地块z；房间导航节点z=地坪+楼层相对高度；建筑门/园区大门/园区内部路的z不低于地坪；
 //     - 地块的每条边界路都是水平的、高度等于地块z(不等高的路不算边界路)。
 // 夹具缺失=失败。重新生成夹具后不需要改常量(检查都按"地块z!=0"自适应)。
@@ -42,7 +42,7 @@ void PlateauSuiteBody(TestWorld& world, const TestOptions& options) {
 		// 平台中心格：construction为真，但不是z=0的平地。
 		int cx = static_cast<int>(floorf(lot->GetPosX())), cy = static_cast<int>(floorf(lot->GetPosY()));
 		run.Check(world.map->IsConstruction(cx, cy), "the plateau cell under an elevated lot is construction", label);
-		run.Check(!world.map->IsGroundConstruction(cx, cy), "the plateau cell is not a z=0 ground cell (road mods never build there)", label);
+		run.Check(fabsf(world.map->GetHeight(cx, cy)) > 1e-3f, "the plateau cell is above z=0 (construction does not imply ground level)", label);
 		run.Check(IsNear(world.map->SampleHeight(lot->GetPosX(), lot->GetPosY()), z), "the terrain under the lot is at the lot's z",
 			label + " terrain=" + to_string(world.map->SampleHeight(lot->GetPosX(), lot->GetPosY())) + " lot=" + to_string(z));
 		for (const auto& [direction, road] : lot->GetBoundaryRoads()) {

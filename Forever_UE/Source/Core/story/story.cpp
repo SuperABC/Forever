@@ -37,7 +37,7 @@ void Story::Init() {
 	globalScript = new Script(&scriptFactory, scriptModName);
 
 	mainScript = new Script(&scriptFactory, scriptModName);
-	// 主线读取config.json的story_scripts里的全部文件(没有配置时退回test.script)，每个文件的
+	// 主线读取config.json的story_scripts里的全部文件(没有配置就没有主线里程碑)，每个文件的
 	// milestones合并进同一个主线Script，见Config::GetMainStoryScriptPaths()。
 	for (const string& path : Config::GetMainStoryScriptPaths()) {
 		mainScript->ReadMilestones(path);
@@ -130,7 +130,7 @@ void Story::RemoveTimer(const string& name, const string& ownerKey) {
 
 vector<StoryTimer> Story::PopExpiredTimers(const Time& now, size_t maxCount) {
 	vector<StoryTimer> expired;
-	// 现实时间计时器(手雷引信这类要求准时的)排在最前面，按剩余时间(越负越早到)，不占maxCount：
+	// 现实时间计时器(要求准时触发的)排在最前面，按剩余时间(越负越早到)，不占maxCount：
 	// 整点几千个游戏时间计时器同时到时会把每帧的名额占满，现实计时器排在后面会被饿住好几秒。数量很少，不会造成卡顿。
 	vector<StoryTimer> realExpired;
 	for (size_t i = 0; i < realTimers.size();) {

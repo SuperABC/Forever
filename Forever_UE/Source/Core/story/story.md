@@ -125,7 +125,7 @@ milestone超时之类）时再补内容。
 ## 主线读取全部 story_scripts
 
 主线 Script 不再固定读 `test.script`：`Story::Init` 对 `Config::GetMainStoryScriptPaths()`（`config.json` 的
-`story_scripts` 列表，按顺序；列表为空时退回只有 `GetMainStoryScriptPath()` 即 `test.script`）里的每个文件调
+`story_scripts` 列表，按顺序；列表为空就没有主线里程碑，不兜底）里的每个文件调
 `ReadMilestones`，所有文件的里程碑合并进同一个主线 Script。顶层字段也一并合并：`name_reserve`（和别名
 `names`，老工程写法）由 `Populace::InitNames` 逐个文件读取并占位，`global_settings` 由
 `AForeverFrameworkActor::EnsurePlayerGenerated` 按顺序遍历（后面的覆盖前面的同名设置）。

@@ -343,7 +343,7 @@ string Populace::PickSchedulerId() const {
 	// 累加所有已注册Scheduler类型的权重建CDF，和Society::Init选Organization类型同一套
 	// 算法（society.cpp），用SchedulerFactory::GetPower(id)单个查询建CDF。
 	vector<string> ids = schedulerFactory.GetRegisteredIds();
-	if (ids.empty()) return string(); // 理论上不会发生：至少有scheduler_basic会被注册
+	if (ids.empty()) return string(); // 没有任何调度mod被注册(配置不完整)
 
 	vector<float> weights;
 	float total = 0.f;

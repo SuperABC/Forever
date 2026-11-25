@@ -43,7 +43,7 @@ public:
 	bool IsUsable() const;                    // usable != 0
 	int GetUsable() const;                    // mod的usable：0=不能用，N>0=每件能用N次，-1=无限次
 	int GetUsesLeft() const;                  // 当前这一件(堆叠里最上面那件)还剩的次数；无限次/不能用时为0。随资产存档
-	const std::string& GetProductType() const; // 商店查价用的Product类型，空=不能买
+	const std::string& GetProductType() const; // 零售查价用的Product类型，空=不能买
 	bool IsThrowable() const;
 	const std::string& GetMeshPath() const; // 空=沿用Cube占位
 	float GetMeshScale() const;

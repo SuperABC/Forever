@@ -33,9 +33,18 @@ float BeachTerrain::GetPriority() const {
 void BeachTerrain::SetupTexture() {
 	SetMapColor(222, 204, 150);
 	// 高出水面0.4米以上是干沙，水线(深度0)处已是湿沙。
-	SetMaterial(MakeMegascansLayer("dry_beach_sand", "Trampled_Beach_Sand_vmghdejo", "vmghdejo", 3.f),
-		MakeMegascansLayer("wet_sand", "Wet_Sand_rldapzp0", "rldapzp0", 3.f),
-		TerrainMaterialSelector::WaterDepth, -0.4f, 0.0f);
+	// 贴图是工程里的Megascans Surface资产(颜色/法线/ORM三张)，字段顺序：name, diffuse, normal, orm, roughness, tileMeters, triplanar。
+	const TerrainMaterialLayer drySand{ "dry_beach_sand",
+		"/Game/3rdParty/Megascans/Surfaces/Trampled_Beach_Sand_vmghdejo/Medium/vmghdejo_tier_2/Textures/T_vmghdejo_2K_B.T_vmghdejo_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Trampled_Beach_Sand_vmghdejo/Medium/vmghdejo_tier_2/Textures/T_vmghdejo_2K_N.T_vmghdejo_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Trampled_Beach_Sand_vmghdejo/Medium/vmghdejo_tier_2/Textures/T_vmghdejo_2K_ORM.T_vmghdejo_2K_ORM",
+		"", 3.f, false };
+	const TerrainMaterialLayer wetSand{ "wet_sand",
+		"/Game/3rdParty/Megascans/Surfaces/Wet_Sand_rldapzp0/Medium/rldapzp0_tier_2/Textures/T_rldapzp0_2K_B.T_rldapzp0_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Wet_Sand_rldapzp0/Medium/rldapzp0_tier_2/Textures/T_rldapzp0_2K_N.T_rldapzp0_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Wet_Sand_rldapzp0/Medium/rldapzp0_tier_2/Textures/T_rldapzp0_2K_ORM.T_rldapzp0_2K_ORM",
+		"", 3.f, false };
+	SetMaterial(drySand, wetSand, TerrainMaterialSelector::WaterDepth, -0.4f, 0.0f);
 }
 
 void BeachTerrain::DistributeTerrain(int width, int height,

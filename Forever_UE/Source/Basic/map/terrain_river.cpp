@@ -123,9 +123,18 @@ float RiverTerrain::GetPriority() const {
 void RiverTerrain::SetupTexture() {
 	SetMapColor(88, 148, 176);
 	// 河岸泥地，水深0.2~1.2米渐变到河床碎石。
-	SetMaterial(MakeMegascansLayer("river_mud", "Soil_Mud_olsfA0", "olsfA0", 3.f),
-		MakeMegascansLayer("river_gravel", "Round_Gravel_okosxhp0", "okosxhp0", 2.f),
-		TerrainMaterialSelector::WaterDepth, 0.2f, 1.2f);
+	// 贴图是工程里的Megascans Surface资产(颜色/法线/ORM三张)，字段顺序：name, diffuse, normal, orm, roughness, tileMeters, triplanar。
+	const TerrainMaterialLayer mud{ "river_mud",
+		"/Game/3rdParty/Megascans/Surfaces/Soil_Mud_olsfA0/Medium/olsfA0_tier_2/Textures/T_olsfA0_2K_B.T_olsfA0_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Soil_Mud_olsfA0/Medium/olsfA0_tier_2/Textures/T_olsfA0_2K_N.T_olsfA0_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Soil_Mud_olsfA0/Medium/olsfA0_tier_2/Textures/T_olsfA0_2K_ORM.T_olsfA0_2K_ORM",
+		"", 3.f, false };
+	const TerrainMaterialLayer gravel{ "river_gravel",
+		"/Game/3rdParty/Megascans/Surfaces/Round_Gravel_okosxhp0/Medium/okosxhp0_tier_2/Textures/T_okosxhp0_2K_B.T_okosxhp0_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Round_Gravel_okosxhp0/Medium/okosxhp0_tier_2/Textures/T_okosxhp0_2K_N.T_okosxhp0_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Round_Gravel_okosxhp0/Medium/okosxhp0_tier_2/Textures/T_okosxhp0_2K_ORM.T_okosxhp0_2K_ORM",
+		"", 2.f, false };
+	SetMaterial(mud, gravel, TerrainMaterialSelector::WaterDepth, 0.2f, 1.2f);
 }
 
 void RiverTerrain::DistributeTerrain(int width, int height,

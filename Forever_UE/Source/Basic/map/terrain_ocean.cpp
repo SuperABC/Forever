@@ -59,9 +59,18 @@ float OceanTerrain::GetPriority() const {
 void OceanTerrain::SetupTexture() {
 	SetMapColor(52, 96, 140);
 	// 岸边湿沙，水深10米起渐变、15米处完全变成水底波纹沙(水深编码上限20米，见TerrainMaterialBuilder.h)。
-	SetMaterial(MakeMegascansLayer("wet_sand", "Wet_Sand_rldapzp0", "rldapzp0", 3.f),
-		MakeMegascansLayer("seabed_sand", "Rippled_Sand_vlziefgfw", "vlziefgfw", 3.f),
-		TerrainMaterialSelector::WaterDepth, 10.0f, 15.0f);
+	// 贴图是工程里的Megascans Surface资产(颜色/法线/ORM三张)，字段顺序：name, diffuse, normal, orm, roughness, tileMeters, triplanar。
+	const TerrainMaterialLayer wetSand{ "wet_sand",
+		"/Game/3rdParty/Megascans/Surfaces/Wet_Sand_rldapzp0/Medium/rldapzp0_tier_2/Textures/T_rldapzp0_2K_B.T_rldapzp0_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Wet_Sand_rldapzp0/Medium/rldapzp0_tier_2/Textures/T_rldapzp0_2K_N.T_rldapzp0_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Wet_Sand_rldapzp0/Medium/rldapzp0_tier_2/Textures/T_rldapzp0_2K_ORM.T_rldapzp0_2K_ORM",
+		"", 3.f, false };
+	const TerrainMaterialLayer seabed{ "seabed_sand",
+		"/Game/3rdParty/Megascans/Surfaces/Rippled_Sand_vlziefgfw/Medium/vlziefgfw_tier_2/Textures/T_vlziefgfw_2K_B.T_vlziefgfw_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Rippled_Sand_vlziefgfw/Medium/vlziefgfw_tier_2/Textures/T_vlziefgfw_2K_N.T_vlziefgfw_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Rippled_Sand_vlziefgfw/Medium/vlziefgfw_tier_2/Textures/T_vlziefgfw_2K_ORM.T_vlziefgfw_2K_ORM",
+		"", 3.f, false };
+	SetMaterial(wetSand, seabed, TerrainMaterialSelector::WaterDepth, 10.0f, 15.0f);
 }
 
 void OceanTerrain::DistributeTerrain(int width, int height,

@@ -489,14 +489,8 @@ string Config::GetMainStoryScriptModName() {
 	return mainStoryScriptModName;
 }
 
-string Config::GetMainStoryScriptPath() {
-	return GetScriptPath("test");
-}
-
 vector<string> Config::GetMainStoryScriptPaths() {
-	if (!storyScriptPaths.empty()) return storyScriptPaths;
-	string fallback = GetMainStoryScriptPath();
-	return fallback.empty() ? vector<string>() : vector<string>{ fallback };
+	return storyScriptPaths;
 }
 
 vector<string> Config::GetConceptJsonKeys() {

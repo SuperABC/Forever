@@ -141,6 +141,10 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	int nodeStaticCount) {
 	Node::SetCount(nodeStaticCount);
 	plantable.clear();
+	// isConstruction只说这一格是平的，不保证在z=0(抬高的平台也是可建设的)。这个路网只在z=0的地面上建，自己把高度卡掉。
+	auto isGround = [&](int x, int y) {
+		return isConstruction(x, y) && fabsf(getHeight(static_cast<float>(x), static_cast<float>(y))) <= 1e-5f;
+	};
 
 	float meshUnit = 0.5f;
 	const float LANE_WIDTH = 0.5f;
@@ -315,7 +319,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				// 用格子中心点做点在四边形内测试，比测试格子角点更准确地反映"这个element
 				// 算不算在lot范围内"。
 				if (!isPointInQuad(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f, nw, ne, se, sw)) continue;
-				if (!isConstruction(x, y)) return false;
+				if (!isGround(x, y)) return false;
 			}
 		}
 		return true;
@@ -366,13 +370,13 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		vector<char> cons;
 		vector<float> heights;
 		terr.push_back(getTerrain(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))));
-		cons.push_back(isConstruction(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))) ? 1 : 0);
+		cons.push_back(isGround(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))) ? 1 : 0);
 		heights.push_back(getHeight(cx, cy));
 		for (int k = 1; static_cast<float>(k) <= kExt - 1.f; k++) {
 			string t = getTerrain(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k)));
 			if (t == "") break;
 			terr.push_back(t);
-			cons.push_back(isConstruction(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k))) ? 1 : 0);
+			cons.push_back(isGround(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k))) ? 1 : 0);
 			heights.push_back(getHeight(cx + dx * k, cy + dy * k));
 		}
 		int sampleCount = static_cast<int>(terr.size()) - 1;

@@ -12,10 +12,10 @@
   Mountain=0.9f。
 - **`SetupTexture()`和`DistributeTerrain()`分两步**——`SetupTexture`只声明外观(地图界面颜色`SetMapColor`、地表材质`SetMaterial`)，`DistributeTerrain`才是真正改地图的算法。
   这样`Map`可以先统一调用一轮`SetupTexture`收集所有地形的外观(`Map::GetTerrainAppearances()`)，再按优先级顺序跑`DistributeTerrain`，两件事互不依赖执行顺序。
-  `SetupTexture`是纯虚函数，但**材质不是必填**：没调`SetMaterial`的地形在UE侧渲染成纯灰并打`LogTerrainMaterial`错误，没有任何兜底贴图。
+  `SetupTexture`是纯虚函数，但**材质不是必填**：没调`SetMaterial`的地形(`materialSpec.defined`为false)由渲染层用默认地表材质兜底(UE侧`TerrainMaterialBuilder`的`FallbackTerrainMaterial`，和默认地形`plain`同一套贴图)。
 - **地表材质(`SetMaterial`，2026-11-24)**：材质声明活在各地形mod的C++里(不再有`diffusePath/normalPath/roughnessPath`，也没有JSON配置)，新增地形mod=在自己的`SetupTexture`里写一行。
-  一个地形最多2个"层"`TerrainMaterialLayer{name, diffuse, normal, orm|roughness, tileMeters, triplanar}`(路径是UE资产路径，如`/Game/Asset/Terrain/Plain/T_Plain_D.T_Plain_D`；
-  Megascans Surface用辅助函数`MakeMegascansLayer(name, folder, id, tileMeters, triplanar)`按Fab导入的固定布局拼路径)。两种形式：
+  一个地形最多2个"层"`TerrainMaterialLayer{name, diffuse, normal, orm|roughness, tileMeters, triplanar}`(路径是UE资产路径，如`/Game/Asset/Terrain/Plain/T_Plain_D.T_Plain_D`。
+  基类不提供拼路径的辅助函数：资产包的目录结构是具体mod的事，路径由各mod自己写全)。两种形式：
   - `SetMaterial(only)`：单层；
   - `SetMaterial(a, b, selector, range0, range1)`：两层，`TerrainMaterialSelector`决定怎么混——`Slope`按坡度`1-法线z`在range0..range1间从a(平缓)渐变到b(陡峭)；`WaterDepth`按水深(米，正=水下，由UE侧顶点色给出)从a(干)渐变到b(水下)；`None`只用a。
   层按`name`去重：不同地形可以共用同名层(如沙滩和海洋共用`wet_sand`)，贴图只加载一份。`normal`必填，`orm`(Megascans约定R=AO,G=粗糙度,B=金属度)和`roughness`(单独灰度图)二选一。

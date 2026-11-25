@@ -70,9 +70,18 @@ float MountainTerrain::GetPriority() const {
 void MountainTerrain::SetupTexture() {
 	SetMapColor(128, 118, 108);
 	// 平缓处是山地草，陡处是垂直岩壁(1-法线z在0.2~0.4即约37~52度之间过渡)。
-	SetMaterial(MakeMegascansLayer("wild_grass", "Wild_Grass_pjvtR0", "pjvtR0", 4.f),
-		MakeMegascansLayer("rock_cliff", "Rough_Rock_Cliff_vl0fffao", "vl0fffao", 4.f, true),
-		TerrainMaterialSelector::Slope, 0.2f, 0.4f);
+	// 贴图是工程里的Megascans Surface资产(颜色/法线/ORM三张)，字段顺序：name, diffuse, normal, orm, roughness, tileMeters, triplanar。
+	const TerrainMaterialLayer grass{ "wild_grass",
+		"/Game/3rdParty/Megascans/Surfaces/Wild_Grass_pjvtR0/Medium/pjvtR0_tier_2/Textures/T_pjvtR0_2K_B.T_pjvtR0_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Wild_Grass_pjvtR0/Medium/pjvtR0_tier_2/Textures/T_pjvtR0_2K_N.T_pjvtR0_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Wild_Grass_pjvtR0/Medium/pjvtR0_tier_2/Textures/T_pjvtR0_2K_ORM.T_pjvtR0_2K_ORM",
+		"", 4.f, false };
+	const TerrainMaterialLayer cliff{ "rock_cliff",
+		"/Game/3rdParty/Megascans/Surfaces/Rough_Rock_Cliff_vl0fffao/Medium/vl0fffao_tier_2/Textures/T_vl0fffao_2K_B.T_vl0fffao_2K_B",
+		"/Game/3rdParty/Megascans/Surfaces/Rough_Rock_Cliff_vl0fffao/Medium/vl0fffao_tier_2/Textures/T_vl0fffao_2K_N.T_vl0fffao_2K_N",
+		"/Game/3rdParty/Megascans/Surfaces/Rough_Rock_Cliff_vl0fffao/Medium/vl0fffao_tier_2/Textures/T_vl0fffao_2K_ORM.T_vl0fffao_2K_ORM",
+		"", 4.f, true };
+	SetMaterial(grass, cliff, TerrainMaterialSelector::Slope, 0.2f, 0.4f);
 }
 
 void MountainTerrain::DistributeTerrain(int width, int height,

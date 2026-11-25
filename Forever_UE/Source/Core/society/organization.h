@@ -15,7 +15,7 @@
 #include <vector>
 
 
-// Organization：一份具体组织的实体（比如一家商店），独占持有一个OrganizationMod实例+一份Script，
+// Organization：一份具体组织的实体，独占持有一个OrganizationMod实例+一份Script，
 // 占用若干Component，构造时按workspace room设计并new出Job，见organization.md。
 class Organization {
 	// 存档：SocietySaveCodec直接读写私有字段(society_save.md)。

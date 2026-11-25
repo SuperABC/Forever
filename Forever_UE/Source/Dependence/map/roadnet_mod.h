@@ -26,8 +26,9 @@ public:
 	// 构建路网,结果填进下面externs/intersections/roads/lots。nodeStaticCount是宿主的Node::count,
 	// 实现开头必须先Node::SetCount(nodeStaticCount),否则跨DLL的id会冲突。
 	// getHeight按地图element单位的连续坐标返回地形高度(含细化高度)。
-	// getTerrain返回原始地形名(越界返回空串)；isConstruction返回该element是否可建设(3x3范围内高度都为0，
-	// 和地形类型、水都无关，越界为false)。放建筑/地块只认isConstruction，不要再拿地形名判断。
+	// getTerrain返回原始地形名(越界返回空串)；isConstruction返回该element是否可建设(3x3范围内高度一致，即一块平地，
+	// 和地形类型、水都无关，越界为false)。它不保证高度是0——抬高的平台也是可建设的，高度用getHeight查；
+	// 只想在z=0上建的mod自己加一句判断。放建筑/地块只认isConstruction，不要再拿地形名判断。
 	virtual void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<bool(int, int)>& isConstruction,

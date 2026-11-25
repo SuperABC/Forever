@@ -22,7 +22,7 @@ struct ServiceStat {
 	int sold = 0;   // 实际卖出的份数
 	int unmet = 0;  // 没买到（没货或买不起）的份数
 	int64_t revenue = 0;
-	int64_t consumptionTax = 0; // 商店当场缴的消费税
+	int64_t consumptionTax = 0; // 卖方当场缴的消费税
 	std::map<float, int> soldByQuality; // 各质量档卖出的份数
 };
 
@@ -91,7 +91,7 @@ public:
 	// 给worker发一笔工资：organization -> worker (Flow::WAGE)，再当场代扣所得税。和每日PayWages同一套扣税。
 	static void PayWage(Society& society, Organization* organization, Citizen* worker, int64_t amountCents);
 
-	// 商店里的一种商品：组织所有仓库里库存>=1、并且有对应Asset(Asset的productType指向它)的Product。
+	// 在售的一种商品：组织所有仓库里库存>=1、并且有对应Asset(Asset的productType指向它)的Product。
 	struct ShopItem {
 		std::string productType;
 		std::string assetType;
@@ -105,7 +105,7 @@ public:
 	enum class PurchaseResult { Success, NoMoney, NoSpace, Invalid };
 	// 玩家按购物车(productType, 数量)买东西：购物车必须不超库存、总价不超过buyer账本余额(存款/国债不在账本余额里)、
 	// 身上放得下(Player::PlanCarry)，否则返回NoMoney/NoSpace/Invalid且什么都不改。成功后按方案把每件放到容器/手上，
-	// 只对实际放下的件数：buyer -> seller (SERVICE_PURCHASE)，商店再缴消费税(和每日RunServices同一个口径)，并从组织
+	// 只对实际放下的件数：buyer -> seller (SERVICE_PURCHASE)，卖方再缴消费税(和每日RunServices同一个口径)，并从组织
 	// 仓库里扣库存。
 	static PurchaseResult PlayerPurchaseCart(Society& society, Industry& industry, Player& player, Organization* seller,
 		Citizen* buyer, const std::vector<std::pair<std::string, int>>& cart);

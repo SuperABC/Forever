@@ -155,6 +155,10 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	int nodeStaticCount) {
 	Node::SetCount(nodeStaticCount);
 	plantable.clear();
+	// isConstruction只说这一格是平的，不保证在z=0(抬高的平台也是可建设的)。这个路网只在z=0的地面上建，自己把高度卡掉。
+	auto isGround = [&](int x, int y) {
+		return isConstruction(x, y) && fabsf(getHeight(static_cast<float>(x), static_cast<float>(y))) <= 1e-5f;
+	};
 
 	const float meshUnit = 0.5f;
 	const float LANE_WIDTH = 0.5f;
@@ -264,13 +268,13 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		vector<char> cons;
 		vector<float> heights;
 		terr.push_back(getTerrain(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))));
-		cons.push_back(isConstruction(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))) ? 1 : 0);
+		cons.push_back(isGround(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))) ? 1 : 0);
 		heights.push_back(getHeight(cx, cy));
 		for (int k = 1; static_cast<float>(k) <= kExt - 1.f; k++) {
 			string t = getTerrain(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k)));
 			if (t == "") break;
 			terr.push_back(t);
-			cons.push_back(isConstruction(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k))) ? 1 : 0);
+			cons.push_back(isGround(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k))) ? 1 : 0);
 			heights.push_back(getHeight(cx + dx * k, cy + dy * k));
 		}
 		int sampleCount = static_cast<int>(terr.size()) - 1;
@@ -400,7 +404,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			for (int x = x0; x <= x1; x++) {
 				if (!isPointInQuad(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f, qx, qy)) continue;
 				if (x < 0 || y < 0 || x >= width || y >= height) return false;
-				if (!isConstruction(x, y)) return false;
+				if (!isGround(x, y)) return false;
 			}
 		}
 		return true;
@@ -446,7 +450,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		if (posX[idx] < width * EDGE_MARGIN_RATIO || posX[idx] > width * (1.f - EDGE_MARGIN_RATIO)
 			|| posY[idx] < height * EDGE_MARGIN_RATIO || posY[idx] > height * (1.f - EDGE_MARGIN_RATIO)) continue;
 		if (ix < 0 || iy < 0 || ix >= width || iy >= height) continue;
-		alive[idx] = isConstruction(ix, iy);
+		alive[idx] = isGround(ix, iy);
 	}
 
 	// =========================================================================================

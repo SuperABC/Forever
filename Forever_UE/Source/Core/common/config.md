@@ -84,11 +84,9 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   （编辑器/PIE挂载用）和`Plugins/<ModName>_Pak/<ModName>.pak`（打包/Shipping用）会被
   `AddResourcePath`的扫描发现；真正的挂载逻辑在UE层`UForeverModSubsystem::MountModContent()`，
   见`Source/Forever/Mod/ForeverModSubsystem.md`。
-- **`GetMainStoryScriptModName`/`GetMainStoryScriptPath`**：分别读`config.json`的
-  `"main_story"`字段、包一层`GetScriptPath("test")`，供`Story::Init()`/
-  `AForeverFrameworkActor::ValidateMainStoryDependencies()`等决定主线剧情`Script`挂载
-  哪个`ScriptMod`、主线剧情`.script`文件路径在哪。字段缺失时返回空字符串，`Config`自己
-  不兜底默认值。
+- **`GetMainStoryScriptModName`**：读`config.json`的`"main_story"`字段，供`Story::Init()`决定主线剧情`Script`挂载
+  哪个`ScriptMod`。字段缺失时返回空字符串，`Config`自己不兜底默认值。主线剧情的`.script`文件见下面的
+  `GetMainStoryScriptPaths()`。
 - **`story_scripts`（`AddStoryScript`/`RemoveStoryScript`/`GetStoryScripts`）**：Story
   screen的"添加`.script`文件"操作维护的一份列表，列表里的脚本全部一起加载，不是
   "多选一激活"（和`main_story`单独一个字段、决定主线挂载哪个`ScriptMod`是两件事）。
@@ -103,8 +101,8 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - **`GetLayouts()`不去重**：`BuildingLayoutLibrary`按文件basename为key，同名`.layout`后加载的会覆盖先加载的，
   调用方自己保证不重复摆放同名模板。
 - **`GetMainStoryScriptPaths()`**：Story screen的`story_scripts`列表非空时就是这份列表（按顺序，各文件的
-  milestones/names/`name_reserve`/`global_settings`合并进同一个主线`Script`），为空时退回只有
-  `GetMainStoryScriptPath()`（目前固定bare名`"test"`，集中一处避免字面量到处重复）。
+  milestones/names/`name_reserve`/`global_settings`合并进同一个主线`Script`），列表为空就是没有主线脚本，
+  不兜底到任何固定名字的脚本(2026-11-25以前会退回名为`test`的脚本)。
 - **新发现的mod默认禁用**：`IsModEnabled`对没列出的id（含`jsonKey`整个不存在）返回false，刚`AddDllPath`扫出来的mod
   需要在Mod screen手动勾选一次才生效。
 - **`WriteConfig`只在Start Game校验通过那一刻调用一次**，不是每次编辑都自动保存；`<concept>_mods`数组就是

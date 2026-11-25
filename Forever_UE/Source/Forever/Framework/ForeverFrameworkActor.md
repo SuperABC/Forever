@@ -49,7 +49,7 @@
 
 ### `ValidateMainStoryDependencies()`
 
-遍历`Config::GetStoryScripts()`(Story screen里玩家添加的脚本列表，为空才退回`Config::GetMainStoryScriptPath()`，保证编辑器直接PIE的工作流)，
+遍历`Config::GetStoryScripts()`(Story screen里玩家添加的脚本列表，即`config.json`的`story_scripts`；为空就是没有主线脚本，不校验)，
 对每个脚本的`Script::GetModDependences`里每个mod id调`Registry::CheckModRegistered`，缺失就`THROW_EXCEPTION(RuntimeException)`。这是兜底二次校验，
 更早的校验在`ForeverConfigBridgeSubsystem::ValidateAndStartGame`。
 

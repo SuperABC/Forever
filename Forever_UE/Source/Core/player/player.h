@@ -126,7 +126,7 @@ public:
 	enum class StoreResult { Failed, AsBackpack, InBackpack, RightHand, LeftHand, Merged };
 	StoreResult StoreAsset(Asset* asset);
 
-	// 商店用：哪个Asset类型的productType等于这个Product类型(没有返回空串)。首次调用时临时创建每个已启用的
+	// 零售用：哪个Asset类型的productType等于这个Product类型(没有返回空串)。首次调用时临时创建每个已启用的
 	// Asset读一下再销毁，结果缓存。
 	std::string FindAssetTypeByProduct(const std::string& productType);
 
@@ -158,7 +158,7 @@ public:
 	Asset* FindAssetByName(const std::string& name) const;
 
 	// 常驻武器对象：构造Player时给每个已启用的weapon mod各建一个Weapon(连同它的脚本，稳定键"weapon:<id>")，
-	// 不随装备/换枪增删、不进存档，Player析构才销毁。这样飞行中的火箭弹等在换枪后仍能找到武器脚本。
+	// 不随装备/换枪增删、不进存档，Player析构才销毁。这样换枪后还在飞的投射物仍能找到武器脚本。
 	// UForeverWeaponComponent装备时从这里取(不持有)。id未启用返回nullptr。
 	Weapon* FindWeapon(const std::string& id) const;
 

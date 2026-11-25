@@ -69,8 +69,8 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 材质**不读网格UV**，全部用世界坐标(`AbsoluteWorldPosition/1000`=element坐标)；`CreateMeshSection`不传UV。数据侧在`TerrainMaterialBuilder.h/.cpp`，材质图是`Tools/TerrainMaterial/terrain_material.hlsl`(单个Custom节点)，生成脚本见`Tools/TerrainMaterial/README.md`。
 
 **材质声明在各地形mod里**：`TerrainMod::SetupTexture()`里调`SetMaterial(...)`声明1~2层(UE贴图资产路径、平铺米数、是否三向投影)和选择器(`None`/`Slope`坡度/`WaterDepth`水深)及范围；
-默认地形`plain`(没有mod)在`Map::GetTerrainAppearances()`里声明。`Map::GetTerrainAppearances()`向已注册mod收集后缓存(新世界和读档后都可用)，Builder只读它。
-新增一个地形mod=在它自己的`SetupTexture`里写`SetMaterial`，不用改任何中央配置。没声明/声明不合法/贴图读不到的地形渲染成纯灰并`UE_LOG(Error)`(`LogTerrainMaterial`)，没有旧贴图可退。
+默认地形`plain`(没有mod)在`Map::GetTerrainAppearances()`里只占一个条目，不声明材质。**没声明材质的地形(`plain`、没调`SetMaterial`的mod地形)统一用兜底材质**：`TerrainMaterialBuilder.cpp`的`FallbackTerrainMaterial()`，贴图是`/Game/Asset/Terrain/Plain`下的三张，路径只写在UE层。`Map::GetTerrainAppearances()`向已注册mod收集后缓存(新世界和读档后都可用)，Builder只读它。
+新增一个地形mod=在它自己的`SetupTexture`里写`SetMaterial`，不用改任何中央配置。声明不合法/贴图读不到的地形渲染成纯灰并`UE_LOG(Error)`(`LogTerrainMaterial`)；没声明的走上面的兜底材质，只打一条Log。
 
 **`FTerrainMaterialBuilder::Build`(`GenerateTerrain`里一次性，运行中不再重建，headless约2.7秒)**：
 1. 扫描地图实际出现的地形id(最多`MaxTerrainTypes`=8，超出打Error)，按id排序编号；层按`name`去重编号。
