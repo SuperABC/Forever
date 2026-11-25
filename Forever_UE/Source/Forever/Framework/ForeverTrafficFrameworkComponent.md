@@ -103,7 +103,7 @@
   `Element/VehicleElement.h`、`Element/TransitVehicleElement.h`、`Controller/BusController.h`、`Element/CitizenElement.h`（despawn豁免）。
 - 被依赖：`AForeverFrameworkActor::BeginPlay()`在`EnsureTrafficGenerated()`→`EnsureStoryGenerated()`之后依次调用`GenerateVehicles`/`BuildRouteDebugMesh`/`BuildTracks`
   （必须排在`EnsureStoryGenerated()`之后——车辆script的`game_start`要先广播完，生成`AVehicleElement`时建触发盒烘焙的选项快照才不会是空的）；
-  `UForeverStoryFrameworkComponent`调用`ApplyEnterVehicle`/`ApplyBoardVehicle`/`ApplyLeaveVehicle`；`AForeverFrameworkActor`调用`StartVehicleLineRun`/`StopVehicleLineRun`/`StartTestNavigation`（以及读档恢复时的`ApplyBoardVehicle`）；
+  `UForeverStoryFrameworkComponent`调用`ApplyEnterVehicle`/`ApplyBoardVehicle`/`ApplyLeaveVehicle`；`AForeverFrameworkActor`调用`StartVehicleLineRun`/`StopVehicleLineRun`（以及读档恢复时的`ApplyBoardVehicle`）；
   `AVehicleElement::ExitVehicle`调用`ExitVehicle`；`AForeverFrameworkActor`的`visualize_navigation`和`AForeverPlayerController`（`TestNavigate`/`OnPossess`）调用`StartGuide`/`RefreshGuide`；`ABusController`调用`FireStopEvent`。
 
 ## 待办/后续阶段

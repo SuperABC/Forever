@@ -13,7 +13,7 @@
 - **两种执行模式**：**物理**(真实Chaos驾驶)和**运动学**(不发输入，Controller自己积分速度沿同一条路径推进，关物理)。远离玩家(地形LOD范围外，物理不可靠)自动切运动学，靠近切回物理；指令/停站状态机两种模式共用，所以切换不丢状态。范围判定由owner(`UForeverTrafficFrameworkComponent`)通过`SetPhysicsRangeQuery`注入，带滞回(第二个参数是当前是不是物理)。
 - **控制权**：`drivenVehicle`是弱引用。玩家搭乘(`SetRideMode`)时Possess权在玩家手里，这里照样每帧发输入；玩家驾驶(非搭乘)时不发输入；玩家放手后车没有Controller了，下一帧自动重新Possess回来。
 - **状态机**：`Idle`/`Driving`/`Dwelling`。`BeginDwell`/`DepartFromDwell`处理停靠；`QueryLoopProgress`返回循环进度(所在腿、已走比例、是否停靠中、停靠已过比例)，供交还Core时刻表时对齐进度。卡住检测用`stuckSeconds`。
-- **`GetRemainingWaypoints`**：行驶中返回剩余路径(世界坐标，第一个点是车当前位置)，空闲/停靠中/没有有效路径返回false，"你在去哪"折线(`StartTestNavigation`)用它。
+- **`GetRemainingWaypoints`**：行驶中返回剩余路径(世界坐标，第一个点是车当前位置)，空闲/停靠中/没有有效路径返回false，"你在去哪"折线(`UForeverTrafficFrameworkComponent::TrackTestNavigationLine`)用它。
 - 空闲(无指令)时原地保持：滑行中踩刹车，慢速后拉手刹；车被销毁则Controller自毁。
 - **子类钩子**：`OnStopEntered`/`OnStopLeft`/`GetDwellSeconds`，公交在`ABusController`里实现。
 - 可调参数(UE单位cm)都是`UPROPERTY(EditAnywhere)`：`maxSpeed`/`maxLateralAccel`(弯道限速，防侧翻关键)/`maxBrakeDecel`/`maxAccel`/`arriveDistance`/`arriveSpeed`等。

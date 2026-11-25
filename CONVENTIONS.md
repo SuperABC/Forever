@@ -31,7 +31,7 @@
 ### Dependence / Core / Basic 层(与UE无关的纯C++)
 
 - 类型名、方法名:PascalCase(如`BuildingMod`、`RegisterBuilding`)
-- 成员变量:camelCase(如`maxAcreage`、`wallTexture`)
+- 成员变量:camelCase(如`batchSize`、`floorHeights`)
 - 文件名、domain文件夹名:snake_case(如`building_mod.h`、`map/`)
 - 只用`std::`容器和纯C++类型,**不出现任何UE头文件/类型**(`FString`/`TArray`/`UObject`等一律禁止),因为Mod侧是不依赖UE运行时的纯Win32 DLL,依赖二进制兼容
 - 函数级中文说明移入配对`.md`,代码里不再写块注释;非显而易见的行内WHY注释仍可保留

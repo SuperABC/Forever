@@ -15,7 +15,7 @@
   UE侧`Forever`模块都间接include——和`Core/common/loader.md`"头文件不
   `#include <windows.h>`，句柄只在.cpp里出现"的约定一致，避免和UE的`CoreMinimal.h`宏
   冲突。
-- **`ValueType`是脚本引擎的核心值类型**——`story/condition.h`的`Expression::Evaluate`、
+- **`ValueType`是脚本引擎的核心值类型**——`story/expression.h`的`ExpressionNode::Evaluate`、
   `Container::GetValue`/`SetValue`都以它为载体，`FromString`会自动推断字面量类型（布尔/
   整数/浮点/字符串），`ToString`则会把浮点数的多余尾零裁掉（整数值输出`5`，`2.5`输出`2.5`），方便脚本里做字符串比较/拼接。存档按类型下标+二进制值写变量，不经过`ToString`。
 - **`OBJECT_HOLDER`/`COSTOM_INIT`/`COSTOM_RUNTIME`是纯标记宏**（定义为空），用于在声明处
@@ -52,7 +52,7 @@
 
 - 依赖：`error.h`（`THROW_EXCEPTION`，`Time`字段校验失败时抛`OutOfRangeException`/
   `InvalidArgumentException`）。`.cpp`只用标准库。
-- 被谁依赖：`story/condition.h`（`ValueType`）、`map/general_geometry.h`（`OBJECT_HOLDER`宏、
+- 被谁依赖：`story/expression.h`（`ValueType`）、`map/general_geometry.h`（`OBJECT_HOLDER`宏、
   `GetRandom`）、Core层各domain代码（`Time`常被城市模拟里的日程/日历系统使用）。
 
 ## 待办/后续阶段

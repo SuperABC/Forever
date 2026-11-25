@@ -20,4 +20,4 @@
 - `puzzle_common.h`的`PuzzleRng`有自己的`seed`参数(显式传才用它)，缺省取种子时走GetRandom，因此自动受puzzle mod流控制。Wxdj战斗里的`mt19937`是战斗内部随机，不受此约束。
 
 ## 已知限制
-同种子也不保证整局逐字节一致：遍历顺序依赖指针地址的容器(`map/set`的键里带`Room*`/`Citizen*`等)会让结果随内存布局变化。已修的：`Map::FlushPendingBuildingRoadAccess`按Road首次出现顺序遍历(此前遍历`unordered_map<Road*,…>`，建筑接路节点的id和导航邻接表顺序每次不同；EconSim的`[NavHash]`行可对比)；`Organization::ReconcileJobs`改用(房间名, 类型)作键(此前招聘的空缺顺序随`Room*`地址变，同种子各类岗位已招人数不同)；修后EconSim同种子3次，stdout和3个月报表完全一致。EconSim没覆盖的域(交通、天气、UE层`TMap<指针,…>`等)没验证；新写代码时，遍历顺序会影响结果的容器不要用指针作键。
+同种子也不保证整局逐字节一致：遍历顺序依赖指针地址的容器(`map/set`的键里带`Room*`/`Citizen*`等)会让结果随内存布局变化。已修的：`Map::FlushPendingBuildingRoadAccess`按Road首次出现顺序遍历(此前遍历`unordered_map<Road*,…>`，建筑接路节点的id和导航邻接表顺序每次不同)；`Organization::ReconcileJobs`改用(房间名, 类型)作键(此前招聘的空缺顺序随`Room*`地址变，同种子各类岗位已招人数不同)；修后用当时的EconSim(该工具已移除，经济报表并进了CoreTest的econ套件)同种子跑3次，stdout和3个月报表完全一致。当时没覆盖的域(交通、天气、UE层`TMap<指针,…>`等)没验证；新写代码时，遍历顺序会影响结果的容器不要用指针作键。

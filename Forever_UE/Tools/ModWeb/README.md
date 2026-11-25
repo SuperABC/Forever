@@ -1,6 +1,6 @@
 # ModWeb
 
-把真实的 C++ puzzle / app 逻辑(`Source/Basic/player` 的俄罗斯方块、bounce、notes)加上游戏里的 `Phone` 外壳(`Source/Core/player/phone.cpp`)用 Emscripten 编译成 WebAssembly,打包成**单个离线 html**(`dist/forever_mods.html`,约 300 KB,wasm 以 base64 内嵌),拷到手机直接打开即可,不需要服务器或宿主电脑。
+把真实的 C++ puzzle / app 逻辑(`Source/Basic/player` 的俄罗斯方块、bounce、notes)加上游戏里的 `Phone` 外壳(`Source/Core/player/phone.cpp`)用 Emscripten 编译成 WebAssembly,打包成**单个离线 html**(`dist/forever_mods.html`,约 14 MB,wasm 以 base64 内嵌),拷到手机直接打开即可,不需要服务器或宿主电脑。
 
 ## 构建
 

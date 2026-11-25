@@ -119,8 +119,7 @@ milestone超时之类）时再补内容。
 
 ## 待办/后续阶段
 
-- 对话历史（`AddTalk`/`GetHistory`）、全局消息队列（`AddMessage`/`PopMessages`），等对应功能被点名时再加。
-- 多剧情路径管理（类似`AddScript`/`RemoveScript`），等需要同时维护多份剧情时再加。
+- 无。
 
 ## 主线读取全部 story_scripts
 

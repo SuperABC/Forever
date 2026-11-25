@@ -1,15 +1,15 @@
 # 全项目 Review（2026-11-25）
 
-初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮（B1/B2/B4/B5/B6）、第七轮（D7）、第八轮（D6）、第九轮（D5）、第十轮（D4）、第十一轮（D3）、第十二轮（D1）和第十三轮（D8）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
+初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮（B1/B2/B4/B5/B6）、第七轮（D7）、第八轮（D6）、第九轮（D5）、第十轮（D4）、第十一轮（D3）、第十二轮（D1）、第十三轮（D8）和第十四轮（F2）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
 
 **怎么读这份清单**
 
-- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C5、C6、C10、D1、D3、D4、D5、D6、D7、D8、D10 和整个 E 节（E1–E4）已修并删掉，B9 你决定保持现状、不再关注，D2 你认为不算问题，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
+- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C5、C6、C10、D1、D3、D4、D5、D6、D7、D8、D10、F2、F3 和整个 E 节（E1–E4）已修并删掉，B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
 - 可信度：
   - **已确认**：读过对应代码，行号核对过。
   - **潜伏**：代码确实有问题，但当前没有调用路径会触发。
   - **推测**：有依据但没有实际复现/回退验证。
-- 行号对应第十三轮结束时的工作区。
+- 行号对应第十四轮结束时的工作区。
 
 **覆盖范围**
 
@@ -17,6 +17,54 @@
 
 - mod 感知（A、B）：对 Core/Dependence/Forever 三层的字符串字面量和标识符做了全量扫描，再逐处读上下文核对，这部分比较全。
 - 找 bug（C）：重点精读 + 模式扫描，不是逐行通读。精读过的：`Core/common` 全部、`traffic.cpp`/`vehicle.cpp`、`room.cpp`、`economy.cpp`、`market.cpp`、`election.cpp`、`script.cpp` 的非词汇表部分、`map.cpp` 的前 1200 行和寻路部分、`ForeverFrameworkActor.cpp` 的前 1200 行、`ForeverModSubsystem.cpp`。Basic 各 mod、大部分 UI、存档编解码、`building.cpp`、`route.cpp` 主体只做了扫描，没有精读。
+
+---
+
+## 第十四轮：F2 文档里引用的名字逐个过了一遍
+
+只改了文档，没有动代码，所以这一轮不需要编译和跑测试。
+
+**做法**
+
+- 重扫全部 388 份 md：反引号里的标识符和文件名，在工作区的代码、配置、资源文件名里一个都找不到的，列出来。
+- 收紧扫描条件后剩 194 个名字、283 处。这 194 个我逐个看了上下文，拿不准的回代码里查。
+- 其中 43 个是真过时，改了 35 份文档、80 处。改完重扫，这 43 个全部消失，没有新增。
+- 剩下 151 个名字、211 处都是误报，分类见下面。
+- 之后按你的决定处理了 F 节另外两条：F1（文档里的日期和变更记录）不管；F3 把"待办"里提到的不存在的名字删了——`story.md` 的两条待办（`AddTalk`/`GetHistory`/`AddMessage`/`PopMessages`、`AddScript`/`RemoveScript`）整条删掉，`ForeverWeaponComponent.md` 里只删了 `ArrestPlayerChange`/`ReleasePlayerChange` 这两个名字，通缉/警察/反抗小游戏的待办本身还留着。
+
+**真过时的（已改）**
+
+- 改名或删掉的函数：
+  - `EnsureMapGenerated`（9 处，分布在 `map.md`、`map_save.md` 和 Forever 层 5 份文档）。它早就拆成 `BuildMap*` 和 `Generate*Mesh` 两组阶段，由 `BuildGenerationStages` 排顺序。
+  - `EnsureModsRegistered`、`EnsureSpawned`、`LookupTerrain`、`Citizen::ResumeWalk`、`StartTestNavigation`、`BuildFarSection`、`BuildFloorMesh`、`MakeLiteralExpression`、`OrganizationMod::ComponentRequirements`、`Door::DoorAccess`、`batchesPerDay`。
+- 不存在的文件：`story/condition.h`（现在是 `expression.h`）、两处 `test.json`（现在是 `test.script`）、`USectionSpeakingWidget.h`、Wxdj 的 `nn_weights.js` 和 `ai/transformer/` 下的几个路径（训练代码已经搬到 `Train/`）。
+- 过时的资产名和模板名：路面资产 `default_1_1`、地形贴图 `T_Plain_D`、layout 模板 `preset_single_room_*`、`preset_train_station_*`、`preset_tshape_double_fg`。
+- 两个党派 mod 文档里的政策名，改成代码里的 `PolicyId::k…`。
+- 用已经不存在的东西举例：`Forever_Mod/README.md` 的 `PengzhanBuilding` 换成占位写法 `XxxBuilding`；`random.md` 里提到已移除的 EconSim。
+
+**顺手发现的内容错误（不只是名字）**
+
+查名字时读到的上下文和代码对不上，一并按代码改了：
+
+- `building_airport.md` 里留着一份旧的火车站说明（全图唯一一座、带地下室），和 `building_train_station.md` 以及代码矛盾。火车站的部分改成指向 `building_train_station.md`。
+- `building_industry_high.md` 的 `Layout()` 一段数字全是旧的（楼体占比、是否有地下室、层高、模板名），按代码重写。
+- `ForeverBuildingFrameworkComponent.md` 说碰撞盒在 `Init()` 里建，实际是近处 LOD 的 `BuildTriggers` 操作里建。
+- `ForeverRoadnetFrameworkComponent.md` 说所有路共用一个路面资产、只建一个 ISM，实际按车道配置有多种资产。
+- `Tools/ModWeb/README.md` 说打包出的 html 约 300 KB，实际约 14 MB。
+
+**误报的类别（没动）**
+
+- UE 引擎和 Win32 自带的头文件、类名。
+- 占位和简称：`ModName`、`RegisterX`、用 `IndustryBuilding` 指高/中/低三个类。
+- 故意写出来的旧名字：说明"已经删掉"或"不要这样做"的地方，比如 `BindRandomHost`、`SetConfig`、`ApplyArgs`、`DoorMod`。
+- 生成物和被 git 忽略的文件：`forever_mods.html`、`furniture.json`、`modtest.json`、`ys.script`。
+- 资产、骨骼、材质的名字，以及路面资产 `default_1_0_1_1_0_1` 这种代码里拼出来的名字。
+- 标成"旧做法"的段落里的变量名，以及"待办"里还没实现的名字（F3，随后已删）。
+
+**需要你知道的**
+
+- **这次扫描只能发现"名字已经不存在"的过时。** 名字都还在、但描述的行为已经变了的文档，扫描发现不了。上面五处内容错误是查名字时碰巧读到的，别的文档里很可能还有。
+- `battle.md` 原来写着一个 C++ 和网页 JS 的对拍程序 `ai_test.cpp`，仓库里没有这个文件。我把那句改成"对拍程序没有进仓库"。如果它在你别的目录里，告诉我路径我再改回去。
 
 ---
 
@@ -601,17 +649,6 @@
 - 去掉各处"id 必须是…""不带/带 concept 前缀"的说法：`mod_test.h/.md`、`random.h`、`green_factory.md`、`party_factory.md`、`basic.md`、`Basic/README.md`、`script.md`、`registry.h/.md`、`config.md`、`loader.md`、`VehicleRig/README.md`、`Test/README.md`。
 - 跟着代码改的文档：`route.md`、`route_mod.md`、`traffic.md`、`traffic_save.md`（C1/C2）；`script.md`（C3）；`save.md`（C5）；`ForeverSaveSubsystem.md`（C10）；`ForeverModSubsystem.md` 重写、`ForeverConfigBridgeSubsystem.md`、`loader.md`、`Dependence/README.md`、`Forever_Mod/README.md`（B8）；`ForeverFrameworkActor.md`、`ForeverTrafficFrameworkComponent.md`、`map.md`、`Core/README.md`。
 - 新文档：`terrain_coverage.md`、`bus_stop_name.md`。
-
-### - [ ] F1 文档里的日期和变更记录没有清理
-- 97 份 md 里有 936 处 `2026-xx-xx` 标记，很多是"(2026-11-22 改)""原来是…现在…"这种变更记录。`CONVENTIONS.md` 第 1 节要求文档只写当前状态。
-- 没动：量大，而且哪些是"值得保留的踩坑记录"需要你定尺度。
-
-### - [ ] F2 仍有约 150 份 md 被引用扫描标记
-- 我用脚本扫了"md 里用反引号引用、但代码里已不存在的标识符/文件"。第一轮修完后还剩 154 份、568 处；第二轮没有重扫。
-- 我看过的大多是误报：简称（如用 `IndustryBuilding` 指代高/中/低三个类）、UE 引擎自带的标识符、`h/.cpp` 这种写法、故意写出来的"不要这样做"的名字。但**没有逐份确认**，里面可能还有真过时的。
-
-### - [ ] F3 "待办"里提到不存在的类
-- 例如 `Core/story/story.md` 的 `AddMessage`/`PopMessages`、`ForeverWeaponComponent.md` 的 `ArrestPlayerChange`/`ReleasePlayerChange`。它们是作为"还没做"列出的，不算错，但如果这些计划已经放弃，应该删掉。
 
 ---
 

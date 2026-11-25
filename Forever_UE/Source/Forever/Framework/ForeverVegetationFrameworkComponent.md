@@ -20,7 +20,7 @@
   `FRotator(0, yaw°, 0)`，等比缩放直接用Core算好的最终scale(随机已经在Core里叠加过)。
 - **剔除距离**——`cullDistanceStart/End`(UU，默认0~60000)是`EditDefaultsOnly`，ISM按实例
   剔除距离隐藏远处的树(没有HISM那种层次树/逐实例LOD，2026-11-18由HISM改成ISM：树初始化后不再增删，不需要层次树)。mobility设成Static，和FrameworkActor的sceneRoot一致。
-- 调用时机：`AForeverFrameworkActor::EnsureMapGenerated`在`GenerateBuildings`之后调用。
+- 调用时机：`AForeverFrameworkActor::GenerateVegetationMesh`阶段，排在`GenerateBuildingMesh`之后(顺序见`BuildGenerationStages`)。
 
 ## 风(树随风摇摆)
 

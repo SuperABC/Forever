@@ -45,25 +45,25 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory*);   //
 ```
 
 `RegisterModBuildings`里注册的creator/deleter必须成对来自同一个mod DLL(如
-`[](const std::string&) -> BuildingMod* { return new PengzhanBuilding(); }`配
+`[](const std::string&) -> BuildingMod* { return new XxxBuilding(); }`配
 `[](BuildingMod* b) { delete b; }`)——宿主的`Factory::Destroy<Concept>`会通过这对函数指针
 释放对象,保证分配和释放发生在同一模块,不能宿主直接`delete`一个mod `new`出来的对象。
 
 **参数直接交给creator,不经过任何"创建后"钩子**——`config.json`里`"building_mods"`数组
-按id配置的命令行式参数(如`"building_pengzhan --density 1.0"`)由`BuildingFactory::CreateBuilding(id)`
+按id配置的命令行式参数(如`"building_xxx --density 1.0"`)由`BuildingFactory::CreateBuilding(id)`
 在创建实例那一刻,作为参数直接传给注册的creator函数;`RegisterModBuildings`导出函数签名
 不需要、也不会带参数——参数只在creator被调用时才出现。mod的creator决定怎么用这个参数
 (最常见的做法是转发给具体子类的构造函数,如`[](const std::string& args) -> BuildingMod* {
-return new PengzhanBuilding(args); }`),不用就直接忽略这个参数,详见
+return new XxxBuilding(args); }`),不用就直接忽略这个参数,详见
 `Forever_UE/Source/Dependence/README.md`。**不要**改成创建实例之后再调`instance->ApplyArgs(args)`
 这类钩子：构造函数已经跑完，`const`成员无法再赋值，参数到手太晚。
 
 **creator lambda必须显式标注`-> BuildingMod*`返回类型**(不能让编译器推导成
-`PengzhanBuilding*`)——`<Concept>Factory::CreateFunc`是裸函数指针类型
+`XxxBuilding*`)——`<Concept>Factory::CreateFunc`是裸函数指针类型
 (`BuildingMod*(*)(const std::string&)`,不是`std::function`,原因见
 `Forever_UE/Source/Core/README.md`),裸函数指针要求签名**完全一致**,没有
-协变:一个返回`PengzhanBuilding*`的无捕获lambda只能转换成
-`PengzhanBuilding*(*)(const std::string&)`,不能直接转换成
+协变:一个返回`XxxBuilding*`的无捕获lambda只能转换成
+`XxxBuilding*(*)(const std::string&)`,不能直接转换成
 `BuildingMod*(*)(const std::string&)`,必须在lambda里显式写`-> BuildingMod*`让返回值在
 lambda内部完成到基类指针的隐式转换。
 

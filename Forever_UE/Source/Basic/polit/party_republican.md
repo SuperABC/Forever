@@ -10,15 +10,15 @@
 
 | 政策 | 目标值 |
 |---|---|
-| `CorporateTax` | 50 |
-| `IncomeTax` | 30 |
-| `ConsumptionTax` | 15 |
-| `RentTax` | 30 |
-| `ImportTariff` | 40 |
-| `RetirementPension` | 8000 |
-| `UnemploymentBenefit` | 8000 |
-| `MinorAllowance` | 3000 |
-| `ImmigrationRatio` | 1.2 |
+| `PolicyId::kCorporateTax` | 50 |
+| `PolicyId::kIncomeTax` | 30 |
+| `PolicyId::kConsumptionTax` | 15 |
+| `PolicyId::kRentTax` | 30 |
+| `PolicyId::kImportTariff` | 40 |
+| `PolicyId::kRetirementPension` | 8000 |
+| `PolicyId::kUnemploymentBenefit` | 8000 |
+| `PolicyId::kMinorAllowance` | 3000 |
+| `PolicyId::kImmigrationRatio` | 1.2 |
 
 - `GetCongress`忽略月份参数，恒返回每月1号12:00-15:00(调试用，便于PIE验证第一天的党内选举)。
 - `ChooseMeetingRoom`发post `random room`(type=`room_meeting`)，地址写进`meetingAddress`；和别的党重叠由Core重调(最多4次)。

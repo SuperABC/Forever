@@ -7,7 +7,7 @@
 ## 关键设计
 
 - **分类标签`categories`**决定哪些仓库能存它：和`StorageMod::categories`同一套字符串标签，任一交集即可入库。
-- **批次配方**：`batchSize`是"一批最少产多少份"，`ingredients`/`byproducts`的value含义是"生产一批(`batchSize`份)需要/产生多少"，不是"每1份"。`batchSize`不要求是整数，但工坊每天配置的产量必须是整批(`batchesPerDay`为正整数，见`manufacture_mod.h`)。
+- **批次配方**：`batchSize`是"一批最少产多少份"，`ingredients`/`byproducts`的value含义是"生产一批(`batchSize`份)需要/产生多少"，不是"每1份"。`batchSize`不要求是整数，但工坊每天配置的产量必须是整批(`ManufactureMod::targets`里每个产品的批数是正整数，见`manufacture_mod.h`)。
 - **`SetProperty()`两段式**：具体子类在这里填四个字段，不在构造函数里赋值。
 - 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
 - `retailPrice`/`importPrice`/`exportPrice`：int64、单位分，要求 零售价 > 进口价 > 出口价 > 0；`Core::Product`构造时校验，不满足则判无效。零售价是商店卖给市民的单价，进口价/出口价是与城市外交易的价格，城市内批发价由Core初始化为二者平均值（不是mod字段）。

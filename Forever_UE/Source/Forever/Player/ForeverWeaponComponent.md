@@ -6,7 +6,7 @@
 ## 已实现范围
 核心武器机制:`WeaponMod`/`WeaponFactory`+`Player`/`Citizen`的生命值字段+hitscan开火/伤害/击杀+换弹夹(扣减Player背包里的真实备弹)+数字键切枪+瞄准+后坐力,命中citizen致死会广播一次`CitizenDeceaseEvent`。
 
-**未做**:通缉值(`ChangeWantedChange`)、警察`JobMod`、反抗小游戏、`ArrestPlayerChange`/`ReleasePlayerChange`——这些需要先有一个"把任意运行时Event广播给剧情脚本匹配"的通用机制(目前只有`BroadcastGameStart`这一个特化入口)和一个警察`JobMod`,工作量明显大于武器本身,留待后续单独实现。
+**未做**:通缉值(`ChangeWantedChange`)、警察`JobMod`、反抗小游戏——这些需要先有一个"把任意运行时Event广播给剧情脚本匹配"的通用机制(目前只有`BroadcastGameStart`这一个特化入口)和一个警察`JobMod`,工作量明显大于武器本身,留待后续单独实现。
 
 ## 关键设计
 
@@ -74,7 +74,7 @@
 - 被谁依赖:`AForeverCharacter`(`CreateDefaultSubobject`+`StartFireWeapon`/`StopFireWeapon`/`ReloadWeapon`/`ActivateShoulderWeapon`转发)。
 
 ## 待办/后续阶段
-- 通缉值(`ChangeWantedChange`)/警察`JobMod`/反抗小游戏(`StartPuzzleChange`可复用现成的`PuzzleMod`/`Canvas`/`PuzzleWidget`机制)/`ArrestPlayerChange`——需要先补"任意Event广播给剧情脚本"的通用机制。
+- 通缉值(`ChangeWantedChange`)/警察`JobMod`/反抗小游戏(`StartPuzzleChange`可复用现成的`PuzzleMod`/`Canvas`/`PuzzleWidget`机制)——需要先补"任意Event广播给剧情脚本"的通用机制。
 - `Player::TakeDamage`没有调用方(`area_damage`/`single_damage`只处理市民),等有会反击的NPC/敌人再接上。
 - 武器状态不按角色持久化(每次被占有都重置成默认肩挂装备)。
 - 具体弹道/后坐力/散射数值需在PIE里调优(机制已实现,当前数值为随手定的测试值)。

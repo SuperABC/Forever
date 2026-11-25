@@ -9,7 +9,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 
 ## 关键设计
 
-- **道路正常路段的可见效果直接来自`Road::mesh`本身**——`mesh`资产（默认`default_1_1`）本身
+- **道路正常路段的可见效果直接来自`Road::mesh`本身**——`mesh`资产（如`default_1_0_1_1_0_1`，命名规则见`roadnet_jing.md`）本身
   已经画好了车道+人行道横断面，`vehicleLanes`/`parkingLanes`/`pedestrianLanes`这几组宽度数据
   只用于结构计算（导航锚点偏移、路口路缘角点、开口cube宽度），不驱动任何单独的procedural
   条带或材质。`BuildRoadInstances`的分段数量算法是"缩放后的mesh长度落在[0.75,1.5]×原始长度
@@ -18,8 +18,8 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   128点惰性缓存），直接按`f=k/n`取点就已经是等弧长分段。用`UInstancedStaticMeshComponent`
   按分段结果摆放`mesh`资产实例，同时满足"沿路线分隔mesh元素"+"曲线道路"两点。
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
-  按路径查/建），不是每条Road各自一个ISM——目前所有Road都用同一个`default_1_1`，只会建
-  一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
+  按路径查/建），不是每条Road各自一个ISM——车道配置相同的Road共用同一个资产，
+  用到几种资产(不同车道配置、隧道`_T`、无人行道变体)就建几个ISM。
 - **曲线上的节间补缝**：每节是刚性的直段，曲线上相邻两节朝向差`delta`，外侧会张开楔形缝（内侧重叠）。`BuildRoadInstances`把内部接缝处每节的两端各沿自身轴向多伸`e=(W/2)·tan(delta/2)`（`W`=路总宽，`delta`取该节两端切线的水平夹角，`e`不超过节长一半），外侧的角正好碰上；这一段首尾（靠路口/开口）的那一端不伸。直路`delta=0`不变。内侧会有重叠，路面材质按世界坐标取样所以不闪，但没在PIE里确认。**头尾倾斜(2026-11-20)**：每节实例的头抬高、尾压低`ROAD_TILE_TILT`(1e-5地图单位=0.01cm，中心高度不变)，整节微微倾斜，内侧重叠处后一节的头压在前一节的尾上，避免共面z-fighting(开口旁的免人行道单段同样处理)；是权宜办法，要根治得用样条网格(`USplineMeshComponent`，弯路节用、直路仍ISM)或材质WPO形变。ISM是刚性实例，做不到像样条网格那样真正沿曲线弯曲，要彻底消除得改成CPU变形的程序网格。
 - **开口按侧处理**（`BuildRoadInstances`一并完成）：同一条路上重叠的`RoadOpening`先合并成一段
   （同一物理开口的车行/行人两条同t同宽，合并后只处理一次），每段记录落在哪一侧（`RoadOpening.forwardSide`，true=side0）。
@@ -38,7 +38,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   road i自己的"开口宽度"边，`(left_i,right_{i+1})`是road i与road i+1之间的桥接边），从路口
   中心（`Intersection`自身坐标）扇形三角剖分，贴`Road`材质。不做圆角/斜切。
 - **开口cube和路口mesh都带碰撞**——`CreateMeshSection`的`bCreateCollision`传`true`。道路
-  本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着`default_1_1`资产自带的
+  本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着路面mesh资产自带的
   collision setup走）。
 - **`Road::AddOpening`接小路开口**：Zone/Building裁剪Lot自由空间时接到"大路"的小路，调用
   `Road::AddOpening`产出开口，渲染这里按`openings`列表（经弧长`t`去重，同一个物理位置只
@@ -77,7 +77,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   `roadPlainBaseMaterial`那种只能在构造函数里用的`ConstructorHelpers::FObjectFinder`，
   因为这个路径是`RoadnetMod`运行时数据，编译期不知道具体是哪个资产），取不到就退化用
   `roadPlainBaseMaterial`。必须在`GenerateRoadnet`里紧跟`BuildJunctionMeshes`之后调用，
-  且`AForeverFrameworkActor::EnsureMapGenerated()`必须保证`Map::InitZones()`/
+  且`AForeverFrameworkActor::BuildGenerationStages()`登记的阶段顺序必须保证`Map::InitZones()`/
   `InitBuildings()`已经跑完再调`GenerateRoadnet`，否则`GetPathRoads()`还是空的。
 
 ### 路口/开口几何的几条不显而易见的约束
@@ -87,9 +87,9 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **三角形环绕顺序**：UE（左手坐标系）要求从上方看是"顺时针"（标准数学XY凸包意义下的负向
   面积）才是正面朝上——`BuildJunctionMeshes`的顶点顺序要和
   `ForeverTerrainFrameworkComponent::BuildLevel`已验证过的`(v00,v11,v10)/(v00,v01,v11)`
-  模式一致。道路本身用真实静态网格资产（`default_1_1`），环绕顺序是资产自带的，不受这条
+  模式一致。道路本身用真实静态网格资产（如`default_1_0_1_1_0_1`），环绕顺序是资产自带的，不受这条
   约束影响。
-- **路口两端的道路tiling必须收缩（`trimStart`/`trimEnd`）**，否则两条路的`default_1_1`会
+- **路口两端的道路tiling必须收缩（`trimStart`/`trimEnd`）**，否则两条路的路面mesh会
   在路口处重叠z-fighting；收缩量必须和`RoadJunctionApproach::setback`（该端两侧车道总宽度
   里较宽的一侧，也是路缘角点/导航锚点的基准点外移距离）用同一个值，否则路口多边形撑不满
   收缩出来的空当，看起来"路口处什么都没有"。
@@ -116,8 +116,8 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   `GetPathRoads()`/`GetPathRoadMaterial()`/`AddRoadAccessNode`）、`Source/Core/map/general_geometry.h`
   （`Road`/`RoadJunction`/`Lot`/`Node`）、`ProceduralMeshComponent`模块、
   `Components/InstancedStaticMeshComponent.h`（Engine模块自带，不需要额外启用）。
-- 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（`EnsureMapGenerated()`
-  在`terrainFramework->GenerateTerrain(map)`之后、`InitZones`/`InitBuildings`跑完之后调用
+- 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（`GenerateRoadnetMesh()`阶段
+  排在`GenerateTerrainMesh()`之后、全部`BuildMap*`阶段之后，调用
   `roadnetFramework->GenerateRoadnet(map)`）。
 
 ## 待办/后续阶段

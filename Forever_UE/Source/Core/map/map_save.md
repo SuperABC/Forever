@@ -90,7 +90,7 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 - 依赖：`map/*`、`common/save_archive`（`ByteWriter`/`ByteReader`/`SaveArchive`）、`common/save`（`JsonStateWriter`/`JsonStateReader`、段版本表）。
 - 被谁依赖：
   - `common/save.cpp`（`SaveGame::BuildArchive`）；
-  - `Forever/Framework/ForeverFrameworkActor.cpp`（读档时 `EnsureMapGenerated` 改走 `Load`）；
+  - `Forever/Framework/ForeverFrameworkActor.cpp`（读档时 `BuildMapTerrain` 改走 `MapSaveCodec::Load`，后面几个 `BuildMap*` 阶段跳过对应的 `Init*`）；
   - `Forever/Mod/ForeverSaveSubsystem.cpp`（`Forever.SaveRoundTrip`）。
 
 ## 待办 / 后续

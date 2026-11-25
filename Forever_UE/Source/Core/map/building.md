@@ -189,7 +189,7 @@
 - 外墙/内墙材质区分——目前统一用一份`wallMaterial`，以后再按需要区分。
 
 ## 房间朝向
-`Room::direction`在`AssignRoom`/`ArrangeRow`里取自烘焙过的single/row朝向(`InverseDirection(layoutDir, face)`)，即建筑局部坐标系下的房间正面方向；房间局部坐标系和换算见`room.md`。
+`Room::direction`在`AssignRoom`/`ArrangeRow`里取自烘焙过的single/row朝向(`InverseDirection(direction, face)`)，即建筑局部坐标系下的房间正面方向；房间局部坐标系和换算见`room.md`。
 
 ## 车辆导航的显式入口/出口端点（entrance / exit）
 

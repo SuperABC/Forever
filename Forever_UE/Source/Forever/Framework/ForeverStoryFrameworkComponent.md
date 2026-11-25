@@ -72,7 +72,7 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 - `AdvanceDialog()`关闭当前台词、推进到下一项；带`label`的台词播完后广播`speaking_finish`（先弹出队首再广播再显示下一项，广播命中的里程碑若又弹对话会排到队尾）。
 - `SelectDialogOption(index)`执行被选中`Option`的`GetChanges()`，把它的`GetDialogs()`插到队头紧接着播放（多个嵌套Dialog保持相对顺序，`insertCursor`递增）。队首不是分支或`index`越界时no-op。
 - `ShowCurrentItem()`按队首是台词还是分支调`ShowLine`/`ShowOptions`，并切`UIOnly`输入模式（避免Pawn的Enhanced Input同时响应，例如空格同时绑了Jump和"推进对话"）；
-  `widgetToFocus`必须是当前显示的Widget，因为空格推进走`NativeOnKeyDown`需要键盘焦点（见`USectionSpeakingWidget.h`）。
+  `widgetToFocus`必须是当前显示的Widget，因为空格推进走`NativeOnKeyDown`需要键盘焦点（见`UI/SectionSpeakingWidget.h`）。
   队列清空时隐藏两个Widget、切回`GameOnly`并显式`SetFocusToGameViewport()`——UI点击会把Slate焦点转到按钮上，光改`SetInputMode`不会抢回来，鼠标隐藏后Look收不到鼠标移动。
   对话展示期间`MeetOptionWidget`临时`Collapsed`，播完恢复`Visible`。
 - `IsDialogActive()`（队列非空）为真时不允许存档，对话队列的中间状态不进存档。

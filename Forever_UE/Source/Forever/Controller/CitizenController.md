@@ -24,7 +24,7 @@
 `GateCrosswalk`（Tick 里取到目标点之后、移动之前）：行人路径只是节点坐标串，不带边信息，所以靠 `JunctionTraffic::FindCrosswalk` 用"当前目标点→下一个点"的坐标去匹配人行横道连线（只管横道，转角不限行）。离横道起点 `crossingRequestDistance` 以内每 `crossingRequestInterval`（交通时钟秒）`Request`（行人 entity，长度 0）；放行后一边走一边续租，走过横道终点（`waypointIndex>crossingEndIndex`）`Leave`；没放行就走到离起点 `crossingWaitDistance` 处停下不再 `AddMovementInput`。`EndCommand`/`OnUnPossess` 会释放，销毁时来不及释放靠租约过期。Core 推算（未实例化）的行走不受路口限制，从横道中间交接给 Actor 的也不会被拦。
 
 ## 剩余路径
-`GetRemainingWaypoints(out, outDestination)`：当前 FollowPath 指令的剩余路径点和目的地。第一个点是市民当前位置，**换算成脚底高度**（Actor 位置减胶囊半高；路径点本身是脚底高度，否则折线/交还 Core 的路径整体抬高）。市民被流式销毁时用它把行进交还 Core（`Citizen::ResumeWalk`），"你在去哪"折线也用它。`GetCurrentDestination()` 供存档把走路中的市民记成"已经到了"。
+`GetRemainingWaypoints(out, outDestination)`：当前 FollowPath 指令的剩余路径点和目的地。第一个点是市民当前位置，**换算成脚底高度**（Actor 位置减胶囊半高；路径点本身是脚底高度，否则折线/交还 Core 的路径整体抬高）。市民被流式销毁时用它把行进交还 Core（`HandBackCitizenToCore`里重新`Citizen::BeginWalk`/`BeginWalkToGreen`），"你在去哪"折线也用它。`GetCurrentDestination()` 供存档把走路中的市民记成"已经到了"。
 
 ## 逃跑指令 Flee（2026-11-19）
 `FCharacterCommand::EType::Flee`(`fleeTarget`、`speedScale`=4×该市民扰动、`bExemptDespawn=true`)：没有路线序列，路径点边走边追加且始终比当前目标点多提前一个(给横道判定看下一点)。

@@ -32,7 +32,7 @@
   齐，相邻两条墙的中心线端点会停在两个不同的点上，墙角会露出缺口（只有两个轴都用完整的`depth`才能让两条墙的
   中心线端点精确重合，缩进不够会交叉成"井"字，各缩一半会露出缺口）。
 - **`GenerateZones`必须在`Map::InitZones()`跑完之后调用**，和其余Framework组件的
-  `GenerateXxx(Map*)`模式一致，`AForeverFrameworkActor::EnsureMapGenerated()`负责保证顺序。
+  `GenerateXxx(Map*)`模式一致，`AForeverFrameworkActor::BuildGenerationStages()`登记阶段的顺序负责保证。
 - **进入/离开检测碰撞盒**：`GenerateZones`遍历完`GetWalls()`之后额外调一次
   `BuildCollisionBox(zone)`——真正的`UBoxComponent`+`OnComponentBeginOverlap`/
   `OnComponentEndOverlap`（不是手动Tick轮询），碰撞Profile用UE自带的
@@ -59,7 +59,7 @@
   用）、`map/door.h`+`Element/DoorComponent.h`（大门）、`ForeverStoryFrameworkComponent`（进出事件）、`map/general_geometry.h`（`FACE_DIRECTION`）、`Components/InstancedStaticMeshComponent.h`、
   `Components/BoxComponent.h`、`Kismet/GameplayStatics.h`、`Engine/Engine.h`。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
-  （`EnsureMapGenerated()`在`GenerateRoadnet`之后调用一次`GenerateZones`）。
+  （`GenerateZoneMesh()`阶段排在`GenerateRoadnetMesh()`之后，调用一次`GenerateZones`）。
 
 ## 待办/后续阶段
 

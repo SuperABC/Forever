@@ -44,8 +44,8 @@
   隧道口，这座山改成抬升（日志里写原因）；不再有"隧道穿过水面"、"一直延伸到extern"的情况。隧道口
   斜坡段额外调`AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形(同时让UE层给洞的
   两条长边加侧壁)，否则隧道段会被
-  山体实心地形完全挡住看不见；消费方`ForeverTerrainFrameworkComponent::LookupTerrain`的判断条件要放宽到
-  "`construction`或者这个格子有hatch"，见该文件`.md`。挖洞宽度直接取`roads.back().GetTotalWidth()`，
+  山体实心地形完全挡住看不见；消费方`ForeverTerrainFrameworkComponent::BuildLevel`的挖洞条件是
+  "这个格子有hatch(不论地形类型，不只认`construction`)"，见该文件`.md`。挖洞宽度直接取`roads.back().GetTotalWidth()`，
   跟着这条路实际配好的车道宽度走，不用固定常量。
 - **隧道内路面用`_T`资产**：两端Z都<0的路段（以及三段拆分里的第三段平路）的mesh路径在`default_x_x_x`后加`_T`后缀（`meshPathFor(..., tunnel=true)`，如`default_1_0_1_1_0_1_T`），隧道口的引道和下坡仍用普通资产。
 - **`addRoad`的地面↔隧道过渡拆成三段Connection**：①`groundNode→flatNode`(长

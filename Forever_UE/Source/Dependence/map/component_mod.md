@@ -12,7 +12,7 @@
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`。
-- 被谁依赖：`component_factory.h`创建它；`Core/map/component.h`/`building.md`消费它；组织(`OrganizationMod::ComponentRequirements`)按组合类型名撮合。
+- 被谁依赖：`component_factory.h`创建它；`Core/map/component.h`/`building.md`消费它；组织(`OrganizationMod`子类的static `GetRequirements()`)按组合类型名撮合。
 
 ## 待办/后续阶段
 

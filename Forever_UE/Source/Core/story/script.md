@@ -39,7 +39,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `THROW_EXCEPTION(RuntimeException, ...)`，等对应类型被点名实现时再插入分支，见
   `Dependence/story/event.md`/`change.md`"JSON分发"一节。`"place_holder"`分支
   `new PlaceHolderChange(obj["label"].AsString())`——`PlaceHolderChange`是一个"占位符"结构性
-  节点，本身不代表任何真正的游戏效果，作用是在`test.json`里标记一个位置，供`ScriptMod::
+  节点，本身不代表任何真正的游戏效果，作用是在`test.script`里标记一个位置，供`ScriptMod::
   WrapScript`用`FindLabel`按标签找到并原地替换成mod自己持有的真实`Change`（见
   `Dependence/story/script_mod.md`"典型用法"一节）——如果这个占位符没有被任何`WrapScript`
   重载替换掉，它会原样出现在`MatchEvent`的返回值里，

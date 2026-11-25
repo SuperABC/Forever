@@ -90,7 +90,7 @@ void ShopSalerJob::DailyPlan(const Time& currentTime, PostHandle*) {
 `ExecNode`两个节点都是`new NPCNavigateChange(occupantName, <具体房间地址>)`。
 `name`/`destination`字段是纯`std::string`——不走`Change`家族"存DSL源码字符串、
 求值前现场Parse"的通用约定，因为这两个字段本来就是已经算好的具体值，从不需要
-`$$`动态求值（**不要改用`Expression`+`MakeLiteralExpression`构造这两个字段**：
+`$$`动态求值（**不要改用`Expression`构造这两个字段**：
 `Expression`树跨DLL构造/求值会导致堆字符串在错误的模块侧释放，引发堆损坏，完整
 分析见`Dependence/story/change.md`"字段类型是`std::string`"一节）。
 **`destination`必须是具体房间地址（`Room::GetAddress()`格式，`"<building地址>

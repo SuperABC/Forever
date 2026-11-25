@@ -208,7 +208,7 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 ## 碰撞检测（Building进入/离开）
 
-`ABuildingElement::Init()`里`BuildFarSection()`之后额外调一次`BuildCollisionBox()`——
+`ABuildingElement`在近处LOD的`BuildTriggers`操作里(`nearFloorCount > 0`时)调`BuildCollisionBox()`，`Init()`里不建——
 真正的`UBoxComponent`+`OnComponentBeginOverlap`/`OnComponentEndOverlap`（不是手动Tick
 轮询），碰撞Profile用UE自带的`"Trigger"`预设。水平=body矩形（`ComputeBodyWorldCenter`，
 和远处LOD灰box同一个框），垂直=整栋楼Z范围（`ComputeFullZRange`，和远处LOD灰box同一个
@@ -234,7 +234,7 @@ Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名�
   `SetCurrentZ`/`SetVelocity`，到站调`Arrive`。远景下电梯照样会到站。曲线是"匀速+两端缓入缓出"：smoothstep速度曲线，
   缓入段位移`cabinCruiseSpeed*te*(u³-u⁴/2)`，缓出段对称复用；`te`夹到不超过半程对应时间。
   `cabinCruiseSpeed`(默认300 UE单位/秒)/`cabinEaseSeconds`(默认1.5秒)是本组件的`UPROPERTY`。
-- **近处LOD的表现**：远→近切换时在所有`BuildFloorMesh`之后跑`BuildElevatorCabins`
+- **近处LOD的表现**：远→近切换时在所有楼层的`BuildFloorSection`/`BuildRoomFurniture`之后跑`BuildElevatorCabins`
   (`BuildElevatorCabinsForBuilding`)，近→远的`ClearNearSections`一并清空。对每台Core电梯：
   - 轿厢网格：用`minFloor`那一层模板的这口井定位/定尺寸(`ComputeDirectionalMeshTransform`，资产默认
     `/Game/Asset/Building/Mesh/Elevator.Elevator`，Z缩放用`minFloor`的层高)，**从Core记录的当前高度生成**；
