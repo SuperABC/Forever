@@ -12,6 +12,7 @@
 - `child_world.*`：世界/套件子进程的入口与父进程驱动、指纹比较。
 - `suite_mods.cpp`：只查 mod 接进 Core 之后的事(id 全局唯一、Registry 认得、计数器复位、Config 的 mod 参数)；对 mod 本身的测试在 `Source/Test/Mod`(ModTest，给 mod 作者用，不依赖 Core)。
 - `suite_unload.cpp`：一局结束后的泄漏和mod dll卸载/重载(唯一会销毁世界的套件)，见`Source/Test/README.md`的unload条目。
+- `suite_fault.cpp`：故障注入，验证异常体系的规则(三类异常、`ErrorScope`、`GuardData`、坏数据、mod dll里抛异常、出错后的收尾)，见`Source/Test/README.md`的fault条目。和unload一样会销毁世界。
 - `suite_*.cpp`：各套件；在子进程里跑的套件主体在 `FindSuiteBody`(suite_random.cpp)里登记。
 
 ## 关键设计

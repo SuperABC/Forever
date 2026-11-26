@@ -18,6 +18,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 - **`WrapScript`转调`mod->WrapScript`**：`Script::WrapScript`直接把参数原样转给
   `mod->WrapScript`，mod侧默认实现原样透传。`MatchEvent`收尾时调用一次`WrapScript`。
+- **一个里程碑的触发条件是一个可以整体跳过的操作**：`MatchEvent`对每个里程碑的`MatchTrigger`用`GuardData`接数据错误(触发条件里的表达式写错)，接住后打一条警告、当作这次没触发，别的里程碑不受影响；mod错误和内部错误照常往外抛。`ReadScript`读文件时登记`ErrorScope(kErrorScopeFile, path)`，脚本语法错的报告里带文件路径。见`common/error.md`。
 - **`WrapScript`/`MatchEvent`都带`PostHandle* post`参数**：`Script::WrapScript`原样转给
   `mod->WrapScript`；`Script::MatchEvent`把自己收到的`post`原样转给`WrapScript`，二者都只是
   单纯透传，不在`Script`这一层解读`post`的内容——真正使用`post`的是mod侧
@@ -36,7 +37,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `$$self.xxx`这类表达式)：`access`为true=常开、false=常锁；`pass`为true=允许这个人通过、false=不允许，省略按true，
   按人登记优先于门的常开/常锁，见`Source/Core/map/door.md`；`remove_option`对门/市民/车辆都生效；`npc_navigate`的name/destination先按原样查，
   查不到再当表达式求值(mod在C++里生成的是现成的姓名/地址，脚本里可以写`$$self.name`这类表达式)。其余`type`字符串统一
-  `THROW_EXCEPTION(RuntimeException, ...)`，等对应类型被点名实现时再插入分支，见
+  `THROW_EXCEPTION(DataException, ...)`，等对应类型被点名实现时再插入分支，见
   `Dependence/story/event.md`/`change.md`"JSON分发"一节。`"place_holder"`分支
   `new PlaceHolderChange(obj["label"].AsString())`——`PlaceHolderChange`是一个"占位符"结构性
   节点，本身不代表任何真正的游戏效果，作用是在`test.script`里标记一个位置，供`ScriptMod::
@@ -102,7 +103,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 ## 待办/后续阶段
 
-- 其余尚未实现的event/change类型的JSON分发分支（未知`type`抛`RuntimeException`）。
+- 其余尚未实现的event/change类型的JSON分发分支（未知`type`抛`DataException`）。
 - 多剧情共享同一份milestone缓存时的命名冲突机制，等真的需要时再加。
 
 ## 载具/公交相关解析

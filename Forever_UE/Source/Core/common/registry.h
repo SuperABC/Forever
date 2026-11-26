@@ -135,7 +135,7 @@ public:
 private:
 	Registry();
 
-	// 自检：ForEachConcept的清单必须和Dependence的mod_concepts表一一对上，否则抛RuntimeException。
+	// 自检：ForEachConcept的清单必须和Dependence的mod_concepts表一一对上，否则抛InternalException。
 	void CheckConceptList();
 
 	// 对paths里的dll做23个concept的RegisterConcept，成功加载的记进loadedDllPaths

@@ -1,5 +1,7 @@
 #include "ConfigMenuWidget.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "StoryPanelWidget.h"
 #include "ModPanelWidget.h"
 #include "ResourcePanelWidget.h"
@@ -38,6 +40,13 @@ void UConfigMenuWidget::NativeConstruct() {
 	}
 
 	HandleStoryTabClicked();
+
+	// 上一局是因为异常结束、被CoreGuard送回菜单的：把原因显示出来(取一次就清空)。
+	const FString sessionError = CoreGuard::ConsumePendingMessage();
+	if (!sessionError.IsEmpty() && FailureMessage) {
+		FailureMessage->SetText(FText::FromString(sessionError));
+		FailureMessage->SetVisibility(ESlateVisibility::Visible);
+	}
 }
 
 void UConfigMenuWidget::ShowOnly(ETab Tab) {

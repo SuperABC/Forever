@@ -35,7 +35,7 @@ Zone::Zone(ZoneFactory* factory, ZoneMod* mod) :
 	type(),
 	name() {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Zone mod is null.\n");
+		THROW_EXCEPTION(DataException, "Zone mod is null.\n");
 	}
 
 	type = mod->GetType();
@@ -77,7 +77,7 @@ string Zone::GetAddress() const {
 void Zone::Layout(int inDirection) {
 	direction = inDirection;
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->Layout(direction, *this, GetBoundaryRoads());
+	MOD_CALL(mod, mod->Layout(direction, *this, GetBoundaryRoads()));
 	scriptModName = mod->scriptModName;
 	scriptMilestones = mod->milestoneNames;
 	walls = mod->walls;

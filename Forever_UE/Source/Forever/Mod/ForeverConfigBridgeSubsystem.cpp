@@ -1,5 +1,7 @@
 #include "ForeverConfigBridgeSubsystem.h"
 
+#include "common/error.h"
+
 #include "ForeverModSubsystem.h"
 #include "ForeverDialogUtils.h"
 #include "UI/FadeSubsystem.h"
@@ -155,7 +157,7 @@ void UForeverConfigBridgeSubsystem::RemoveStoryScript(const FString& Path) {
 	Config::RemoveStoryScript(TCHAR_TO_UTF8(*Path));
 }
 
-bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMessage) {
+bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMessage) try {
 	TArray<FString> failures;
 
 	// 刷新缓存的.layout/.script文件列表，让运行中往资源目录里增删的文件在这次开局生效。
@@ -229,8 +231,15 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 
 	return true;
 }
+catch (...) {
+	// 开始游戏途中抛了异常(多半来自mod或坏数据)：变成一条错误提示，不让它穿进引擎。
+	const ErrorReport report = DescribeCurrentException();
+	UE_LOG(LogTemp, Error, TEXT("开始游戏失败：\n%s"), UTF8_TO_TCHAR(report.ToText().c_str()));
+	OutFailureMessage = FString::Printf(TEXT("开始游戏失败：%s"), UTF8_TO_TCHAR(report.ToLine().c_str()));
+	return false;
+}
 
-bool UForeverConfigBridgeSubsystem::SaveConfigWithDialog(FString& OutError) {
+bool UForeverConfigBridgeSubsystem::SaveConfigWithDialog(FString& OutError) try {
 	FString path;
 	if (!ForeverDialog::SaveFile(TEXT("保存配置"), TEXT("JSON (*.json)|*.json"), TEXT("config.json"), path)) {
 		return false;
@@ -238,8 +247,15 @@ bool UForeverConfigBridgeSubsystem::SaveConfigWithDialog(FString& OutError) {
 	Config::WriteConfig(TCHAR_TO_UTF8(*path));
 	return true;
 }
+catch (...) {
+	// 保存配置途中抛了异常(多半来自mod或坏数据)：变成一条错误提示，不让它穿进引擎。
+	const ErrorReport report = DescribeCurrentException();
+	UE_LOG(LogTemp, Error, TEXT("保存配置失败：\n%s"), UTF8_TO_TCHAR(report.ToText().c_str()));
+	OutError = FString::Printf(TEXT("保存配置失败：%s"), UTF8_TO_TCHAR(report.ToLine().c_str()));
+	return false;
+}
 
-bool UForeverConfigBridgeSubsystem::LoadConfigWithDialog(FString& OutError) {
+bool UForeverConfigBridgeSubsystem::LoadConfigWithDialog(FString& OutError) try {
 	FString path;
 	if (!ForeverDialog::OpenFile(TEXT("读取配置"), TEXT("JSON (*.json)|*.json"), path)) {
 		return false;
@@ -255,6 +271,13 @@ bool UForeverConfigBridgeSubsystem::LoadConfigWithDialog(FString& OutError) {
 	// 写绝对路径，所选文件里的相对路径已按它自己所在目录解析。
 	Config::WriteConfig(TCHAR_TO_UTF8(*GetConfigPath()));
 	return true;
+}
+catch (...) {
+	// 读取配置途中抛了异常(多半来自mod或坏数据)：变成一条错误提示，不让它穿进引擎。
+	const ErrorReport report = DescribeCurrentException();
+	UE_LOG(LogTemp, Error, TEXT("读取配置失败：\n%s"), UTF8_TO_TCHAR(report.ToText().c_str()));
+	OutError = FString::Printf(TEXT("读取配置失败：%s"), UTF8_TO_TCHAR(report.ToLine().c_str()));
+	return false;
 }
 
 bool UForeverConfigBridgeSubsystem::SelectFolder(FString& OutPath) const {

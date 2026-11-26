@@ -10,7 +10,7 @@ Puzzle::Puzzle(PuzzleFactory* factory, const string& id) :
 	factory(factory),
 	mod(factory->CreatePuzzle(id)) {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Puzzle " + id + " mod is null.\n");
+		THROW_EXCEPTION(DataException, "Puzzle " + id + " mod is null.\n");
 	}
 }
 
@@ -27,15 +27,15 @@ string Puzzle::GetName() const {
 }
 
 void Puzzle::SetParam(const string& param) {
-	mod->SetParam(param);
+	MOD_CALL(mod, mod->SetParam(param));
 }
 
 void Puzzle::Init(Canvas* canvas, PostHandle* post) {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->Init(canvas, post);
+	MOD_CALL(mod, mod->Init(canvas, post));
 }
 
 JsonValue* Puzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	return mod->Loop(canvas, ms, post);
+	return MOD_CALL(mod, mod->Loop(canvas, ms, post));
 }

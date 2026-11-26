@@ -38,6 +38,11 @@ std::string ToString(const ValueType* value) = delete;
 // 自动推断字面量类型(bool/int/double/string)解析成ValueType，脚本里写时间/数值字面量时用。
 ValueType FromString(const std::string& s);
 
+// 不抛异常的数字解析。语义和std::stoi/std::stod完全一样(十进制、允许前导空白和正负号，stod还认inf/nan/十六进制浮点)，
+// 只是把"解析不了/超出范围"从抛异常改成返回false。consumed=用掉了多少个字符，调用方据此判断是不是整串都是数字。
+bool TryParseInt(const std::string& text, int& out, size_t* consumed = nullptr);
+bool TryParseDouble(const std::string& text, double& out, size_t* consumed = nullptr);
+
 // 键值容器接口。实现在宿主(Script)，mod通过虚函数调用，所以ValueType不能按值过这条边界：
 // 值是长字符串时按值传/按值返回就是"一侧分配、另一侧释放"(CONVENTIONS.md第4节)。
 class Container {
@@ -78,6 +83,9 @@ public:
 	// 支持ISO 8601、中文(YYYY年MM月DD日)、美式(MM/DD/YYYY)及纯时间等多种字符串格式，
 	// 自动识别，供story脚本里写时间字面量时随意选一种熟悉的格式，见utility.md。
 	Time(std::string time);
+	// 不抛异常的版本：text能按上面那个构造函数解析就写进out并返回true，否则返回false(out不动)。
+	// "试着解析一下，不行就算了"的地方用它，不要自己写try/catch。
+	static bool TryParse(const std::string& text, Time& out) noexcept;
 
 	bool IsValid() const; // year > 0
 
@@ -148,7 +156,7 @@ private:
 	int second; // 0-59
 	int millisecond; // 0-999
 
-	void Validate() const; // 各字段范围不合法时抛OutOfRangeException/InvalidArgumentException
+	void Validate() const; // 各字段范围不合法时抛DataException
 	void NormalizeTime(); // 字段进位/借位归一化(比如second=65归一化成minute+1,second=5)
 	int OrdinalDate() const; // 当年第几天
 };

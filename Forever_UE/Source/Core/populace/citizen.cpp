@@ -76,7 +76,7 @@ float& Personality::operator()(const string& name) {
 	if (name == "art") return art;
 	if (name == "reasoning") return reasoning;
 	if (name == "perception") return perception;
-	THROW_EXCEPTION(InvalidArgumentException, "Unknown personality field " + name + ".\n");
+	THROW_EXCEPTION(DataException, "Unknown personality field " + name + ".\n");
 }
 
 float Personality::operator()(const string& name) const { return const_cast<Personality*>(this)->operator()(name); }
@@ -124,7 +124,7 @@ float& Relation::operator()(const string& name) {
 	if (name == "trust") return trust;
 	if (name == "competing") return competing;
 	if (name == "reliability") return reliability;
-	THROW_EXCEPTION(InvalidArgumentException, "Unknown relation field " + name + ".\n");
+	THROW_EXCEPTION(DataException, "Unknown relation field " + name + ".\n");
 }
 
 float Relation::operator()(const string& name) const { return const_cast<Relation*>(this)->operator()(name); }
@@ -191,7 +191,7 @@ void Citizen::AddAcquaintance(const string& name, RELATIONSHIP_CATEGORY category
 const Relation& Citizen::GetAcquaintance(const string& name) const {
 	auto it = acquaintances.find(name);
 	if (it == acquaintances.end()) {
-		THROW_EXCEPTION(InvalidArgumentException, "Acquaintance " + name + " not found.\n");
+		THROW_EXCEPTION(InternalException, "Acquaintance " + name + " not found.\n");
 	}
 	return it->second;
 }
@@ -199,7 +199,7 @@ const Relation& Citizen::GetAcquaintance(const string& name) const {
 void Citizen::SetAcquaintanceValue(const string& name, RELATION_TYPE type, float value) {
 	auto it = acquaintances.find(name);
 	if (it == acquaintances.end()) {
-		THROW_EXCEPTION(InvalidArgumentException, "Acquaintance " + name + " not found.\n");
+		THROW_EXCEPTION(InternalException, "Acquaintance " + name + " not found.\n");
 	}
 	it->second[type] = value;
 }
@@ -207,7 +207,7 @@ void Citizen::SetAcquaintanceValue(const string& name, RELATION_TYPE type, float
 void Citizen::AdjustAcquaintanceValue(const string& name, RELATION_TYPE type, float delta) {
 	auto it = acquaintances.find(name);
 	if (it == acquaintances.end()) {
-		THROW_EXCEPTION(InvalidArgumentException, "Acquaintance " + name + " not found.\n");
+		THROW_EXCEPTION(InternalException, "Acquaintance " + name + " not found.\n");
 	}
 	float value = clamp(it->second[type] + delta, 0.0f, 1.0f);
 	it->second[type] = value;

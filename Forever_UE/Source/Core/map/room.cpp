@@ -28,10 +28,10 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 	parentComponent(parentComponent),
 	layer(layer) {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Room mod is null.\n");
+		THROW_EXCEPTION(DataException, "Room mod is null.\n");
 	}
 
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 	type = mod->GetType();
 	name = mod->GetName();
 	properties.isResidence = mod->isResidence;
@@ -187,7 +187,7 @@ void Room::LayoutFurniture() {
 	{
 		// 房间mod在自己的随机流里摆(GetRandom可复现，--seed按mod id生效)。
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-		mod->Layout(BuildLayoutInfo());
+		MOD_CALL(mod, mod->Layout(BuildLayoutInfo()));
 	}
 	float baseZ = parentBuilding->GetFloorWorldZ(layer);
 	for (const FurnitureSpec& spec : mod->furniture) { // 只读，不改mod的容器(跨DLL分配器)

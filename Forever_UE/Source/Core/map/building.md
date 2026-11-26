@@ -71,7 +71,7 @@
   `floors`(每层调`ReadFloor`)；②按`(component,id)`去重创建`Component`，逐个槽位调
   `AssignRoom`/`ArrangeRow`创建`Room`；③给每个`Room`创建导航锚点；④调
   `BuildPedestrianNavigation`构建内部导航图。
-- **模板名必须存在**：`Building::Layout()`对`mod->floors`里每个非空的`templateName`先用`BuildingLayoutLibrary::HasTemplate`校验，找不到直接抛`InvalidArgumentException`(开局即报错)；读档前`Config::FindMissingLayouts`对存档manifest里的模板名做同样的检查，两边口径一致，不会出现能开局、存了却读不回来的情况。空模板名表示这层故意不用模板，不校验。
+- **模板名必须存在**：`Building::Layout()`对`mod->floors`里每个非空的`templateName`先用`BuildingLayoutLibrary::HasTemplate`校验，找不到直接抛`ModException`(开局即报错，报告里指名这个建筑mod)；读档前`Config::FindMissingLayouts`对存档manifest里的模板名做同样的检查，两边口径一致，不会出现能开局、存了却读不回来的情况。空模板名表示这层故意不用模板，不校验。
 - **`.layout`模板只描述楼梯/坡道的2D位置+朝向+哪几侧有墙，不携带3D网格信息**——
   楼梯/坡道的实际3D网格由`FloorAssetSpec::stairMeshPath`/`rampMeshPath`作为`AssignFloor`
   的显式参数指定，模板名字只决定楼梯/坡道摆在楼体的哪个位置、多大、朝哪，不决定拿什么3D

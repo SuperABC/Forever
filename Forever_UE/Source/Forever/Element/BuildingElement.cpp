@@ -1,5 +1,7 @@
 #include "Element/BuildingElement.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
@@ -1196,6 +1198,7 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 
 void ABuildingElement::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
+	CORE_GUARD_BEGIN("ABuildingElement::Tick")
 
 	if (!building || !framework.IsValid()) return;
 
@@ -1273,6 +1276,7 @@ void ABuildingElement::Tick(float DeltaTime) {
 		floorTierOpQueue.Dequeue(op);
 		ExecuteLodOp(op);
 	}
+	CORE_GUARD_END
 }
 
 void ABuildingElement::UpdateCabins(float deltaSeconds) {

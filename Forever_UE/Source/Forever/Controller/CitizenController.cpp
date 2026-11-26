@@ -1,5 +1,7 @@
 #include "Controller/CitizenController.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
@@ -322,6 +324,7 @@ bool ACitizenController::GateCrosswalk(ACitizenElement* element, const FCharacte
 
 void ACitizenController::Tick(float deltaTime) {
 	Super::Tick(deltaTime);
+	CORE_GUARD_BEGIN("ACitizenController::Tick")
 
 	ACitizenElement* element = citizenElement.Get();
 	FCharacterCommand* command = commands.Current();
@@ -361,4 +364,5 @@ void ACitizenController::Tick(float deltaTime) {
 		direction = (direction + FVector(-direction.Y, direction.X, 0.f) * sway).GetSafeNormal();
 	}
 	element->AddMovementInput(direction, 1.f);
+	CORE_GUARD_END
 }

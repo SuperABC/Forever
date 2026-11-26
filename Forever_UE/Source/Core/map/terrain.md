@@ -23,7 +23,7 @@
 
 ## 依赖关系
 
-- 依赖：`terrain_mod.h`、`terrain_factory.h`、`common/error.h`（`NullPointerException`）。
+- 依赖：`terrain_mod.h`、`terrain_factory.h`、`common/error.h`（`DataException`）。
 - 被谁依赖：`Source/Core/map/map.h`（`Map::InitTerrains()`临时构造`Terrain*`跑
   `DistributeTerrain`，见`map.md`）。
 

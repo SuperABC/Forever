@@ -1,5 +1,7 @@
 #include "party_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 #include <algorithm>
@@ -19,7 +21,7 @@ PartyMod* PartyFactory::CreateParty(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	PartyMod* instance = it->second.creator(argsIt->second);
+	PartyMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);

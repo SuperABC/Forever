@@ -1,5 +1,7 @@
 #include "traffic/route.h"
 
+#include "common/error.h"
+
 #include "traffic/vehicle.h"
 #include "map/map.h"
 #include "map/building.h"
@@ -70,7 +72,7 @@ void TrackPath::Evaluate(float arcLength, float& outX, float& outY, float& outZ,
 Route::Route(RouteFactory* factory, const string& modId, const string& name) :
 	factory(factory), name(name) {
 	mod = factory->CreateRoute(modId);
-	if (mod) mod->SetProperty();
+	if (mod) MOD_CALL(mod, mod->SetProperty());
 }
 
 Route::~Route() {
@@ -136,8 +138,8 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 	}
 
 	auto [mapSizeX, mapSizeY] = map->GetSize();
-	mod->SetManualTransit(&map->GetTransit()); // 编辑器手工线路(--skip的mod用)，指向Map/Roadnet拥有的数据，Build结束后撤掉
-	mod->LayoutRoute(infos, mapSizeX, mapSizeY);
+	MOD_CALL(mod, mod->SetManualTransit(&map->GetTransit())); // 编辑器手工线路(--skip的mod用)，指向Map/Roadnet拥有的数据，Build结束后撤掉
+	MOD_CALL(mod, mod->LayoutRoute(infos, mapSizeX, mapSizeY));
 
 	// instantiate线路：让mod按地形把每条link的几何改成最终形状(过山抬升/挖隧道)，请求转发给
 	// Map——和Map::InitRoadnet对路网的做法一致，所以Traffic必须在地形网格生成之前构建。读档不走这里
@@ -146,7 +148,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 		auto getTerrain = [map](int x, int y) -> const string& { return map->GetTerrainRef(x, y); };
 		auto getWater = [map](int x, int y) -> pair<bool, float> { return map->GetWater(x, y); };
 		auto getHeight = [map](float x, float y) -> float { return map->SampleHeight(x, y); };
-		mod->BuildTrack(getTerrain, getWater, getHeight);
+		MOD_CALL(mod, mod->BuildTrack(getTerrain, getWater, getHeight));
 		for (const TerrainHatch& hatch : mod->hatches) map->AddRouteHatch(hatch);
 		map->ApplyTerrainFits(mod->terrainFits);
 		// 拆掉轨道扫过的楼体/园区；带stationMod的建筑不拆(它的Station已经建好，轨道从上方过)。
@@ -155,7 +157,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 		});
 		debugf(DebugLevel::Log, "Route::Build: 线路%s拆除了%d座建筑。\n", name.c_str(), demolished);
 	}
-	mod->SetManualTransit(nullptr);
+	MOD_CALL(mod, mod->SetManualTransit(nullptr));
 
 	Assemble(map);
 }

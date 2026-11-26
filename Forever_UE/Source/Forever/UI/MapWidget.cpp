@@ -1,5 +1,7 @@
 #include "UI/MapWidget.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Components/Image.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanelSlot.h"
@@ -128,10 +130,12 @@ void UMapWidget::NativeConstruct() {
 
 void UMapWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	Super::NativeTick(MyGeometry, DeltaTime);
+	CORE_GUARD_BEGIN("UMapWidget::NativeTick")
 
 	if (GetVisibility() != ESlateVisibility::Visible) return;
 	ResizeDisplayImageToCoverViewport();
 	UpdatePlayerMarker();
+	CORE_GUARD_END
 }
 
 FReply UMapWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) {

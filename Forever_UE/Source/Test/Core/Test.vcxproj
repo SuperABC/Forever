@@ -112,6 +112,7 @@
     <ClCompile Include="suite_plateau.cpp" />
     <ClCompile Include="suite_unload.cpp" />
     <ClCompile Include="suite_terrain.cpp" />
+    <ClCompile Include="suite_fault.cpp" />
     <ClCompile Include="suite_presets.cpp" />
     <ClCompile Include="suite_transit.cpp" />
     <ClCompile Include="econ_report.cpp" />

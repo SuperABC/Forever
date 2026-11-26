@@ -1,5 +1,7 @@
 #include "Player/ForeverWeaponComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Player/ForeverCharacter.h"
 #include "Player/ForeverDamage.h"
 #include "Player/ForeverWeaponVisualComponent.h"
@@ -135,6 +137,7 @@ void UForeverWeaponComponent::Reload() {
 void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverWeaponComponent::TickComponent")
 
 	if (bReloading && GetWorld()->GetTimeSeconds() >= reloadEndTime) {
 		bReloading = false;
@@ -164,6 +167,7 @@ void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType
 				FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
 		}
 	}
+	CORE_GUARD_END
 }
 
 void UForeverWeaponComponent::Fire() {

@@ -1,5 +1,7 @@
 #include "society/economy.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 #include "society/society.h"
@@ -65,7 +67,7 @@ namespace {
 		state.roomCount = static_cast<int>(roomStates.size());
 
 		mod->issueShares = 0;
-		mod->MonthlySettle(state);
+		MOD_CALL(mod, mod->MonthlySettle(state));
 		// 没有岗位计划的mod（外部Mod、不设计岗位的组织）不动岗位。
 		if (!mod->vacancies.empty()) {
 			Organization::JobChange change = organization->ReconcileJobs();
@@ -241,7 +243,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 	map<string, vector<Provider>> providers;
 	for (Organization* organization : sellers) {
 		OrganizationMod* mod = organization->GetMod();
-		mod->CollectServices(organization->GetScript(), stockTypes, post);
+		MOD_CALL(mod, mod->CollectServices(organization->GetScript(), stockTypes, post));
 		for (const ServiceOffer& offer : mod->services) {
 			if (offer.capacity <= 0) continue;
 			Provider provider;
@@ -387,8 +389,8 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 		ServiceStat& stat = report.services[type];
 		for (Provider& provider : typeProviders) {
 			if (provider.sold <= 0) continue;
-			provider.organization->GetMod()->ApplyServiceUsage(provider.offer.name, provider.sold,
-				provider.organization->GetScript());
+			MOD_CALL(provider.organization->GetMod(), provider.organization->GetMod()->ApplyServiceUsage(provider.offer.name, provider.sold,
+				provider.organization->GetScript()));
 			// 消费税即时缴纳：卖方每笔销售当场把销售额的一部分交给政府。
 			int64_t consumptionTax = society.GetPolicy().Tax(provider.revenue, society.GetPolicy().consumptionTaxPercent);
 			society.GetLedger().Transfer(Holder::Of(provider.organization), Holder::Government(), consumptionTax, Flow::CONSUMPTION_TAX);

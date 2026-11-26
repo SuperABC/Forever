@@ -21,7 +21,7 @@ Green::Green(GreenFactory* factory, GreenMod* mod) :
 	type(),
 	name() {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Green mod is null.\n");
+		THROW_EXCEPTION(DataException, "Green mod is null.\n");
 	}
 	type = mod->GetType();
 	name = mod->GetName();
@@ -72,7 +72,7 @@ void Green::Layout(const vector<float>& xy, const vector<Link>& inLinks) {
 
 	{
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-		mod->Layout(shape);
+		MOD_CALL(mod, mod->Layout(shape));
 	}
 
 	// 装饰物：包围盒系 -> 世界坐标，多边形外的丢弃。

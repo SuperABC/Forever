@@ -41,7 +41,7 @@
 - **导出函数名和json key不在这里重复写**：`RegisterMods`用`FindModConceptDescriptor(conceptKey)`从Dependence的`mod_concepts`表里查
   `RegisterMod<Concepts>`/`FinishMod<Concepts>`，`ReloadModArgs`用`ModConceptJsonKey(conceptKey)`算`"<concept>_mods"`。
 - **自检**：`Registry`构造时`CheckConceptList()`核对这份清单和`GetModConceptDescriptors()`一一对上(不多、不少、不重复)，
-  对不上抛`RuntimeException`。CoreTest的mods套件另有一条看得见的检查。
+  对不上抛`InternalException`。CoreTest的mods套件另有一条看得见的检查。
 - **新增concept要改的地方**：①`Dependence/common/mod_concepts.cpp`的导出符号表加一行；②`registry.h`的`ForEachConcept`加一行、
   加getter和成员(这三处挨在一起)；③`Test/Mod/mod_checks.cpp`的`AllFactories`和`ModTestHost`各加一行(ModTest启动时也会核对)。
   ②里漏了`ForEachConcept`那一行，自检会报错；别的地方不用再动。

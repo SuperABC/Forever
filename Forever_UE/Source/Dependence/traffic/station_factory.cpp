@@ -1,5 +1,7 @@
 #include "station_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 
@@ -18,7 +20,7 @@ StationMod* StationFactory::CreateStation(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	StationMod* instance = it->second.creator(argsIt->second);
+	StationMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -84,7 +86,7 @@ void StationFactory::AssignRoads(const string& id, const vector<Road*>& roads,
 	RoadStationEmitFunc emit, void* context) const {
 	auto it = registries.find(id);
 	if (it != registries.end() && IsEnabled(id)) {
-		it->second.assign(roads, emit, context);
+		MOD_ID_CALL(it->first, it->second.assign(roads, emit, context));
 	}
 }
 

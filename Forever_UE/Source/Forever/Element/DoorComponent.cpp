@@ -1,5 +1,7 @@
 #include "Element/DoorComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "map/door.h"
 #include "populace/citizen.h"
 
@@ -350,6 +352,7 @@ void UForeverDoorComponent::UpdateOpenState() {
 void UForeverDoorComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverDoorComponent::TickComponent")
 
 	// 兜底核对：EndOverlap可能漏掉(Pawn在盒内被按距离流式销毁、被隐藏/关碰撞...)，passers里就会留着
 	// 已经不在盒里的项，门永远开着。门开着时隔一段时间用触发盒的实际重叠记录核对一次。
@@ -412,6 +415,7 @@ void UForeverDoorComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	} else {
 		idleTicks = 0;
 	}
+	CORE_GUARD_END
 }
 
 void UForeverDoorComponent::RefreshOptions() {

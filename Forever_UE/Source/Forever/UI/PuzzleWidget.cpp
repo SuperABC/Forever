@@ -1,5 +1,7 @@
 #include "UI/PuzzleWidget.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
@@ -41,34 +43,40 @@ static PostImplement MakePost(UWorld* world) {
 
 void UPuzzleWidget::NativeConstruct() {
 	Super::NativeConstruct();
+	CORE_GUARD_BEGIN("UPuzzleWidget::NativeConstruct")
 	SetVisibility(ESlateVisibility::Collapsed);
 
 	// NativeSupportsKeyboardFocus默认返回bIsFocusable(false)，树里只有展示用的Image，不打开的话
 	// SetKeyboardFocus会静默失败，键盘没反应。
 	SetIsFocusable(true);
+	CORE_GUARD_END
 }
 
 void UPuzzleWidget::AbortPuzzle() {
+	CORE_GUARD_BEGIN("UPuzzleWidget::AbortPuzzle")
 	if (!puzzle) return;
 	delete puzzle;
 	puzzle = nullptr;
 	SetVisibility(ESlateVisibility::Collapsed);
+	CORE_GUARD_END
 }
 
 void UPuzzleWidget::NativeDestruct() {
+	CORE_GUARD_ALWAYS_BEGIN("UPuzzleWidget::NativeDestruct")
 	AbortPuzzle();
+	CORE_GUARD_END
 	Super::NativeDestruct();
 }
 
 void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
-	// 先创建新的这局：puzzle id没注册/没在config"puzzle_mods"里启用时Puzzle构造会抛NullPointerException，
-	// 不能让它一路抛出去崩游戏——打日志、静默不执行，正在进行的上一局(如果有)原样保留。
+	CORE_GUARD_BEGIN("UPuzzleWidget::StartPuzzle")
+	// 先创建新的这局：puzzle id没注册/没在config"puzzle_mods"里启用时Puzzle构造会抛数据错误(DataException)，
+	// 只跳过这一次start_puzzle——打日志、不执行，正在进行的上一局(如果有)原样保留。mod错误和内部错误不在这里接。
 	Puzzle* created = nullptr;
-	try {
-		created = new Puzzle(&Registry::Get().GetPuzzleFactory(), string(TCHAR_TO_UTF8(*puzzleId)));
-	}
-	catch (const NullPointerException&) {
-		UE_LOG(LogTemp, Warning, TEXT("start_puzzle: puzzle \"%s\" 没有注册或没有在 config 的 puzzle_mods 里启用，已忽略。"), *puzzleId);
+	ErrorReport createReport;
+	if (!GuardData([&]() { created = new Puzzle(&Registry::Get().GetPuzzleFactory(), string(TCHAR_TO_UTF8(*puzzleId))); }, createReport)) {
+		UE_LOG(LogTemp, Warning, TEXT("start_puzzle: puzzle \"%s\" 没有注册或没有在 config 的 puzzle_mods 里启用，已忽略：%s"),
+			*puzzleId, UTF8_TO_TCHAR(createReport.ToLine().c_str()));
 		return;
 	}
 
@@ -106,9 +114,11 @@ void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
 	// 跑，只是场景里的Actor/AI/物理(包括AForeverFrameworkActor::Tick驱动的城市模拟)会停住。
 	if (!alreadyPaused) previousDilation = UGameplayStatics::GetGlobalTimeDilation(GetWorld());
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.f);
+	CORE_GUARD_END
 }
 
 void UPuzzleWidget::EndPuzzle(const JsonValue& result) {
+	CORE_GUARD_BEGIN("UPuzzleWidget::EndPuzzle")
 	// 结果json归mod实例所有，delete puzzle之前先展平进事件。root不是object时事件里没有任何字段。
 	PuzzleResultEvent resultEvent;
 	if (!resultEvent.SetFromJson(result)) {
@@ -132,10 +142,12 @@ void UPuzzleWidget::EndPuzzle(const JsonValue& result) {
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) story->NotifyPuzzleFinished(resultEvent);
 	}
+	CORE_GUARD_END
 }
 
 void UPuzzleWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	Super::NativeTick(MyGeometry, DeltaTime);
+	CORE_GUARD_BEGIN("UPuzzleWidget::NativeTick")
 
 	if (!puzzle) return;
 
@@ -152,9 +164,11 @@ void UPuzzleWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	if (result) {
 		EndPuzzle(*result);
 	}
+	CORE_GUARD_END
 }
 
 void UPuzzleWidget::BlitCanvasToImage() {
+	CORE_GUARD_BEGIN("UPuzzleWidget::BlitCanvasToImage")
 	int width = canvas.GetWidth(), height = canvas.GetHeight();
 	if (width <= 0 || height <= 0) return;
 
@@ -169,6 +183,7 @@ void UPuzzleWidget::BlitCanvasToImage() {
 
 	texture->UpdateResource();
 	if (DisplayImage) DisplayImage->SetBrushFromTexture(texture, true);
+	CORE_GUARD_END
 }
 
 FReply UPuzzleWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) {
@@ -186,6 +201,7 @@ FReply UPuzzleWidget::NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent
 // 鼠标事件的Slate本地坐标(受DPI缩放影响，范围是控件的Slate尺寸)换算成画布像素坐标——画布
 // 尺寸是视口真实像素，两者只要DPI缩放不是1就不相等，不换算会以左上角为原点按比例错位。
 void UPuzzleWidget::UpdateMousePos(const FGeometry& geometry, const FPointerEvent& mouseEvent) {
+	CORE_GUARD_BEGIN("UPuzzleWidget::UpdateMousePos")
 	FVector2D localPos = geometry.AbsoluteToLocal(mouseEvent.GetScreenSpacePosition());
 	FVector2D localSize = geometry.GetLocalSize();
 	if (localSize.X > 0 && localSize.Y > 0) {
@@ -193,6 +209,7 @@ void UPuzzleWidget::UpdateMousePos(const FGeometry& geometry, const FPointerEven
 		localPos.Y *= canvas.GetHeight() / localSize.Y;
 	}
 	canvas.SetMousePos(FMath::RoundToInt(localPos.X), FMath::RoundToInt(localPos.Y));
+	CORE_GUARD_END
 }
 
 FReply UPuzzleWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {

@@ -11,7 +11,10 @@
 class Config {
 public:
 	// 找不到文件或JSON语法错误时静默留空，不抛异常
+	// 读配置。文件打不开、JSON语法错、内容类型不对都不会抛异常：整份配置留空，原因记在GetLastReadError()。
 	static void ReadConfig(const std::string& path);
+	// 上一次ReadConfig读到一半出错的原因(单行文字)；成功、或只是文件打不开/语法错(那两种只打日志)时为空。
+	static const std::string& GetLastReadError();
 
 	static std::string GetConfigDir();
 
@@ -143,6 +146,9 @@ public:
 	static void RescanFiles();
 
 private:
+	static void ClearState();
+	static void ReadConfigFile(const std::string& path);
+	static std::string lastReadError;
 	static bool CheckFileFormat(const std::filesystem::path& filePath, const std::string& format);
 
 

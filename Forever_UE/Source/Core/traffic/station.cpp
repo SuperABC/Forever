@@ -1,5 +1,7 @@
 #include "traffic/station.h"
 
+#include "common/error.h"
+
 #include "map/building.h"
 #include "map/map.h"
 
@@ -12,9 +14,9 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	mod = factory->CreateStation(modId);
 	if (!mod || !building) return;
 
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 	int direction = building->GetDirection();
-	mod->Layout(direction, building->GetSizeX(), building->GetSizeY());
+	MOD_CALL(mod, mod->Layout(direction, building->GetSizeX(), building->GetSizeY()));
 
 	float quadSizeX = building->GetSizeX();
 	float quadSizeY = building->GetSizeY();
@@ -72,7 +74,7 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	mod = factory->CreateStation(modId);
 	if (!mod) return;
 
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 
 	// 没有building，不走mod->Layout()那套相对建筑占地矩形的换算——世界坐标/朝向都是调用方
 	// (Traffic::InitRoadsideStations)已经按道路几何算好的，直接用；贴路站点只有一个停靠位，没有进出站口和站内连线。

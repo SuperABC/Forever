@@ -1,5 +1,7 @@
 #include "traffic/vehicle.h"
 
+#include "common/error.h"
+
 #include "map/room.h"
 #include "story/script.h"
 #include "story/script_factory.h"
@@ -15,7 +17,7 @@ Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const st
 	category = factory->GetCategory(id);
 	if (category.empty()) category = "car";
 	mod = factory->CreateVehicle(id);
-	if (mod) mod->SetProperty();
+	if (mod) MOD_CALL(mod, mod->SetProperty());
 
 	// scriptModName/milestoneNames由mod自己的SetProperty()决定(见vehicle_mod.h"Script配置"一节)，
 	// 都空则没有脚本(script为空)，见MakeScript。

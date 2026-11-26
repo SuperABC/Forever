@@ -54,7 +54,7 @@
 - **离城**：`departed`是另一个独立标记（不可逆）。`Depart()`：置`departed`、断开岗位（`Job::SetOccupant(nullptr)`）、`EndWalk`、`SetCurrentRoom(nullptr)`、`ClearPosition`，**保留“家”和户**，账户和房产由`Emigration`结算。`IsActive()`=!isDead&&!departed，经济结算和UE流式生成判断“人在不在场”都用它。`departed`随人口段存档。
 - **`Personality`/`Relation`**：`Personality`13项各自`clamp(GetRandomNormal(0, 1/3), -1, 1)`（±1大致对应3σ）；
   `Relation`6项全部初始化为0。两者都支持按枚举和按脚本变量名（`operator()(name)`，未知名抛
-  `InvalidArgumentException`）访问。`Personality`值域统一为[-1,1]（`AdjustPersonalityValue`同样clamp到[-1,1]）；
+  `InternalException`）访问。`Personality`值域统一为[-1,1]（`AdjustPersonalityValue`同样clamp到[-1,1]）；
   `Relation`强度值域为[0,1]（`AdjustAcquaintanceValue`clamp到[0,1]）。
 - **`Relation::category`**：必须创建时指定（无默认构造），`AddAcquaintance(name, category)`用`insert_or_assign`
   （`Relation`不可默认构造，不能用`operator[]`）。**配偶标记`RELATIONSHIP_KINSHIP`，不是`RELATIONSHIP_ROMANTIC`**：

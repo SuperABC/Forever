@@ -1,5 +1,7 @@
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "ProceduralMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -38,6 +40,7 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverTerrainFrameworkComponent::TickComponent")
 
 	if (!map) return;
 	if (currentPivots.empty()) return;
@@ -122,6 +125,7 @@ void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 			parentBoundary, parentOffsetX, parentOffsetY, edgeFlags);
 		currentPivots[i].first = newPivots[i];
 	}
+	CORE_GUARD_END
 }
 
 void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {

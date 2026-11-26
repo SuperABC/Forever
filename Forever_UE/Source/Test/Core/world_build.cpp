@@ -1,4 +1,5 @@
 #include "world_build.h"
+#include "common/error.h"
 
 #include "test_framework.h"
 
@@ -121,11 +122,11 @@ namespace {
 		if (getenv_s(&traceLength, traceFlag, sizeof(traceFlag), "CORETEST_TRACE") == 0 && traceLength > 0) fprintf(stderr, "[stage] %s\n", name.c_str());
 		const unsigned long long before = RandomRegistry::UnscopedDraws();
 		const auto begin = chrono::steady_clock::now();
-		try {
-			fn();
-		}
-		catch (const exception& e) {
-			error = name + ": exception " + e.what();
+		// 和游戏里一样：登记"当时在做哪个阶段"，出错时报告里带上阶段、mod、文件。
+		ErrorReport report;
+		const string stageName = name;
+		if (!GuardCall([&] { ErrorScope stageScope(kErrorScopeStep, stageName); fn(); }, report)) {
+			error = stageName + ": " + report.ToLine();
 			return false;
 		}
 		WorldStage stage;
@@ -255,8 +256,8 @@ map<string, string> ComputeFingerprint(TestWorld& world) {
 		size_t traceLength = 0;
 		char traceFlag[4];
 		if (getenv_s(&traceLength, traceFlag, sizeof(traceFlag), "CORETEST_TRACE") == 0 && traceLength > 0) fprintf(stderr, "[fp] %s\n", name);
-		try { fn(); }
-		catch (const exception& e) { fp[string("error.") + name] = e.what(); }
+		ErrorReport report;
+		if (!GuardCall(fn, report)) fp[string("error.") + name] = report.ToLine();
 	};
 	section("manifest", [&] { archive.SetJson(SAVE_SECTION_MANIFEST, 1, SaveGame::BuildManifest(save).ToJson().WriteCompact()); });
 	section("map", [&] { MapSaveCodec::Save(*world.map, archive); });

@@ -1,5 +1,7 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/CitizenElement.h"
 #include "Controller/CitizenController.h"
 
@@ -520,6 +522,9 @@ void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, R
 			pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
 			return;
 		}
+		// 线程池线程上没有别人替它接异常：寻路里抛出的任何异常都在这里接住，让这一局结束(回游戏线程后切回菜单)。
+		// 计数必须在外面减，否则EndPlay等不到任务结束。
+		CoreGuard::Run(TEXT("pathfinding task"), [&]() {
 		TArray<FVector> waypoints;
 		auto appendPlan = [&waypoints](const Map::VehicleRoutePlan& plan) {
 			for (const Map::NavPoint& point : plan.points) {
@@ -575,6 +580,7 @@ void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, R
 			result.serial = serial;
 			component->pathResultQueue.Enqueue(MoveTemp(result));
 		}
+		});
 		pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
 		});
 }
@@ -1370,6 +1376,7 @@ void UForeverPopulaceFrameworkComponent::CheckStuckCitizens(double now) {
 void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverPopulaceFrameworkComponent::TickComponent")
 
 	// 世界还在分阶段生成：game_start广播(给市民加交互选项)之前不能流式生成市民，否则生成时烘焙的
 	// 选项快照是空的，见AForeverFrameworkActor::BeginPlay。
@@ -1521,6 +1528,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		}
 	}
 	pollCursor = (pollCursor + processed) % total;
+	CORE_GUARD_END
 }
 
 TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFrameworkComponent::SyncPositionsToCore() {

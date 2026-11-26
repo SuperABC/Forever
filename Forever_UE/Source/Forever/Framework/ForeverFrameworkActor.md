@@ -40,7 +40,7 @@
 - 地图大小：config.json顶层`map_size`(数字或`[宽,高]`，见`Core/common/config.md`)优先，不写或不是2的整数次幂时用默认`kDefaultMapWidth/Height`=1024(`ResolveMapSize`)；出生点`GetDefaultSpawnLocation`也按它算地图中心。必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，且`w*h/(512*512)`>1才会生成山，见`Source/Basic/map/terrain_mountain.md`。
   `GetDefaultSpawnLocation()`给GameMode用(地图中心，地形还没生成)，`AForeverPlayerGameMode`不再提前生成地图。
 - 每个阶段占两帧：第一帧只让`GetLoadProgress`的"当前阶段名"被控件读到并画出来，第二帧才执行(阶段会同步卡住主线程)。`LoadMap`结束后先空等2帧让黑屏渲染。
-  每个阶段单独`try/catch ExceptionBase`：`UE_LOG`打`GetDetailedInfo()`后`QuitGame`(不用`FPlatformMisc::RequestExit`，它在PIE里可能连Editor一起关)，之后不再继续、不置完成标志。
+  每个阶段执行时登记一个`ErrorScope(kErrorScopeStep, 阶段名)`，自己不接异常：阶段里抛出的任何异常由`Tick`外面那层`CORE_GUARD`接住，这一局结束、回菜单并显示原因(类别、消息、在哪个阶段/mod/文件)，见`CoreGuard.md`。
   所有"生成世界过程中的致命错误"(mod依赖缺失、取名重试耗尽、取名器未启用等)都在Core层`THROW_EXCEPTION`，一路穿到这里处理，中间层不感知。
 - 最后一个阶段完成后置`bInitialGenerationDone`(`IsInitialGenerationDone()`只读，开局黑屏`UI/FadeWidget`用它加`IsLodSettled()`判断世界就绪；game_start广播是同步的，这个标志就是"响应完"的等价物)；
   玩家如果还是过渡用的`ADefaultPawn`，会被挪到地形上方的地图中心。生成完成前`Tick`只驱动生成、不推进时钟/调度。
@@ -51,7 +51,7 @@
 ### `ValidateMainStoryDependencies()`
 
 遍历`Config::GetStoryScripts()`(Story screen里玩家添加的脚本列表，即`config.json`的`story_scripts`；为空就是没有主线脚本，不校验)，
-对每个脚本的`Script::GetModDependences`里每个mod id调`Registry::CheckModRegistered`，缺失就`THROW_EXCEPTION(RuntimeException)`。这是兜底二次校验，
+对每个脚本的`Script::GetModDependences`里每个mod id调`Registry::CheckModRegistered`，缺失就`THROW_EXCEPTION(DataException)`。这是兜底二次校验，
 更早的校验在`ForeverConfigBridgeSubsystem::ValidateAndStartGame`。
 
 ## 读档
@@ -76,6 +76,8 @@
 traffic(并把`ConsumeStopEvents`转成`EnterStopEvent`/`LeaveStopEvent`广播给公交自己的script) → story → `FireExpiredTimers`。新的每帧逻辑加进这同一个`Tick`，不要新开入口。
 
 ## 统一的Change消费入口：`ApplyChange`
+
+**一条脚本指令是一个可以整体跳过的操作**：`ApplyChange`只做一件事——用`GuardData`包住`ApplyChangeUnguarded`(原来的全部内容)。指令里的数据错误(表达式写错、名字找不到)只跳过这一条并打警告，后面的指令照常执行；mod错误和内部错误不在这里接，往外抛给`CoreGuard`结束这一局。`for_range`的子指令、分支选项的指令也走`ApplyChange`，所以各自独立跳过。
 
 分派方式(2026-11-25)：`switch (change->GetKind())`，每种Change一个`case`，进了分支再`static_cast`成子类
 (`Dependence/story/change.md`"种类")。以前是39个`dynamic_cast`的if链。分支体没有动：以`return`结尾的=UE自己处理完了；

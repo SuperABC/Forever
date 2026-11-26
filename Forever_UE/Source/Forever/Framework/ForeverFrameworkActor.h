@@ -123,6 +123,7 @@ public:
 	// 余下的转发给Core各域的ApplyChange,见ForeverFrameworkActor.md。
 	// @change: 待执行的变化
 	// @context: 变量路由上下文
+	// 执行一条脚本指令。指令里的数据错误只跳过这一条(打警告)，见.cpp。
 	void ApplyChange(const Change* change, const ScriptContext& context);
 
 protected:
@@ -140,11 +141,12 @@ protected:
 	TArray<FGenerationStage> generationStages;
 	int32 generationStageIndex = 0;
 	bool bStageLabelShown = false;
-	bool bGenerationFailed = false;
 	int32 generationStartDelayFrames = 2;
 	// 地图是从存档恢复的(BuildMapTerrain设置)：这时后面几个Init*步骤跳过。
 	bool bMapRestored = false;
 	void BuildGenerationStages();
+	// ApplyChange的实际内容(不接异常)，只由ApplyChange调用。
+	void ApplyChangeUnguarded(const Change* change, const ScriptContext& context);
 	void RunGenerationStep();
 
 	// 生成期间驱动生成阶段;生成完后驱动全局时钟、天空/天气/植被风/路灯和各域Tick,见.md"Tick"。

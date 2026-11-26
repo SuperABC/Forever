@@ -1,6 +1,8 @@
 // 月末选举：全体在城成年人按"各党提议 + 自己的身份"投票，胜者成为下个月的执政党。设计见polit.md"选举"一节。
 #include "polit/polit.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
@@ -69,7 +71,7 @@ vector<double> Polit::ComputeRatios(Party& party, const Time& now) {
 	PartyMod* mod = party.GetMod();
 	if (mod) {
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-		mod->Propose(current);
+		MOD_CALL(mod, mod->Propose(current));
 	}
 	vector<PolicyTarget> targets = mod ? mod->targets : vector<PolicyTarget>();
 

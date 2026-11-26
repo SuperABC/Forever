@@ -16,7 +16,7 @@ Terrain::Terrain(TerrainFactory* factory, const string& terrainId) :
 	type(),
 	name() {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Terrain " + terrainId + " mod is null.\n");
+		THROW_EXCEPTION(DataException, "Terrain " + terrainId + " mod is null.\n");
 	}
 
 	type = mod->GetType();
@@ -45,7 +45,7 @@ float Terrain::GetPriority() const {
 
 void Terrain::SetupTexture() const {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->SetupTexture();
+	MOD_CALL(mod, mod->SetupTexture());
 }
 
 TerrainMapColor Terrain::GetMapColor() const {
@@ -67,5 +67,5 @@ void Terrain::DistributeTerrain(int width, int height,
 	const function<bool(int, int, bool, float)>& setWater,
 	const function<bool(int, int, const float*)>& setFineHeights) const {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater, setFineHeights);
+	MOD_CALL(mod, mod->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater, setFineHeights));
 }

@@ -1,5 +1,7 @@
 #include "player_save.h"
 
+#include "common/error.h"
+
 #include "player/player.h"
 #include "player/asset.h"
 #include "story/script.h"
@@ -207,12 +209,8 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 		}
 		return player;
 	}
-	catch (const exception& e) {
-		error = string("player load failed: ") + e.what();
-		return nullptr;
-	}
 	catch (...) {
-		error = "player load failed with an unknown error";
+		error = "player load failed: " + DescribeCurrentException().ToLine();
 		return nullptr;
 	}
 }

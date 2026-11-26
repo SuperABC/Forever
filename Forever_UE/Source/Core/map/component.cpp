@@ -12,7 +12,7 @@ Component::Component(ComponentFactory* factory, ComponentMod* mod, Building* par
 	name(),
 	parentBuilding(parentBuilding) {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Component mod is null.\n");
+		THROW_EXCEPTION(DataException, "Component mod is null.\n");
 	}
 
 	type = mod->GetType();

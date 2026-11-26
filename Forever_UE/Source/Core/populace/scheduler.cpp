@@ -1,5 +1,7 @@
 #include "populace/scheduler.h"
 
+#include "common/error.h"
+
 #include "populace/citizen.h"
 #include "story/script.h"
 #include "story/script_factory.h"
@@ -11,7 +13,7 @@ Scheduler::Scheduler(SchedulerFactory* factory, ScriptFactory* scriptFactory, co
 	factory(factory), citizen(citizen) {
 	mod = factory->CreateScheduler(id);
 	// scriptModName/milestoneNames由mod的SetProperty()填好，见scheduler_mod.h。
-	if (mod) mod->SetProperty();
+	if (mod) MOD_CALL(mod, mod->SetProperty());
 	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
 	if (script) {
 		script->SetOwner(ScriptOwnerKind::Citizen, citizen);
@@ -32,7 +34,7 @@ string Scheduler::GetType() const {
 Script* Scheduler::GetScript() const { return script; }
 
 void Scheduler::DailyPlan(const Time& currentTime, PostHandle* post) {
-	if (mod) mod->DailyPlan(currentTime, post);
+	if (mod) MOD_CALL(mod, mod->DailyPlan(currentTime, post));
 }
 
 const unordered_map<string, Time>& Scheduler::GetPlans() const {
@@ -43,6 +45,6 @@ const unordered_map<string, Time>& Scheduler::GetPlans() const {
 vector<Change*> Scheduler::ExecNode(const string& node, PostHandle* post) {
 	if (!mod) return {};
 	mod->occupantName = citizen ? citizen->GetName() : string();
-	mod->ExecNode(node, post);
+	MOD_CALL(mod, mod->ExecNode(node, post));
 	return mod->changes; // 只复制指针值，所有权留在mod自己身上
 }

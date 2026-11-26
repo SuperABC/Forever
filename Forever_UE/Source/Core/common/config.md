@@ -25,6 +25,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   使用的文件（每台开发机上mod/资源的实际存放位置经常不一样），配置界面的Add按钮拿到的
   本来就是绝对路径；`ReadConfig`仍然兼容解析相对路径写法，只是不会再有代码主动生成它。
 - **`ReadConfig`找不到文件或JSON语法错误时留空，不抛异常**，但会打一条警告日志区分"文件
+  **内容类型不对也一样**(例如`dll_paths`里混进一个数字，`AsString()`会抛数据错误)：`ReadConfig`在自己里面接住，整份配置清空(`ClearState`)而不是留下读到一半的半份，原因记在`GetLastReadError()`(单行文字，带类别和config路径)并打一条Error日志。调用方本来就按"读完是空的"判定配置无效。`AddResourcePath`扫描目录用带`error_code`的迭代器，无权限的子目录跳过而不是抛`filesystem_error`。
   打不开"（可能路径错了，也可能另一个进程正独占持有，比如正在`WriteConfig`）和"JSON语法
   错误"这两种根因不同的情况——否则排查"为什么回退扫描了默认目录"时无法区分。调用方
   （`ForeverModSubsystem`）据此决定要不要回退扫描默认目录(和`UForeverKeyBindingSubsystem`

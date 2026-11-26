@@ -1,4 +1,6 @@
 #include "Element/CitizenElement.h"
+
+#include "Framework/CoreGuard.h"
 #include "common/random.h"
 
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
@@ -154,10 +156,12 @@ Room* ACitizenElement::GetWalkDestination() const {
 
 void ACitizenElement::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime); // AForeverCharacter::Tick：瞄准摄像机插值，被玩家占有期间必须持续跑
+	CORE_GUARD_BEGIN("ACitizenElement::Tick")
 
 	// 走路已经搬到ACitizenController里；这个Actor的Tick只有被玩家占有时才需要（瞄准插值），
 	// 其余时候立刻关掉。
 	if (!IsPlayerControlled()) SetActorTickEnabled(false);
+	CORE_GUARD_END
 }
 
 void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponent* inFramework) {

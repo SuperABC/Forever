@@ -1,5 +1,7 @@
 #include "Controller/VehicleCommandController.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/VehicleElement.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
@@ -806,6 +808,7 @@ float AVehicleCommandController::ComputeTrafficLimit(AVehicleElement* vehicle, f
 void AVehicleCommandController::Tick(float deltaTime)
 {
 	Super::Tick(deltaTime);
+	CORE_GUARD_BEGIN("AVehicleCommandController::Tick")
 
 	AVehicleElement* vehicle = drivenVehicle.Get();
 	if (!vehicle) {
@@ -842,6 +845,7 @@ void AVehicleCommandController::Tick(float deltaTime)
 	}
 
 	TickDriving(vehicle, deltaTime);
+	CORE_GUARD_END
 }
 
 void AVehicleCommandController::HoldStill(AVehicleElement* vehicle)

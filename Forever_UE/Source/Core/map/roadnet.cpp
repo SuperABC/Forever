@@ -252,7 +252,7 @@ Roadnet::Roadnet(RoadnetFactory* factory, const string& roadnetId) :
 	type(),
 	name() {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Roadnet " + roadnetId + " mod is null.\n");
+		THROW_EXCEPTION(DataException, "Roadnet " + roadnetId + " mod is null.\n");
 	}
 
 	type = mod->GetType();
@@ -296,7 +296,7 @@ void Roadnet::DistributeRoadnet(int width, int height,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->DistributeRoadnet(width, height, getTerrain, isConstruction, getWater, getHeight, nodeStaticCount);
+	MOD_CALL(mod, mod->DistributeRoadnet(width, height, getTerrain, isConstruction, getWater, getHeight, nodeStaticCount));
 
 	for (const Node& n : mod->externs) externs.push_back(new Node(n));
 	for (const Intersection& i : mod->intersections) intersections.push_back(new Intersection(i));
@@ -444,7 +444,7 @@ const TreeRequests& Roadnet::GetTrees() const {
 
 void Roadnet::LayoutTrees() {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->LayoutTrees(roads);
+	MOD_CALL(mod, mod->LayoutTrees(roads));
 	trees = mod->trees;
 }
 
@@ -454,7 +454,7 @@ const LampRequests& Roadnet::GetLamps() const {
 
 void Roadnet::LayoutLamps() {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->LayoutLamps(roads);
+	MOD_CALL(mod, mod->LayoutLamps(roads));
 	lamps = mod->lamps;
 }
 

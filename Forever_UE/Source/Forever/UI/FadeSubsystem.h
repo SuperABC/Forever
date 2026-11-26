@@ -40,6 +40,9 @@ public:
 	// 变黑，等几帧让黑屏画出来，再OpenLevel(World)。开始游戏/读档共用。
 	void OpenWorldLevel();
 
+	// 立刻从视口撤掉，不等进度、不渐隐。世界生成中途失败要回菜单时用(CoreGuard)：进度永远到不了满格。
+	void Dismiss();
+
 private:
 	// 创建(必要时)并挂到视口，返回widget；失败返回nullptr。不改变widget的状态。
 	UFadeWidget* EnsureWidgetShown();

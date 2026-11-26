@@ -43,12 +43,12 @@
 
 ## 为什么`WrapScript`不能按值返回`vector<ScriptAction>`
 
-`ScriptMod`被`Forever_Mod`目录下几个预编译dll（`Empty`/`Wxdj`/`Test`）继承，每个dll是独立
-链接的模块，各自有自己的CRT堆。如果把`WrapScript`写成内联在头文件里的虚函数默认体
+`ScriptMod`被`Forever_Mod`目录下几个预编译dll（`Empty`/`Wxdj`/`Test`）继承。mod dll的`new`/`delete`走C运行时的堆，
+而宿主`UnrealEditor-Forever.dll`是UE模块、走`FMemory`（`CONVENTIONS.md`第4节）。如果把`WrapScript`写成内联在头文件里的虚函数默认体
 `virtual std::vector<ScriptAction> WrapScript(...) { return actions; }`，没override它的
 mod会在自己的目标文件里生成这份默认实现的私有副本，用于填vtable——执行`return actions`时在
-mod自己的堆上构造并返回一个新`vector<ScriptAction>`，这个vector被Core（链接进Forever.dll）
-接住之后析构时用的是Forever.dll的CRT堆，两边堆不一致，直接堆损坏崩溃。和跨DLL分配器的通用
+mod这一侧(C运行时的堆)构造并返回一个新`vector<ScriptAction>`，这个vector被Core（链接进Forever.dll）
+接住之后析构时用的是Forever.dll的`FMemory`，两边分配器不一致，直接堆损坏崩溃。和跨DLL分配器的通用
 规则（`[[memory:cross_dll_allocator_crash]]`）是同一类问题的另一种触发方式：不是"mod调用
 Core对象的STL容器mutator"，而是"mod的编译产物里默认实现构造的STL容器被Core析构"。
 

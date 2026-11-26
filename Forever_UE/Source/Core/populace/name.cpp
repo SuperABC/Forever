@@ -12,7 +12,7 @@ Name::Name(NameFactory* factory, const string& nameId) :
 	type(),
 	name() {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Name " + nameId + " mod is null.\n");
+		THROW_EXCEPTION(DataException, "Name " + nameId + " mod is null.\n");
 	}
 
 	type = mod->GetType();
@@ -37,7 +37,7 @@ NameMod* Name::GetMod() const {
 
 string Name::GetSurname(const string& fullName) const {
 	string result;
-	mod->GetSurname(fullName, [&](const string& value) { result = value; });
+	MOD_CALL(mod, mod->GetSurname(fullName, [&](const string& value) { result = value; }));
 	return result;
 }
 
@@ -50,10 +50,10 @@ string Name::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) c
 	string result;
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	for (int attempt = 0; attempt < kMaxReserveRetryAttempts; attempt++) {
-		mod->GenerateName(allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; });
+		MOD_CALL(mod, mod->GenerateName(allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; }));
 		if (result.empty() || reserve.find(result) == reserve.end()) return result;
 	}
-	THROW_EXCEPTION(DeadLoopException,
+	THROW_EXCEPTION(ModException,
 		"Name generator could not avoid reserved names after " + to_string(kMaxReserveRetryAttempts) + " attempts.\n");
 }
 
@@ -62,10 +62,10 @@ string Name::GenerateName(const string& surname,
 	string result;
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	for (int attempt = 0; attempt < kMaxReserveRetryAttempts; attempt++) {
-		mod->GenerateName(surname, allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; });
+		MOD_CALL(mod, mod->GenerateName(surname, allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; }));
 		if (result.empty() || reserve.find(result) == reserve.end()) return result;
 	}
-	THROW_EXCEPTION(DeadLoopException,
+	THROW_EXCEPTION(ModException,
 		"Name generator could not avoid reserved names after " + to_string(kMaxReserveRetryAttempts) + " attempts.\n");
 }
 

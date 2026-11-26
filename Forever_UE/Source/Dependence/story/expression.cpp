@@ -210,7 +210,7 @@ ValueType UnaryExpression::Evaluate(const ScriptContext& context) const {
 	case UnaryOperator::LOGICAL_NOT:
 		return ApplyLogicalNot(value);
 	default:
-		THROW_EXCEPTION(InvalidArgumentException, "Unknown unary operator.\n");
+		THROW_EXCEPTION(DataException, "Unknown unary operator.\n");
 	}
 }
 
@@ -221,7 +221,7 @@ ValueType UnaryExpression::ApplyNegate(const ValueType& value) const {
 			return -v;
 		}
 		else {
-			THROW_EXCEPTION(RuntimeException, "Cannot apply negate to boolean or non-numeric type.\n");
+			THROW_EXCEPTION(DataException, "Cannot apply negate to boolean or non-numeric type.\n");
 		}
 		}, value);
 }
@@ -249,7 +249,7 @@ ValueType BinaryExpression::Evaluate(const ScriptContext& context) const {
 	if (operand == BinaryOperator::INCLUDE) {
 		auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
 		if (!array_expr) {
-			THROW_EXCEPTION(RuntimeException, "Right operand of 'in' must be an array.\n");
+			THROW_EXCEPTION(DataException, "Right operand of 'in' must be an array.\n");
 		}
 
 		auto array_values = array_expr->GetElementValues(context);
@@ -301,7 +301,7 @@ ValueType BinaryExpression::Evaluate(const ScriptContext& context) const {
 		return ComputeArithmetic(left_val, right_val, operand);
 
 	default:
-		THROW_EXCEPTION(RuntimeException, "Unknown binary operator.\n");
+		THROW_EXCEPTION(DataException, "Unknown binary operator.\n");
 	}
 }
 
@@ -310,7 +310,7 @@ bool BinaryExpression::GetComparisonResult(const ValueType& left, const ValueTyp
 	if (auto bool_result = get_if<bool>(&result)) {
 		return *bool_result;
 	}
-	THROW_EXCEPTION(RuntimeException, "Comparison must return boolean value.\n");
+	THROW_EXCEPTION(DataException, "Comparison must return boolean value.\n");
 }
 
 ValueType BinaryExpression::CompareValues(const ValueType& left, const ValueType& right, BinaryOperator op) const {
@@ -345,7 +345,7 @@ ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const Value
 					return to_string(v);
 				}
 				else {
-					THROW_EXCEPTION(RuntimeException, "Unsupported type for string concatenation.\n");
+					THROW_EXCEPTION(DataException, "Unsupported type for string concatenation.\n");
 				}
 				}, left);
 
@@ -361,7 +361,7 @@ ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const Value
 					return to_string(v);
 				}
 				else {
-					THROW_EXCEPTION(RuntimeException, "Unsupported type for string concatenation.\n");
+					THROW_EXCEPTION(DataException, "Unsupported type for string concatenation.\n");
 				}
 				}, right);
 
@@ -381,12 +381,12 @@ ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const Value
 			case BinaryOperator::MULTIPLY: return l * r;
 			case BinaryOperator::DIVIDE:
 				if (r == 0) {
-					THROW_EXCEPTION(RuntimeException, "Division by zero.\n");
+					THROW_EXCEPTION(DataException, "Division by zero.\n");
 				}
 				return l / r;
 			case BinaryOperator::MODULO:
 				if (r == 0) {
-					THROW_EXCEPTION(RuntimeException, "Modulo by zero.\n");
+					THROW_EXCEPTION(DataException, "Modulo by zero.\n");
 				}
 				return l % r;
 			case BinaryOperator::EXPONENT: {
@@ -401,7 +401,7 @@ ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const Value
 				return result;
 			}
 			default:
-				THROW_EXCEPTION(RuntimeException, "Unsupported arithmetic operator.\n");
+				THROW_EXCEPTION(DataException, "Unsupported arithmetic operator.\n");
 			}
 		}
 		// 如果至少有一个操作数是浮点数，进行浮点数运算
@@ -416,22 +416,22 @@ ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const Value
 			case BinaryOperator::MULTIPLY: return l_val * r_val;
 			case BinaryOperator::DIVIDE:
 				if (abs(r_val) < 1e-10) {
-					THROW_EXCEPTION(RuntimeException, "Division by zero.\n");
+					THROW_EXCEPTION(DataException, "Division by zero.\n");
 				}
 				return l_val / r_val;
 			case BinaryOperator::MODULO:
 				if (abs(r_val) < 1e-10) {
-					THROW_EXCEPTION(RuntimeException, "Modulo by zero.\n");
+					THROW_EXCEPTION(DataException, "Modulo by zero.\n");
 				}
 				return fmod(l_val, r_val);
 			case BinaryOperator::EXPONENT:
 				return pow(l_val, r_val);
 			default:
-				THROW_EXCEPTION(RuntimeException, "Unsupported arithmetic operator.\n");
+				THROW_EXCEPTION(DataException, "Unsupported arithmetic operator.\n");
 			}
 		}
 		else {
-			THROW_EXCEPTION(RuntimeException, "Arithmetic operations only supported for numeric types.\n");
+			THROW_EXCEPTION(DataException, "Arithmetic operations only supported for numeric types.\n");
 		}
 		}, left, right);
 }
@@ -463,7 +463,7 @@ bool Expression::EvaluateBool(const ScriptContext& context) const {
 	if (auto bool_val = get_if<bool>(&result)) {
 		return *bool_val;
 	}
-	THROW_EXCEPTION(RuntimeException, "Expression must Evaluate to boolean.\n");
+	THROW_EXCEPTION(DataException, "Expression must Evaluate to boolean.\n");
 }
 
 ValueType Expression::EvaluateValue(const ScriptContext& context) const {
@@ -538,7 +538,7 @@ vector<string> Expression::Tokenize(const string& expr) {
 			}
 			size_t end = FindMatchingQuote(expr, i);
 			if (end == string::npos) {
-				THROW_EXCEPTION(RuntimeException, "Unmatched quote in expression");
+				THROW_EXCEPTION(DataException, "Unmatched quote in expression");
 			}
 			string quoted = expr.substr(i, end - i + 1);
 			tokens.push_back(quoted);
@@ -548,7 +548,7 @@ vector<string> Expression::Tokenize(const string& expr) {
 			// 变量名里的内嵌表达式$$(...)：整段(含括号)并进当前变量token，求值时由ExpandNameExpressions展开
 			size_t close = FindMatchingParen(expr, i + 2);
 			if (close == string::npos) {
-				THROW_EXCEPTION(RuntimeException, "Unmatched parenthesis in variable name expression");
+				THROW_EXCEPTION(DataException, "Unmatched parenthesis in variable name expression");
 			}
 			current += expr.substr(i, close - i + 1);
 			i = close + 1;
@@ -557,7 +557,7 @@ vector<string> Expression::Tokenize(const string& expr) {
 			// 数组项下标由内嵌表达式给出：[$$(表达式)]，同样整段并进变量token
 			size_t close = FindMatchingParen(expr, i + 3);
 			if (close == string::npos || close + 1 >= expr.length() || expr[close + 1] != ']') {
-				THROW_EXCEPTION(RuntimeException, "Malformed [$$(expr)] index in variable name");
+				THROW_EXCEPTION(DataException, "Malformed [$$(expr)] index in variable name");
 			}
 			current += expr.substr(i, close + 2 - i);
 			i = close + 2;
@@ -663,7 +663,7 @@ vector<string> Expression::InfixToPostfix(const vector<string>& infix) {
 				opStack.pop();
 			}
 			if (opStack.empty()) {
-				THROW_EXCEPTION(RuntimeException, "Mismatched parentheses.\n");
+				THROW_EXCEPTION(DataException, "Mismatched parentheses.\n");
 			}
 			opStack.pop();
 		}
@@ -682,7 +682,7 @@ vector<string> Expression::InfixToPostfix(const vector<string>& infix) {
 
 	while (!opStack.empty()) {
 		if (opStack.top() == "(") {
-			THROW_EXCEPTION(RuntimeException, "Mismatched parentheses.\n");
+			THROW_EXCEPTION(DataException, "Mismatched parentheses.\n");
 		}
 		postfix.push_back(opStack.top());
 		opStack.pop();
@@ -708,7 +708,7 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 				}
 
 				if (IsOperator(postfix[j])) {
-					THROW_EXCEPTION(RuntimeException, "Unexpected operator in array: " + postfix[j] + ".\n");
+					THROW_EXCEPTION(DataException, "Unexpected operator in array: " + postfix[j] + ".\n");
 				}
 
 				elements.push_back(ParseOperand(postfix[j]));
@@ -716,7 +716,7 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 			}
 
 			if (j >= postfix.size() || postfix[j] != "]") {
-				THROW_EXCEPTION(RuntimeException, "Unclosed array.\n");
+				THROW_EXCEPTION(DataException, "Unclosed array.\n");
 			}
 
 			exprStack.push(make_unique<ArrayExpression>(move(elements)));
@@ -725,7 +725,7 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 		else if (IsOperator(token)) {
 			if (token == NEGATE_TOKEN) {
 				if (exprStack.empty()) {
-					THROW_EXCEPTION(RuntimeException, "Insufficient operands for unary minus.\n");
+					THROW_EXCEPTION(DataException, "Insufficient operands for unary minus.\n");
 				}
 				auto operand = move(exprStack.top());
 				exprStack.pop();
@@ -737,7 +737,7 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 				exprStack.push(make_unique<UnaryExpression>(UnaryOperator::LOGICAL_NOT, move(operand)));
 			}
 			else if (exprStack.size() < 2) {
-				THROW_EXCEPTION(RuntimeException, "Insufficient operands for operator: " + token + ".\n");
+				THROW_EXCEPTION(DataException, "Insufficient operands for operator: " + token + ".\n");
 			}
 			else {
 				auto right = move(exprStack.top());
@@ -755,7 +755,7 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 	}
 
 	if (exprStack.size() != 1) {
-		THROW_EXCEPTION(RuntimeException, "Invalid expression.\n");
+		THROW_EXCEPTION(DataException, "Invalid expression.\n");
 	}
 
 	return move(exprStack.top());
@@ -811,7 +811,7 @@ BinaryOperator Expression::GetOperator(const string& token) const {
 	else if (token == "^") return BinaryOperator::EXPONENT;
 	else if (token == "&&") return BinaryOperator::LOGICAL_AND;
 	else if (token == "||") return BinaryOperator::LOGICAL_OR;
-	else THROW_EXCEPTION(RuntimeException, "Unknown operator: " + token);
+	else THROW_EXCEPTION(DataException, "Unknown operator: " + token);
 }
 
 shared_ptr<ExpressionNode> Expression::ParseOperand(const string& token) {
@@ -836,20 +836,19 @@ shared_ptr<ExpressionNode> Expression::ParseConstant(const string& token) {
 	}
 
 	// 尝试解析为整数
-	try {
-		size_t pos;
-		int int_val = stoi(token, &pos);
-		if (pos == token.length() && !(token.length() > 1 && token[0] == '0' && isdigit(token[1]))) {
+	{
+		size_t pos = 0;
+		int int_val = 0;
+		if (TryParseInt(token, int_val, &pos) && pos == token.length() && !(token.length() > 1 && token[0] == '0' && isdigit(token[1]))) {
 			return make_unique<ConstantExpression>(int_val);
 		}
 	}
-	catch (const exception&) {}
 
 	// 尝试解析为浮点数
-	try {
-		size_t pos;
-		double double_val = stod(token, &pos);
-		if (pos == token.length()) {
+	{
+		size_t pos = 0;
+		double double_val = 0.0;
+		if (TryParseDouble(token, double_val, &pos) && pos == token.length()) {
 			if (token.find('.') != string::npos ||
 				token.find('e') != string::npos ||
 				token.find('E') != string::npos) {
@@ -860,7 +859,6 @@ shared_ptr<ExpressionNode> Expression::ParseConstant(const string& token) {
 			}
 		}
 	}
-	catch (const exception&) {}
 
 	// 处理字符串
 	string str_val = token;

@@ -1,5 +1,7 @@
 #include "Player/ForeverWeaponVisualComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Player/ForeverCharacter.h"
 #include "Player/ForeverWeaponComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -247,6 +249,7 @@ void UForeverWeaponVisualComponent::ApplyAimPose(int32 index) {
 void UForeverWeaponVisualComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverWeaponVisualComponent::TickComponent")
 
 	AForeverCharacter* character = Cast<AForeverCharacter>(GetOwner());
 	if (!bShowing || !character) return;
@@ -281,4 +284,5 @@ void UForeverWeaponVisualComponent::TickComponent(float DeltaTime, ELevelTick Ti
 			SetHiddenForOwner(visual, character->IsFirstPerson()); // 第一人称看不到自己背上的枪
 		}
 	}
+	CORE_GUARD_END
 }

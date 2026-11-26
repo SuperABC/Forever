@@ -1,5 +1,7 @@
 #include "Element/BoatElement.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Framework/ForeverFrameworkActor.h"
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "Water/WaterQuery.h"
@@ -190,6 +192,7 @@ bool ABoatElement::SamplePoint(const FVector& world, double time, float& outDept
 void ABoatElement::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime); // 把位置写回Core，见AVehicleElement::Tick
+	CORE_GUARD_BEGIN("ABoatElement::Tick")
 
 	if (!carMesh) return;
 
@@ -292,6 +295,7 @@ void ABoatElement::Tick(float DeltaTime)
 
 	UpdateWake(DeltaTime, transform, velocity, time, propellerWet);
 	UpdateHud(velocity.Size());
+	CORE_GUARD_END
 }
 
 void ABoatElement::UpdateWake(float deltaTime, const FTransform& transform, const FVector& velocity, double time, float propellerWet)

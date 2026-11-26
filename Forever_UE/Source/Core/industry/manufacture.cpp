@@ -1,5 +1,7 @@
 #include "industry/manufacture.h"
 
+#include "common/error.h"
+
 #include "industry/industry.h"
 
 #include <algorithm>
@@ -22,7 +24,7 @@ Manufacture::Manufacture(ManufactureFactory* factory, const string& id, const st
 	inputCache = new Storage(name + "#input", {}, 0.f);
 	outputCache = new Storage(name + "#output", {}, 0.f);
 
-	mod->SetTargets();
+	MOD_CALL(mod, mod->SetTargets());
 	ComputeRecipe();
 }
 

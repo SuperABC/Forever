@@ -1,5 +1,7 @@
 #include "manufacture_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 
@@ -17,7 +19,7 @@ ManufactureMod* ManufactureFactory::CreateManufacture(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	ManufactureMod* instance = it->second.creator(argsIt->second);
+	ManufactureMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);

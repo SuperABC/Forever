@@ -164,6 +164,6 @@ void Registry::CheckConceptList() {
 		if (find(keys.begin(), keys.end(), descriptor.conceptKey) == keys.end()) problem += string(" missing concept '") + descriptor.conceptKey + "';";
 	}
 	if (!problem.empty()) {
-		THROW_EXCEPTION(RuntimeException, "Registry::ForEachConcept does not match Dependence/common/mod_concepts:" + problem + "\n");
+		THROW_EXCEPTION(InternalException, "Registry::ForEachConcept does not match Dependence/common/mod_concepts:" + problem + "\n");
 	}
 }

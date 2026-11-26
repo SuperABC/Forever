@@ -1,6 +1,8 @@
 // 党代会：每月由党派mod给出日程，开始/结束时通知党员，结束时统计到场者并投票选党首。设计见polit.md"党代会"一节。
 #include "polit/polit.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 #include "map/room.h"
 #include "populace/citizen.h"
@@ -46,7 +48,7 @@ void Polit::UpdateCongress(Party& party, const Time& now) {
 		party.congress.monthKey = monthKey;
 		{
 			RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-			party.congress.plan = mod->GetCongress(now.GetYear(), now.GetMonth());
+			party.congress.plan = MOD_CALL(mod, mod->GetCongress(now.GetYear(), now.GetMonth()));
 		}
 		const PartyCongress& plan = party.congress.plan;
 		PolitLog(now, "congress_plan", "party=" + party.GetId() + " day=" + to_string(plan.day) +

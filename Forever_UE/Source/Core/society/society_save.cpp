@@ -1,5 +1,7 @@
 #include "society_save.h"
 
+#include "common/error.h"
+
 #include "society/society.h"
 #include "society/organization.h"
 #include "society/job.h"
@@ -77,7 +79,7 @@ void SocietySaveCodec::Save(const Society& society, const Map& map, const Popula
 		{
 			// 岗位计划由mod基类的虚函数写成文本（vacancies的内存始终在mod一侧分配释放）。
 			JsonStateWriter vacancyWriter;
-			if (o->mod) o->mod->SaveVacancies(vacancyWriter);
+			if (o->mod) MOD_CALL(o->mod, o->mod->SaveVacancies(vacancyWriter));
 			w.Str(vacancyWriter.Finish().WriteCompact());
 		}
 	}
@@ -203,7 +205,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 					JsonReader reader;
 					if (reader.Parse(stateText, root, false)) {
 						JsonStateReader stateReader(root, stateVersion);
-						job->mod->LoadState(stateReader);
+						MOD_CALL(job->mod, job->mod->LoadState(stateReader));
 					}
 					else {
 						debugf(DebugLevel::Warning, "failed to parse saved state of job mod %s.\n", jobId.c_str());
@@ -230,7 +232,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 				JsonReader vacancyParser;
 				if (vacancyParser.Parse(vacancyText, vacancyRoot, false)) {
 					JsonStateReader vacancyReader(vacancyRoot, 0);
-					o->mod->LoadVacancies(vacancyReader);
+					MOD_CALL(o->mod, o->mod->LoadVacancies(vacancyReader));
 				}
 				else {
 					debugf(DebugLevel::Warning, "failed to parse saved job plan of organization %s.\n", id.c_str());
@@ -304,12 +306,8 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 		}
 		return guard.release();
 	}
-	catch (const exception& e) {
-		error = string("society load failed: ") + e.what();
-		return nullptr;
-	}
 	catch (...) {
-		error = "society load failed with an unknown error";
+		error = "society load failed: " + DescribeCurrentException().ToLine();
 		return nullptr;
 	}
 }

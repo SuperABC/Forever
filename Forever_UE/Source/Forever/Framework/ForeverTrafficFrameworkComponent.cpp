@@ -1,5 +1,7 @@
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Element/VehicleElement.h"
@@ -467,6 +469,7 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, b
 void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverTrafficFrameworkComponent::TickComponent")
 
 	// 交通时钟放在所有早返回之前：暂停时DeltaTime为0不走，卡顿的大帧夹到0.25s免得租约被一帧耗光。
 	trafficClock += FMath::Min(DeltaTime, 0.25f);
@@ -602,6 +605,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 			entry.element = nullptr;
 		}
 	}
+	CORE_GUARD_END
 }
 
 AVehicleElement* UForeverTrafficFrameworkComponent::FindOrSpawnVehicle(const FString& vehicleName) {

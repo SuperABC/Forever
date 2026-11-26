@@ -1,5 +1,7 @@
 #include "UI/PhoneWidget.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
@@ -15,23 +17,29 @@
 
 void UPhoneWidget::NativeConstruct() {
 	Super::NativeConstruct();
+	CORE_GUARD_BEGIN("UPhoneWidget::NativeConstruct")
 	SetVisibility(ESlateVisibility::Collapsed);
 
 	// 跟PuzzleWidget同样的理由(见PuzzleWidget.cpp里NativeConstruct的说明)：树里只有一张
 	// 纯展示用的Image，没有任何天生可获得焦点的子控件，不打开这个开关键盘会完全没反应。
 	SetIsFocusable(true);
+	CORE_GUARD_END
 }
 
 void UPhoneWidget::NativeDestruct() {
+	CORE_GUARD_ALWAYS_BEGIN("UPhoneWidget::NativeDestruct")
 	delete phone;
 	phone = nullptr;
 
+	CORE_GUARD_END
 	Super::NativeDestruct();
 }
 
 void UPhoneWidget::TogglePhone() {
+	CORE_GUARD_BEGIN("UPhoneWidget::TogglePhone")
 	if (GetVisibility() == ESlateVisibility::Visible) ClosePhone();
 	else OpenPhone();
+	CORE_GUARD_END
 }
 
 FIntPoint UPhoneWidget::ComputeCanvasSize() const {
@@ -45,6 +53,7 @@ FIntPoint UPhoneWidget::ComputeCanvasSize() const {
 }
 
 void UPhoneWidget::OpenPhone() {
+	CORE_GUARD_BEGIN("UPhoneWidget::OpenPhone")
 	if (!phone) {
 		FIntPoint size = ComputeCanvasSize();
 		canvas.Init(size.X, size.Y);
@@ -59,9 +68,11 @@ void UPhoneWidget::OpenPhone() {
 		UWidgetBlueprintLibrary::SetInputMode_UIOnlyEx(playerController, this, EMouseLockMode::DoNotLock, false);
 		SetKeyboardFocus();
 	}
+	CORE_GUARD_END
 }
 
 void UPhoneWidget::ClosePhone() {
+	CORE_GUARD_BEGIN("UPhoneWidget::ClosePhone")
 	SetVisibility(ESlateVisibility::Collapsed);
 
 	if (APlayerController* playerController = GetOwningPlayer()) {
@@ -72,10 +83,12 @@ void UPhoneWidget::ClosePhone() {
 
 	// 不delete phone/canvas——手机要跨越开关手机保持多任务状态(桌面/正在跑的App/最近任务
 	// 列表)，只有Widget自己被销毁(NativeDestruct)时才真正释放，见类注释第1点。
+	CORE_GUARD_END
 }
 
 void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	Super::NativeTick(MyGeometry, DeltaTime);
+	CORE_GUARD_BEGIN("UPhoneWidget::NativeTick")
 
 	if (!phone || GetVisibility() != ESlateVisibility::Visible) return;
 
@@ -107,9 +120,11 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	BlitCanvasToImage();
 
 	if (result != 0) ClosePhone();
+	CORE_GUARD_END
 }
 
 void UPhoneWidget::BlitCanvasToImage() {
+	CORE_GUARD_BEGIN("UPhoneWidget::BlitCanvasToImage")
 	int width = canvas.GetWidth(), height = canvas.GetHeight();
 	if (width <= 0 || height <= 0) return;
 
@@ -124,6 +139,7 @@ void UPhoneWidget::BlitCanvasToImage() {
 
 	texture->UpdateResource();
 	if (DisplayImage) DisplayImage->SetBrushFromTexture(texture, true);
+	CORE_GUARD_END
 }
 
 FReply UPhoneWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) {

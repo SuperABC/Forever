@@ -1,5 +1,7 @@
 #include "ForeverCharacter.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Animation/AnimInstance.h"
 #include "AnimationRuntime.h"
 #include "Camera/CameraComponent.h"
@@ -306,6 +308,7 @@ void AForeverCharacter::SetAvatarTexture(UTexture2D* texture)
 void AForeverCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CORE_GUARD_BEGIN("AForeverCharacter::Tick")
 
 	// 长按3：按住的真实时间到阈值就弹出投掷物选择列表。
 	if (bThrowKeyHeld && GetWorld()->GetRealTimeSeconds() - throwKeyPressTime >= longPressThreshold) {
@@ -329,6 +332,7 @@ void AForeverCharacter::Tick(float DeltaTime)
 	float targetArmLength = bIsAiming ? aimArmLength : defaultArmLength;
 	cameraBoom->SocketOffset = FMath::VInterpTo(cameraBoom->SocketOffset, targetSocketOffset, DeltaTime, aimTransitionSpeed);
 	cameraBoom->TargetArmLength = FMath::FInterpTo(cameraBoom->TargetArmLength, targetArmLength, DeltaTime, aimTransitionSpeed);
+	CORE_GUARD_END
 }
 
 void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

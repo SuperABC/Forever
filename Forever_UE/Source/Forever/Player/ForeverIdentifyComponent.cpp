@@ -1,5 +1,7 @@
 #include "Player/ForeverIdentifyComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
@@ -106,6 +108,7 @@ void UForeverIdentifyComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverIdentifyComponent::TickComponent")
 	if (!bActive || tags.Num() == 0) return;
 
 	APlayerController* controller = Cast<APlayerController>(GetOwner());
@@ -127,4 +130,5 @@ void UForeverIdentifyComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		tag->SetTintColorAndOpacity(tint);
 		return false;
 	});
+	CORE_GUARD_END
 }

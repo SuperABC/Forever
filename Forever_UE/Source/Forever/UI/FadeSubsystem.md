@@ -22,3 +22,5 @@
 
 ## 保持黑屏
 `BeginHoldBlack()`(返回是否成功显示)/`IsHeldBlack()`/`ReleaseHold()`，给跳时间用，见`FadeWidget.md`。
+
+`Dismiss()`：立刻从视口撤掉，不等进度、不渐隐。世界生成中途出异常要回菜单时由`CoreGuard`调用——那一局的进度永远到不了满格，不撤的话回到菜单还是黑屏。

@@ -1,5 +1,7 @@
 #include "building_factory.h"
 
+#include "common/error.h"
+
 #include "../common/mod_args.h"
 #include "common/random.h"
 
@@ -20,7 +22,7 @@ BuildingMod* BuildingFactory::CreateBuilding(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	BuildingMod* instance = it->second.creator(argsIt->second);
+	BuildingMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -82,28 +84,28 @@ float BuildingFactory::RandomAcreage(const string& id) const {
 	auto it = registries.find(id);
 	if (!IsEnabled(id)) return 0.f;
 	RandomScope scope(RandomRegistry::GetModStream(id));
-	return it->second.randomAcreage();
+	return MOD_ID_CALL(it->first, it->second.randomAcreage());
 }
 
 float BuildingFactory::GetAcreageMin(const string& id) const {
 	auto it = registries.find(id);
 	if (!IsEnabled(id)) return 0.f;
 	RandomScope scope(RandomRegistry::GetModStream(id));
-	return it->second.acreageMin();
+	return MOD_ID_CALL(it->first, it->second.acreageMin());
 }
 
 float BuildingFactory::GetAcreageMax(const string& id) const {
 	auto it = registries.find(id);
 	if (!IsEnabled(id)) return 0.f;
 	RandomScope scope(RandomRegistry::GetModStream(id));
-	return it->second.acreageMax();
+	return MOD_ID_CALL(it->first, it->second.acreageMax());
 }
 
 float BuildingFactory::GetPower(const string& id, AREA_TYPE area) const {
 	auto it = registries.find(id);
 	if (!IsEnabled(id) || area == AREA_PLACEHOLDER) return 0.f;   // 占位分区永远没有权重
 	RandomScope scope(RandomRegistry::GetModStream(id));
-	return it->second.power(area);
+	return MOD_ID_CALL(it->first, it->second.power(area));
 }
 
 void BuildingFactory::Assign(const string& id, const vector<Lot*>& lots,
@@ -113,7 +115,7 @@ void BuildingFactory::Assign(const string& id, const vector<Lot*>& lots,
 		// --skip：只跳过Assign(显式占位)，mod仍启用——按权重分布(GetPower/FillRemainder)和路网预设落地都不受影响。
 		if (ModArgs(configuredArgs.at(id)).GetBool("skip")) return;
 		RandomScope scope(RandomRegistry::GetModStream(id));
-		it->second.assign(lots, emit, context);
+		MOD_ID_CALL(it->first, it->second.assign(lots, emit, context));
 	}
 }
 

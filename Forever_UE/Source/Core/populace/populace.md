@@ -97,10 +97,10 @@ Populace::Populace() : nameFactory(Registry::Get().GetNameFactory()) {}
 void Populace::InitNames() {
 	const string activeId = Config::GetUniqueConceptMod("Names");
 	if (activeId.empty()) {
-		THROW_EXCEPTION(RuntimeException, "No name mod enabled.\n");
+		THROW_EXCEPTION(DataException, "No name mod enabled.\n");
 	}
 	if (!nameFactory.CheckRegistered(activeId)) {
-		THROW_EXCEPTION(RuntimeException, "Name mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
+		THROW_EXCEPTION(DataException, "Name mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
 	}
 	name = new Name(&nameFactory, activeId);
 	// ...遍历Config::GetMainStoryScriptPaths()，对每个脚本的name_reserve调ReserveName，见name.md

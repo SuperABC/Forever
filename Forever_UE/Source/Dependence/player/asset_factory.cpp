@@ -1,5 +1,7 @@
 #include "asset_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 
@@ -17,7 +19,7 @@ AssetMod* AssetFactory::CreateAsset(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	AssetMod* instance = it->second.creator(argsIt->second);
+	AssetMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);

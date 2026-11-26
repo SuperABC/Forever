@@ -1,5 +1,7 @@
 #include "Player/ForeverRocketProjectile.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/CitizenElement.h"
 #include "Player/ForeverExplosionEffect.h"
 #include "Player/ForeverProjectileBridgeComponent.h"
@@ -144,6 +146,7 @@ void AForeverRocketProjectile::BeginPlay()
 void AForeverRocketProjectile::Tick(float deltaSeconds)
 {
 	Super::Tick(deltaSeconds);
+	CORE_GUARD_BEGIN("AForeverRocketProjectile::Tick")
 	if (bExploded) return;
 
 	age += deltaSeconds;
@@ -156,6 +159,7 @@ void AForeverRocketProjectile::Tick(float deltaSeconds)
 	UpdateFlame(deltaSeconds);
 	UpdateSmoke(deltaSeconds);
 	UpdateFlightSound();
+	CORE_GUARD_END
 }
 
 void AForeverRocketProjectile::UpdateFlightSound()

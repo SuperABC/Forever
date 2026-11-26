@@ -1,5 +1,7 @@
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/BuildingElement.h"
 #include "Framework/ForeverFrameworkActor.h"
 
@@ -122,6 +124,7 @@ UStaticMesh* UForeverBuildingFrameworkComponent::ResolveMesh(const string& softP
 void UForeverBuildingFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverBuildingFrameworkComponent::TickComponent")
 
 	// 每帧重置一次全地图共享的LOD操作预算，供所有ABuildingElement在自己的Tick里申请
 	// (TryConsumeLodOpBudget)——具体队列/执行现在都在Element自己身上，这里只保留节流总闸。
@@ -146,6 +149,7 @@ void UForeverBuildingFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		bFrozenForLod = false;
 		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.f);
 	}
+	CORE_GUARD_END
 }
 
 void UForeverBuildingFrameworkComponent::PrewarmMeshes() {

@@ -1,5 +1,7 @@
 #include "player/weapon.h"
 
+#include "common/error.h"
+
 #include "common/registry.h"
 #include "story/script.h"
 
@@ -23,7 +25,7 @@ Weapon::Weapon(WeaponFactory* factory, const string& id) :
 	mod = factory->CreateWeapon(id);
 	if (!mod) return;
 
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 	type = mod->GetType();
 	firstPersonMeshPath = mod->firstPersonMeshPath;
 	gripSocketName = mod->gripSocketName;
@@ -111,5 +113,5 @@ void Weapon::EnsureScript() {
 Script* Weapon::GetScript() const { return script; }
 
 void Weapon::FireCustom(PostHandle* post) const {
-	if (mod) mod->OnFire(post);
+	if (mod) MOD_CALL(mod, mod->OnFire(post));
 }

@@ -1,5 +1,7 @@
 #include "Element/TransitVehicleElement.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "traffic/vehicle.h"
 
 #include "Framework/ForeverFrameworkActor.h"
@@ -347,6 +349,7 @@ void ATransitVehicleElement::MeetOptionSelect()
 void ATransitVehicleElement::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CORE_GUARD_BEGIN("ATransitVehicleElement::Tick")
 
 	if (!vehicle) return;
 
@@ -356,4 +359,5 @@ void ATransitVehicleElement::Tick(float DeltaTime)
 	SetActorLocationAndRotation(
 		FVector(x * TRANSIT_WORLD_SCALE, y * TRANSIT_WORLD_SCALE, z * TRANSIT_WORLD_SCALE),
 		FRotator(vehicle->GetPitch(), yaw + meshYawOffsetDegrees, 0.f));
+	CORE_GUARD_END
 }

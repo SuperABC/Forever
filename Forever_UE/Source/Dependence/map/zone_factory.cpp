@@ -1,5 +1,7 @@
 #include "zone_factory.h"
 
+#include "common/error.h"
+
 #include "../common/mod_args.h"
 #include "common/random.h"
 
@@ -19,7 +21,7 @@ ZoneMod* ZoneFactory::CreateZone(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	ZoneMod* instance = it->second.creator(argsIt->second);
+	ZoneMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -84,7 +86,7 @@ void ZoneFactory::Assign(const string& id, const vector<Lot*>& lots,
 		// --skip：只跳过Assign(显式占位)，mod仍启用——按权重分布(GetPower/FillRemainder)和路网预设落地都不受影响。
 		if (ModArgs(configuredArgs.at(id)).GetBool("skip")) return;
 		RandomScope scope(RandomRegistry::GetModStream(id));
-		it->second.assign(lots, emit, context);
+		MOD_ID_CALL(it->first, it->second.assign(lots, emit, context));
 	}
 }
 

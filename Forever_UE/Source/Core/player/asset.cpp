@@ -1,5 +1,7 @@
 #include "player/asset.h"
 
+#include "common/error.h"
+
 #include "common/registry.h"
 #include "story/script.h"
 
@@ -13,7 +15,7 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 	mod = factory->CreateAsset(id);
 	if (!mod) return;
 
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 	name = mod->GetName(); // mod保证全局唯一，拷贝一份：GetName()返回的是mod内部缓冲
 	type = mod->GetType();
 	mobility = mod->mobility;

@@ -1,5 +1,7 @@
 #include "Element/VehicleElement.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "traffic/vehicle.h"
 #include "traffic/route.h"
 
@@ -529,6 +531,7 @@ void AVehicleElement::PushNearbyCharacters()
 void AVehicleElement::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CORE_GUARD_BEGIN("AVehicleElement::Tick")
 
 	if (!vehicle) return;
 
@@ -539,6 +542,7 @@ void AVehicleElement::Tick(float DeltaTime)
 	// 切回时刻表时Route::Update会直接覆盖。
 	const float scale = vehicle->GetRoute() ? 0.001f : 1.f;
 	vehicle->SetTransform(location.X * scale, location.Y * scale, location.Z * scale, GetActorRotation().Yaw);
+	CORE_GUARD_END
 }
 
 void AVehicleElement::EnsureOptionsForPlayer(APawn* player) {

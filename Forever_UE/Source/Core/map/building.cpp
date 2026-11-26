@@ -111,19 +111,19 @@ Stair::Stair(RectParams params) : params(params) {}
 int Stair::GetDirection() const { return direction; }
 void Stair::SetDirection(int dir) { direction = dir; }
 bool Stair::GetWall(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Stair wall direction out of range [0,3].\n");
 	return walls[dir];
 }
 void Stair::AddWall(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Stair wall direction out of range [0,3].\n");
 	walls[dir] = true;
 }
 const WallStyle& Stair::GetWallStyle(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Stair wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 WallStyle& Stair::MutableWallStyle(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Stair wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 void Stair::InstanciateQuad(float width, float height) {
@@ -136,19 +136,19 @@ Elevator::Elevator(RectParams params) : params(params) {}
 int Elevator::GetDirection() const { return direction; }
 void Elevator::SetDirection(int dir) { direction = dir; }
 bool Elevator::GetWall(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Elevator wall direction out of range [0,3].\n");
 	return walls[dir];
 }
 void Elevator::AddWall(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Elevator wall direction out of range [0,3].\n");
 	walls[dir] = true;
 }
 const WallStyle& Elevator::GetWallStyle(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Elevator wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 WallStyle& Elevator::MutableWallStyle(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Elevator wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 void Elevator::InstanciateQuad(float width, float height) {
@@ -161,19 +161,19 @@ Ramp::Ramp(RectParams params) : params(params) {}
 int Ramp::GetDirection() const { return direction; }
 void Ramp::SetDirection(int dir) { direction = dir; }
 bool Ramp::GetWall(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Ramp wall direction out of range [0,3].\n");
 	return walls[dir];
 }
 void Ramp::AddWall(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Ramp wall direction out of range [0,3].\n");
 	walls[dir] = true;
 }
 const WallStyle& Ramp::GetWallStyle(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Ramp wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 WallStyle& Ramp::MutableWallStyle(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Ramp wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 void Ramp::InstanciateQuad(float width, float height) {
@@ -209,11 +209,11 @@ void Hatch::InstanciateQuad(float width, float height) {
 
 Corridor::Corridor(RectParams params) : params(params) {}
 bool Corridor::GetWall(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Corridor wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Corridor wall direction out of range [0,3].\n");
 	return walls[dir];
 }
 void Corridor::AddWall(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Corridor wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Corridor wall direction out of range [0,3].\n");
 	walls[dir] = true;
 }
 const WallHole& Corridor::GetDoors() const { return doors; }
@@ -229,11 +229,11 @@ void Corridor::AddWindow(int dir, vector<RectParams> positions) {
 	for (auto& p : positions) windows[dir].push_back(p);
 }
 const WallStyle& Corridor::GetWallStyle(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Corridor wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Corridor wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 WallStyle& Corridor::MutableWallStyle(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Corridor wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Corridor wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 void Corridor::InstanciateQuad(float width, float height) {
@@ -258,11 +258,11 @@ void Single::AddWindow(int dir, vector<RectParams> positions) {
 	for (auto& p : positions) windows[dir].push_back(p);
 }
 const WallStyle& Single::GetWallStyle(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Single wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Single wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 WallStyle& Single::MutableWallStyle(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Single wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Single wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 void Single::InstanciateQuad(float width, float height) {
@@ -296,11 +296,11 @@ void Row::AddWindow(int dir, vector<RectParams> positions) {
 	for (auto& p : positions) windows[dir].push_back(p);
 }
 const WallStyle& Row::GetWallStyle(int dir) const {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Row wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Row wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 WallStyle& Row::MutableWallStyle(int dir) {
-	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Row wall direction out of range [0,3].\n");
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InternalException, "Row wall direction out of range [0,3].\n");
 	return wallStyles[dir];
 }
 void Row::InstanciateQuad(float width, float height) {
@@ -340,7 +340,7 @@ int Floor::AssignNumber() { return number++; }
 // ===== BuildingLayoutLibrary =====
 
 RectParams BuildingLayoutLibrary::InverseParams(const RectParams& params, int face) {
-	if (face < 0 || face >= 4) THROW_EXCEPTION(InvalidArgumentException, "Facing direction out of range [0,3].\n");
+	if (face < 0 || face >= 4) THROW_EXCEPTION(ModException, "Facing direction out of range [0,3].\n");
 	RectParams inversed = params;
 	switch (face) {
 	case 0:
@@ -380,7 +380,7 @@ RectParams BuildingLayoutLibrary::InverseParams(const RectParams& params, int fa
 }
 
 int BuildingLayoutLibrary::InverseDirection(int direction, int face) {
-	if (face < 0 || face >= 4) THROW_EXCEPTION(InvalidArgumentException, "Facing direction out of range [0,3].\n");
+	if (face < 0 || face >= 4) THROW_EXCEPTION(ModException, "Facing direction out of range [0,3].\n");
 	switch (face) {
 	case 0:
 		if (direction >= 2) return direction - 2;
@@ -407,7 +407,7 @@ float BuildingLayoutLibrary::FaceYawDegrees(int face) {
 }
 
 PointParams BuildingLayoutLibrary::InversePoint(const PointParams& point, int face) {
-	if (face < 0 || face >= 4) THROW_EXCEPTION(InvalidArgumentException, "Facing direction out of range [0,3].\n");
+	if (face < 0 || face >= 4) THROW_EXCEPTION(ModException, "Facing direction out of range [0,3].\n");
 	switch (face) {
 	case 0: return { point[2], point[3], 1.f - point[0], -point[1] };
 	case 1: return { 1.f - point[2], -point[3], point[0], point[1] };
@@ -436,7 +436,7 @@ RectParams BuildingLayoutLibrary::InverseWall(const RectParams& pos, int directi
 namespace {
 	RectParams ReadRectParams(const JsonValue& arr) {
 		if (arr.size() != kRectParamCount) {
-			THROW_EXCEPTION(JsonFormatException, "Layout rect must have 8 floats.\n");
+			THROW_EXCEPTION(DataException, "Layout rect must have 8 floats.\n");
 		}
 		RectParams params{};
 		for (int i = 0; i < kRectParamCount; i++) params[i] = arr[i].AsFloat();
@@ -445,7 +445,7 @@ namespace {
 
 	PointParams ReadPointParams(const JsonValue& arr) {
 		if (arr.size() != kPointParamCount) {
-			THROW_EXCEPTION(JsonFormatException, "Layout point must have 4 floats.\n");
+			THROW_EXCEPTION(DataException, "Layout point must have 4 floats.\n");
 		}
 		PointParams params{};
 		for (int i = 0; i < kPointParamCount; i++) params[i] = arr[i].AsFloat();
@@ -552,8 +552,9 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 	vehicleNavigationTemplates.clear();
 
 	for (const auto& path : paths) {
+		ErrorScope fileScope(kErrorScopeFile, path);
 		if (!filesystem::exists(path)) {
-			THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+			THROW_EXCEPTION(DataException, "Path does not exist: " + path + ".\n");
 		}
 
 		filesystem::path p(path);
@@ -562,14 +563,14 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 
 		ifstream fin(path);
 		if (!fin.is_open()) {
-			THROW_EXCEPTION(IOException, "Failed to open file: " + path + "\n");
+			THROW_EXCEPTION(DataException, "Failed to open file: " + path + "\n");
 		}
 
 		JsonReader reader;
 		JsonValue root;
 		if (!reader.Parse(fin, root)) {
 			fin.close();
-			THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
+			THROW_EXCEPTION(DataException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
 		}
 		fin.close();
 
@@ -823,7 +824,7 @@ Building::Building(BuildingFactory* factory, BuildingMod* mod) :
 	type(),
 	name() {
 	if (!mod) {
-		THROW_EXCEPTION(NullPointerException, "Building mod is null.\n");
+		THROW_EXCEPTION(DataException, "Building mod is null.\n");
 	}
 
 	type = mod->GetType();
@@ -848,7 +849,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	RoomFactory& roomFactory, ComponentFactory& componentFactory, BuildingNavResult& navOut) {
 	int resolvedDirection = inputDirection;
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->Layout(resolvedDirection, *this, GetBoundaryRoads());
+	MOD_CALL(mod, mod->Layout(resolvedDirection, *this, GetBoundaryRoads()));
 	direction = resolvedDirection;
 
 	const BuildingFootprintSpec& fp = mod->footprint;
@@ -911,7 +912,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 		// 模板名找不到和读档时"missing layout"一样算错误：静默当空模板会让这一层没有任何房间，
 		// 开局能进、存档却读不回来。templateName为空表示这层故意不用模板。
 		if (!spec.templateName.empty() && !library.HasTemplate(spec.templateName)) {
-			THROW_EXCEPTION(InvalidArgumentException, "Building " + name + " floor " + to_string(level) +
+			THROW_EXCEPTION(ModException, "Building " + name + " floor " + to_string(level) +
 				" uses missing layout template: " + spec.templateName + ".\n");
 		}
 		ReadFloor(level, spec.face, spec.templateName, library);

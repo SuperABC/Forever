@@ -1,5 +1,7 @@
 #include "organization_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 
@@ -18,7 +20,7 @@ OrganizationMod* OrganizationFactory::CreateOrganization(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	OrganizationMod* instance = it->second.creator(argsIt->second);
+	OrganizationMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -78,14 +80,14 @@ bool OrganizationFactory::IsEnabled(const string& id) const {
 
 float OrganizationFactory::GetPower(const string& id) const {
 	auto it = registries.find(id);
-	return IsEnabled(id) ? it->second.power() : 0.f;
+	return IsEnabled(id) ? MOD_ID_CALL(it->first, it->second.power()) : 0.f;
 }
 
 const unordered_map<string, pair<int, int>>& OrganizationFactory::GetRequirements(const string& id) const {
 	static const unordered_map<string, pair<int, int>> empty;
 	auto it = registries.find(id);
 	if (!IsEnabled(id) || !it->second.requirements) return empty;
-	return it->second.requirements();
+	return MOD_ID_CALL(it->first, it->second.requirements());
 }
 
 vector<pair<string, OrganizationMod*>> OrganizationFactory::GetLiveInstances() const {

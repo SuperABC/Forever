@@ -1,5 +1,7 @@
 #include "traffic_save.h"
 
+#include "common/error.h"
+
 #include "traffic/traffic.h"
 #include "player/vehicle_asset.h"
 #include "populace/populace.h"
@@ -327,7 +329,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 				JsonReader reader;
 				if (reader.Parse(stateText, root, false)) {
 					JsonStateReader stateReader(root, stateVersion);
-					station->mod->LoadState(stateReader);
+					MOD_CALL(station->mod, station->mod->LoadState(stateReader));
 				}
 			}
 			traffic->stations[name] = station;
@@ -433,7 +435,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 				JsonReader reader;
 				if (reader.Parse(stateText, root, false)) {
 					JsonStateReader stateReader(root, stateVersion);
-					vehicle->mod->LoadState(stateReader);
+					MOD_CALL(vehicle->mod, vehicle->mod->LoadState(stateReader));
 				}
 			}
 			vehicle->options = options;
@@ -516,12 +518,8 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 		traffic->restoredFromSave = true;
 		return traffic;
 	}
-	catch (const exception& e) {
-		error = string("traffic load failed: ") + e.what();
-		return nullptr;
-	}
 	catch (...) {
-		error = "traffic load failed with an unknown error";
+		error = "traffic load failed: " + DescribeCurrentException().ToLine();
 		return nullptr;
 	}
 }

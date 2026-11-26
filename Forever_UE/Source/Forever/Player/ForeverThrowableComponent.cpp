@@ -1,5 +1,7 @@
 #include "Player/ForeverThrowableComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/AssetElement.h"
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverAssetFrameworkComponent.h"
@@ -196,6 +198,7 @@ void UForeverThrowableComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverThrowableComponent::TickComponent")
 
 	AForeverCharacter* character = GetCharacter();
 	if (!character || !IsActive() || !character->IsAiming()) {
@@ -203,6 +206,7 @@ void UForeverThrowableComponent::TickComponent(float DeltaTime, ELevelTick TickT
 		return;
 	}
 	UpdatePreview();
+	CORE_GUARD_END
 }
 
 void UForeverThrowableComponent::UpdatePreview()

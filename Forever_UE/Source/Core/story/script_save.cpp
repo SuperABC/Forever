@@ -1,5 +1,7 @@
 #include "script_save.h"
 
+#include "common/error.h"
+
 #include "story/script.h"
 #include "story/story.h"
 #include "map/map.h"
@@ -233,7 +235,7 @@ bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* popul
 			JsonReader reader;
 			if (reader.Parse(stateText, root, false)) {
 				JsonStateReader stateReader(root, stateVersion);
-				script->mod->LoadState(stateReader);
+				MOD_CALL(script->mod, script->mod->LoadState(stateReader));
 			}
 		}
 		for (auto& [name, premise] : premises) {

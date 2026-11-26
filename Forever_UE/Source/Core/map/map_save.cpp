@@ -1,5 +1,7 @@
 #include "map_save.h"
 
+#include "common/error.h"
+
 #include "map/polygon_util.h"
 #include "common/json.h"
 #include "common/utility.h"
@@ -1856,12 +1858,8 @@ Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
 		debugf(DebugLevel::Log, "%s.\n", lastReport.c_str());
 		return map;
 	}
-	catch (const exception& e) {
-		error = string("map load failed: ") + e.what();
-		return nullptr;
-	}
 	catch (...) {
-		error = "map load failed with an unknown error";
+		error = "map load failed: " + DescribeCurrentException().ToLine();
 		return nullptr;
 	}
 }

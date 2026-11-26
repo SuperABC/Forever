@@ -1,5 +1,7 @@
 #include "config.h"
 
+#include "common/error.h"
+
 #include "json.h"
 
 #include "loader.h"
@@ -22,6 +24,7 @@ unordered_map<string, vector<string>> Config::resourcePaths = {};
 unordered_map<string, vector<string>> Config::pluginPaths = {};
 unordered_map<string, vector<string>> Config::pakPaths = {};
 string Config::mainStoryScriptModName = "";
+string Config::lastReadError;
 bool Config::hasGlobalSeed = false;
 unsigned long long Config::globalSeed = 0;
 bool Config::hasMapSize = false;
@@ -134,7 +137,7 @@ bool Config::CheckFileFormat(const filesystem::path& filePath, const string& for
 	return ext == format;
 }
 
-void Config::ReadConfig(const string& path) {
+void Config::ClearState() {
 	dllPaths.clear();
 	layoutPaths.clear();
 	resourcePaths.clear();
@@ -150,6 +153,24 @@ void Config::ReadConfig(const string& path) {
 	dllConceptIds.clear();
 	modDependences.clear();
 	storyScriptPaths.clear();
+}
+
+void Config::ReadConfig(const string& path) {
+	// 读到一半出错(例如dll_paths里混进了不是字符串的元素)不能留下半份配置：整份清空，和"文件打不开"一样留空状态，
+	// 调用方本来就按"读完是空的"判定配置无效。
+	lastReadError.clear();
+	ErrorReport report;
+	// 文件scope要放在GuardCall里面：异常得穿过它才会被记进报告，放在外面的话异常在到它之前就被接住了。
+	if (GuardCall([&] { ErrorScope fileScope(kErrorScopeFile, path); ReadConfigFile(path); }, report)) return;
+	ClearState();
+	lastReadError = report.ToLine();
+	debugf(DebugLevel::Error, "[Config] failed to read %s, the config is left empty: %s\n", path.c_str(), lastReadError.c_str());
+}
+
+const string& Config::GetLastReadError() { return lastReadError; }
+
+void Config::ReadConfigFile(const string& path) {
+	ClearState();
 
 	ifstream fin(path);
 	if (!fin.is_open()) {
@@ -417,8 +438,14 @@ void Config::AddResourcePath(const string& rawPath) {
 	vector<string> plugins;
 	vector<string> paks;
 	vector<string> layouts;
-	for (const auto& entry : filesystem::recursive_directory_iterator(dir)) {
-		string full = ToForwardSlashes(filesystem::absolute(entry.path()).string());
+	// skip_permission_denied+error_code：递归到无权限子目录时跳过，而不是抛filesystem_error中断整次扫描(和AddDllPath一样)。
+	error_code dirIterError;
+	for (const auto& entry : filesystem::recursive_directory_iterator(
+			dir, filesystem::directory_options::skip_permission_denied, dirIterError)) {
+		error_code absoluteError;
+		const filesystem::path absolutePath = filesystem::absolute(entry.path(), absoluteError);
+		if (absoluteError) continue;
+		string full = ToForwardSlashes(absolutePath.string());
 		if (CheckFileFormat(entry.path(), ".script")) {
 			scripts.push_back(full);
 		} else if (CheckFileFormat(entry.path(), ".uplugin")) {

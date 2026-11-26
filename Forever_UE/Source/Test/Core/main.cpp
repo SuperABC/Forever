@@ -59,7 +59,7 @@ namespace {
 			else options.configPath = arg;
 		}
 		if (options.configPath.empty()) {
-			fprintf(stderr, "usage: CoreTest <config.json> [--suite random,mods,lint,world,econ,save,perform,route,green,presets,plateau,polit,transit,terrain,unload|all] [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]\n");
+			fprintf(stderr, "usage: CoreTest <config.json> [--suite random,mods,lint,world,econ,save,perform,route,green,presets,plateau,polit,transit,terrain,unload,fault|all] [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]\n");
 			return false;
 		}
 		return true;
@@ -100,6 +100,7 @@ static int RealMain(int argc, char** argv) {
 		{ "transit", RunTransitSuite },
 		{ "terrain", RunTerrainSuite },
 		{ "unload", RunUnloadSuite },
+		{ "fault", RunFaultSuite },
 	};
 
 	int totalFailures = 0, totalPasses = 0;

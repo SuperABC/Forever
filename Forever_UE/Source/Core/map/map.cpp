@@ -1,5 +1,7 @@
 #include "map.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 #include "common/utility.h"
 #include "map/polygon_util.h"
@@ -183,10 +185,10 @@ void Map::InitRoadnet() {
 	// 属于致命配置错误，直接抛异常(和Populace::InitNames同一个处理)。
 	const string activeId = Config::GetUniqueConceptMod("Roadnets");
 	if (activeId.empty()) {
-		THROW_EXCEPTION(RuntimeException, "No roadnet mod enabled.\n");
+		THROW_EXCEPTION(DataException, "No roadnet mod enabled.\n");
 	}
 	if (!roadnetFactory.CheckRegistered(activeId)) {
-		THROW_EXCEPTION(RuntimeException, "Roadnet mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
+		THROW_EXCEPTION(DataException, "Roadnet mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
 	}
 
 	roadnet = new Roadnet(&roadnetFactory, activeId);
@@ -1037,7 +1039,7 @@ void Map::InitVegetation() {
 		BuildingMod* mod = building ? building->GetMod() : nullptr;
 		if (!mod) continue;
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-		mod->LayoutTrees(*building, building->GetBoundaryRoads());
+		MOD_CALL(mod, mod->LayoutTrees(*building, building->GetBoundaryRoads()));
 		Building* host = building;
 		TreeFrame frame;
 		frame.toLocal = [host](const PointParams& p) { return host->QuadNorthPointToLocal(p); };
@@ -1051,7 +1053,7 @@ void Map::InitVegetation() {
 		ZoneMod* mod = zone ? zone->GetMod() : nullptr;
 		if (!mod) continue;
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-		mod->LayoutTrees(zone->GetDirection(), *zone, zone->GetBoundaryRoads());
+		MOD_CALL(mod, mod->LayoutTrees(zone->GetDirection(), *zone, zone->GetBoundaryRoads()));
 		Zone* host = zone;
 		TreeFrame frame;
 		frame.toLocal = [host](const PointParams& p) { return host->NorthPointToLocal(p); };

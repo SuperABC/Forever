@@ -842,7 +842,7 @@ istream& operator>>(istream& sin, JsonValue& root) {
 	JsonReader reader;
 	bool ok = reader.Parse(sin, root, true);
 	if (!ok) {
-		THROW_EXCEPTION(JsonFormatException, reader.GetErrorMessages());
+		THROW_EXCEPTION(DataException, reader.GetErrorMessages());
 	}
 	return sin;
 }
@@ -1096,7 +1096,7 @@ string JsonValue::AsString() const {
 	case DATA_DOUBLE:
 		return to_string(value.valueDouble);
 	default:
-		THROW_EXCEPTION(JsonFormatException, "Type is not convertible to string");
+		THROW_EXCEPTION(DataException, "Type is not convertible to string");
 	}
 }
 
@@ -1115,7 +1115,7 @@ int JsonValue::AsInt() const {
 	default:
 		break;
 	}
-	THROW_EXCEPTION(JsonFormatException, "Value is not convertible to Int.");
+	THROW_EXCEPTION(DataException, "Value is not convertible to Int.");
 }
 
 unsigned int JsonValue::AsUInt() const {
@@ -1133,7 +1133,7 @@ unsigned int JsonValue::AsUInt() const {
 	default:
 		break;
 	}
-	THROW_EXCEPTION(JsonFormatException, "Value is not convertible to uInt.");
+	THROW_EXCEPTION(DataException, "Value is not convertible to uInt.");
 }
 
 double JsonValue::AsDouble() const {
@@ -1151,7 +1151,7 @@ double JsonValue::AsDouble() const {
 	default:
 		break;
 	}
-	THROW_EXCEPTION(JsonFormatException, "Value is not convertible to double.");
+	THROW_EXCEPTION(DataException, "Value is not convertible to double.");
 }
 
 float JsonValue::AsFloat() const { return float(AsDouble()); }
@@ -1171,7 +1171,7 @@ bool JsonValue::AsBool() const {
 	default:
 		break;
 	}
-	THROW_EXCEPTION(JsonFormatException, "Value is not convertible to bool.");
+	THROW_EXCEPTION(DataException, "Value is not convertible to bool.");
 }
 
 bool JsonValue::ConvertibleTo(DataType other) const {

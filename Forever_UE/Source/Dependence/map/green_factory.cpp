@@ -1,5 +1,7 @@
 #include "green_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 
@@ -18,7 +20,7 @@ GreenMod* GreenFactory::CreateGreen(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	GreenMod* instance = it->second.creator(argsIt->second);
+	GreenMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -80,14 +82,14 @@ float GreenFactory::GetPowerFree(const string& id) const {
 	auto it = registries.find(id);
 	if (it == registries.end() || !IsEnabled(id) || !it->second.powerFree) return 0.f;
 	RandomScope scope(RandomRegistry::GetModStream(id));
-	return it->second.powerFree();
+	return MOD_ID_CALL(it->first, it->second.powerFree());
 }
 
 float GreenFactory::GetPowerLinked(const string& id) const {
 	auto it = registries.find(id);
 	if (it == registries.end() || !IsEnabled(id) || !it->second.powerLinked) return 0.f;
 	RandomScope scope(RandomRegistry::GetModStream(id));
-	return it->second.powerLinked();
+	return MOD_ID_CALL(it->first, it->second.powerLinked());
 }
 
 vector<pair<string, GreenMod*>> GreenFactory::GetLiveInstances() const {

@@ -55,8 +55,8 @@
 
 ## 依赖关系
 
-- 依赖：`error.h`（`THROW_EXCEPTION`，`Time`字段校验失败时抛`OutOfRangeException`/
-  `InvalidArgumentException`）。`.cpp`只用标准库。
+- 依赖：`error.h`（`THROW_EXCEPTION`，`Time`字段校验失败、时间字符串解析不了时抛`DataException`；
+  不想抛异常的调用方用`Time::TryParse`、`TryParseInt`、`TryParseDouble`）。`.cpp`只用标准库。
 - 被谁依赖：`story/expression.h`（`ValueType`）、`map/general_geometry.h`（`OBJECT_HOLDER`宏、
   `GetRandom`）、Core层各domain代码（`Time`常被城市模拟里的日程/日历系统使用）。
 

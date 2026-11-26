@@ -99,6 +99,10 @@ void UFadeSubsystem::OpenWorldLevel() {
 	}));
 }
 
+void UFadeSubsystem::Dismiss() {
+	RemoveFromViewport();
+}
+
 void UFadeSubsystem::HandleFinished() {
 	RemoveFromViewport();
 }

@@ -1,5 +1,7 @@
 #include "society/organization.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 #include "story/script_factory.h"
 
@@ -55,8 +57,8 @@ void Organization::DesignJobs(bool reset) {
 		if (!component) continue;
 		for (Room* room : component->GetRooms()) {
 			if (!room || !room->IsWorkspace()) continue;
-			mod->DesignJobsForRoom(component->GetType(), component->GetName(),
-				room->GetType(), room->GetName(), room->WorkspaceCapacity(), reset && first);
+			MOD_CALL(mod, mod->DesignJobsForRoom(component->GetType(), component->GetName(),
+				room->GetType(), room->GetName(), room->WorkspaceCapacity(), reset && first));
 			first = false;
 		}
 	}
@@ -275,7 +277,7 @@ Script* Organization::GetScript() const { return script; }
 OrganizationMod* Organization::GetMod() const { return mod; }
 
 void Organization::DailyPlan(const Time& currentTime, PostHandle* post) {
-	if (mod) mod->DailyPlan(currentTime, post);
+	if (mod) MOD_CALL(mod, mod->DailyPlan(currentTime, post));
 }
 
 const unordered_map<string, Time>& Organization::GetPlans() const {
@@ -285,6 +287,6 @@ const unordered_map<string, Time>& Organization::GetPlans() const {
 
 vector<Change*> Organization::ExecNode(const string& node, PostHandle* post) {
 	if (!mod) return {};
-	mod->ExecNode(node, post);
+	MOD_CALL(mod, mod->ExecNode(node, post));
 	return mod->changes;
 }

@@ -1,5 +1,7 @@
 #include "society/job.h"
 
+#include "common/error.h"
+
 #include "story/script.h"
 #include "story/script_factory.h"
 #include "common/config.h"
@@ -12,7 +14,7 @@ Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Ro
 	factory(factory), position(position) {
 	mod = factory->CreateJob(id);
 	// scriptModName/milestoneNames由mod的SetProperty()填好，都空则没有脚本，见MakeScript。
-	if (mod) mod->SetProperty();
+	if (mod) MOD_CALL(mod, mod->SetProperty());
 	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
 	if (script) {
 		script->SetOwner(ScriptOwnerKind::Job, this); // 所属组织由Organization挂上岗位时补(SetOwnerParent)
@@ -54,7 +56,7 @@ bool Job::IsOpen() const { return !closed; }
 void Job::SetClosed(bool value) { closed = value; }
 
 void Job::DailyPlan(const Time& currentTime, PostHandle* post) {
-	if (mod) mod->DailyPlan(currentTime, post);
+	if (mod) MOD_CALL(mod, mod->DailyPlan(currentTime, post));
 }
 
 const unordered_map<string, Time>& Job::GetPlans() const {
@@ -65,6 +67,6 @@ const unordered_map<string, Time>& Job::GetPlans() const {
 vector<Change*> Job::ExecNode(const string& node, PostHandle* post) {
 	if (!mod) return {};
 	mod->occupantName = occupant ? occupant->GetName() : string();
-	mod->ExecNode(node, post);
+	MOD_CALL(mod, mod->ExecNode(node, post));
 	return mod->changes; // 只复制指针值，所有权留在mod自己身上
 }

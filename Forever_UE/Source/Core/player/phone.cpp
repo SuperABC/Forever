@@ -1,5 +1,9 @@
 #include "phone.h"
 
+#include "common/utility.h"
+
+#include "common/error.h"
+
 #include "common/registry.h"
 #include "common/json.h"
 
@@ -55,11 +59,13 @@ void Phone::BuildAppList() {
 		appTypes.push_back(id);
 		// 桌面图标下显示App的GetName()：临时建一个实例取名字(不Init)，随即销毁。
 		string name = id;
-		try {
+		ErrorReport report;
+		if (!GuardCall([&] {
 			App probe(&Registry::Get().GetAppFactory(), id);
 			name = probe.GetName();
+		}, report)) {
+			debugf(DebugLevel::Warning, "Phone: cannot read the name of app %s, showing its id instead: %s\n", id.c_str(), report.ToLine().c_str());
 		}
-		catch (...) {}
 		appNames.push_back(name);
 	}
 }

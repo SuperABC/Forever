@@ -1,5 +1,7 @@
 #include "polit/polit.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 #include "common/registry.h"
 #include "map/map.h"
@@ -92,7 +94,7 @@ void Polit::Init(PostHandle& post, const Time& now) {
 		for (int attempt = 1; attempt <= kMeetingRoomAttempts; attempt++) {
 			{
 				RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-				mod->ChooseMeetingRoom(&post);
+				MOD_CALL(mod, mod->ChooseMeetingRoom(&post));
 			}
 			string address = mod->meetingAddress;
 			if (address.empty()) {
@@ -171,7 +173,7 @@ void Polit::AssignPowers(Party& party, const Time& now) {
 
 	{
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-		mod->AssignPowers(context);
+		MOD_CALL(mod, mod->AssignPowers(context));
 	}
 
 	// 复制mod的输出并校验：姓名必须是党员，权力id必须已注册，重复的(权力,人)忽略。

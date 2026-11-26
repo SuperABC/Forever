@@ -1,5 +1,7 @@
 #include "industry/product.h"
 
+#include "common/error.h"
+
 using namespace std;
 
 Product::Product(ProductFactory* factory, const string& id) :
@@ -8,7 +10,7 @@ Product::Product(ProductFactory* factory, const string& id) :
 	if (!mod) return;
 
 	type = mod->GetType();
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 	categories = mod->categories;
 	batchSize = mod->batchSize;
 	ingredients = mod->ingredients;

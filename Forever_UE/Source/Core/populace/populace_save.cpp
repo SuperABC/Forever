@@ -1,5 +1,7 @@
 #include "populace_save.h"
 
+#include "common/error.h"
+
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "populace/experience.h"
@@ -493,13 +495,8 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 		}
 		return guard.release();
 	}
-	catch (const exception& e) {
-		error = string("populace load failed: ") + e.what();
-		outPendingOrganizations.clear();
-		return nullptr;
-	}
 	catch (...) {
-		error = "populace load failed with an unknown error";
+		error = "populace load failed: " + DescribeCurrentException().ToLine();
 		outPendingOrganizations.clear();
 		return nullptr;
 	}

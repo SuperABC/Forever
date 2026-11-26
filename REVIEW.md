@@ -1,15 +1,15 @@
 # 全项目 Review（2026-11-25）
 
-初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮到第十四轮也已入库（`021e707`、`3a402f1`）；第十五轮（D9）、第十六轮（G1/G3）和第十七轮（C4/C7/C8）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
+初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮到第十七轮也已入库（`021e707`、`3a402f1`、`de8e1f9`）；第十八轮（异常系统重构，含 C9）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
 
 **怎么读这份清单**
 
-- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C4、C5、C6、C7、C8、C10、D1、D3、D4、D5、D6、D7、D8、D9、D10、F2、F3、G1、G3 和整个 E 节（E1–E4）已修并删掉（D9 里 `VehicleMod::drivable`/`capacity` 你决定留着），B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
+- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C4、C5、C6、C7、C8、C9、C10、D1、D3、D4、D5、D6、D7、D8、D9、D10、F2、F3、G1、G3 和整个 E 节（E1–E4）已修并删掉（D9 里 `VehicleMod::drivable`/`capacity` 你决定留着），B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
 - 可信度：
   - **已确认**：读过对应代码，行号核对过。
   - **潜伏**：代码确实有问题，但当前没有调用路径会触发。
   - **推测**：有依据但没有实际复现/回退验证。
-- 行号对应第十七轮结束时的工作区。
+- 行号对应第十八轮结束时的工作区。
 
 **覆盖范围**
 
@@ -17,6 +17,77 @@
 
 - mod 感知（A、B）：对 Core/Dependence/Forever 三层的字符串字面量和标识符做了全量扫描，再逐处读上下文核对，这部分比较全。
 - 找 bug（C）：重点精读 + 模式扫描，不是逐行通读。精读过的：`Core/common` 全部、`traffic.cpp`/`vehicle.cpp`、`room.cpp`、`economy.cpp`、`market.cpp`、`election.cpp`、`script.cpp` 的非词汇表部分、`map.cpp` 的前 1200 行和寻路部分、`ForeverFrameworkActor.cpp` 的前 1200 行、`ForeverModSubsystem.cpp`。Basic 各 mod、大部分 UI、存档编解码、`building.cpp`、`route.cpp` 主体只做了扫描，没有精读。
+
+---
+
+## 第十八轮：异常系统重构（含 C9）
+
+按之前给你看过的设计全部实现了：三类异常、三层接法、UE 层回菜单。规则写进了 `CONVENTIONS.md` 第 14 节，细节在 `Dependence/common/error.md` 和 `Forever/Framework/CoreGuard.md`。
+
+**一、异常类：10 个换成 3 个**
+
+- `DataException`（数据写错了）、`ModException`（mod 的问题）、`InternalException`（程序自己的 bug）。原来的 10 个类全部删掉。
+- 140 处抛出点逐个归了类：数据错误 109 处、内部错误 25 处、mod 错误 6 处。大部分是数据错误，这符合实际——Core 抛异常基本都是因为读到了坏的脚本、layout 或配置。
+- 不是这三类的异常（mod 抛的 `std::runtime_error` 之类）：抛出时在某个 mod 里就算 mod 错误，否则算内部错误。
+
+**二、出错时知道"当时在做什么"**
+
+- 新增 `ErrorScope`：进入一段有名字的工作时放一个，正常返回什么都不做；异常穿过它时把自己记进报告。
+- Core 里调 mod 的 61 处改成了 `MOD_CALL(mod, mod->Xxx(...))`，23 个工厂里调 mod 函数指针的 35 处改成了 `MOD_ID_CALL`。所以任何从 mod 里出来的异常，报告里都有 mod 的 id，不用在每个调用点写 try/catch。
+- 读脚本、读 layout、读 config、世界生成的每个阶段、每帧各个域的 Tick 都登记了。
+- 一份报告长这样：类别、消息、抛出位置（文件:行）、当时在哪个阶段 > 哪个 mod > 哪个文件。
+
+**三、三层接法**
+
+1. **可以整体跳过的操作**（只接数据错误，打警告，跳过这一个）：一条脚本指令、一个里程碑的触发条件、一段对话、一次 `start_puzzle`。
+2. **有失败返回值的加载**（接住变成错误文字）：存档各段、`Config::ReadConfig`、菜单里的存档/读档/开始游戏/读写配置。
+3. **会话边界**（UE 层，新文件 `CoreGuard`）：接住后这一局结束，回菜单并在菜单上显示原因。世界生成失败以前是直接退出游戏，现在也走这条路。
+
+**四、UE 层包了哪些入口**
+
+- 26 个文件、91 处。用的是两行宏 `CORE_GUARD_BEGIN` / `CORE_GUARD_END`，不用改函数结构。
+- `AForeverFrameworkActor` 的 `BeginPlay`、`Tick`、`EndPlay`。
+- 所有调 Core 的文件里的 Tick 一族（24 处）。
+- `UForeverStoryFrameworkComponent` 的全部函数（52 处）：它是脚本事件的总入口。
+- `UPuzzleWidget`、`UPhoneWidget`：它们每帧直接跑 mod 的界面代码。
+- 线程池里的行人寻路任务。
+- 保护可以嵌套，只有最外层接异常。里层如果接了，外层会带着半更新的世界把剩下的代码跑完。
+
+**五、顺手清掉的**
+
+- C9 的三处全部解决：世界生成只接 `ExceptionBase`、`AddResourcePath` 扫描目录会抛、`ReadConfig` 读到类型不对的元素会崩。
+- 空的 `catch {}` 从 8 处减到 1 处，剩下的那处在 `ErrorScope` 自己的析构函数里（异常展开途中不能再抛，有注释）。原来的 8 处里有 6 处是"用 `stoi`/`stod` 试着解析，抛了就算了"，换成了新加的 `TryParseInt`/`TryParseDouble`/`Time::TryParse`（不抛异常，语义和原来逐个输入一致，有测试）。
+- `ExceptionBase::GetDetailedInfo()` 删掉了。它是一个按值返回字符串的虚函数，宿主对 mod 抛出的异常调它，就是 C8 那种"一侧分配、另一侧释放"。
+
+**六、测试**
+
+- CoreTest 新增 `fault` 套件，74 项，逐条验证上面的规则：三类异常的归类、上下文的顺序和过期清理、只接数据错误的那层、坏的 config/脚本/layout/表达式。
+- `Forever_Mod/Test` 新增一个故障注入用的小游戏 mod `puzzle_fault`（默认不启用），能按参数在 mod dll 里抛三种异常。测试确认宿主都能接住、归类正确、指名到这个 mod，并且之后世界仍能销毁、mod dll 仍能全部卸掉。
+- 这次重构不应该改变任何模拟结果：econ 的 4 份摘要和上一轮逐字节相同，polit 的指标也没变。
+
+**需要你知道的**
+
+- **UE 层的回菜单流程我没有实际触发过。** 接住异常 → 撤掉黑屏 → 切回菜单 → 菜单显示原因，这四步只做了编译验证。要验证它，需要在编辑器里用一个会出错的脚本或 mod 跑一次。最简单的办法：在 `config.json` 的 `puzzle_mods` 里启用 `puzzle_fault`，脚本里 `start_puzzle` 它并把参数设成 `std`。
+- **输入回调、UI 按钮回调、碰撞回调没有逐个包。** 它们进脚本都经过 `UForeverStoryFrameworkComponent`（已全部包住），直接调的 Core 接口基本是不抛异常的取值函数。以后新写"引擎直接调用、里面又调脚本/表达式/layout/mod"的函数，要自己加那两行宏，这条写进了 `CONVENTIONS.md`。
+- **CoreTest 验证不了宿主和 mod 分配器不同的问题。** CoreTest 是普通程序，和 mod 用的是同一个堆；只有在 UE 里两边的分配器才不同。所以"mod 抛的异常消息完整传到宿主"这条测试，在 UE 里是否同样安全，靠的是代码规则（只读不拷贝、不按值接、不保存异常对象），不是测试。
+- **接不住的还是接不住**：空指针解引用、除零、栈溢出不是 C++ 异常。
+- 接住异常后世界是半更新的，销毁它时（各域的析构函数）理论上仍可能出问题。我没有办法系统地验证每一种中途失败后的销毁。
+- `puzzle_fault` 会出现在游戏的 mod 面板里（因为 `Forever_Mod/Test` 的 dll 在 `dll_paths` 里），默认是不勾选的。
+- C9 原文第三条说"数组里出现非字符串元素时会抛"，不准确：数字会被转成字符串，只有对象和数组才会抛。
+- `CONVENTIONS.md` 第 4 节原来说各 dll"各自静态链接一份 CRT"，和工程设置不符（12 个工程全是 `/MD`）。随后按你的要求改成了实际情况：UE 模块把全局 `new`/`delete` 换成了引擎的 `FMemory`，mod dll 走 C 运行时的堆，`Dependence.lib` 是静态库所以同一份源码在两边各有一份编译产物。这三点我都核对过（12 个工程文件、引擎源码 `ModuleBoilerplate.h` 和 `PerModuleInline.inl`），和 `general_geometry.md`、`change.md` 里早先记下的两次崩溃现场一致。几条规则本身没有改。
+- `Tools` 下单独编译的 RoadnetViz、JunctionTest、ModHost、ModWeb 没有重编。
+
+**我中途出过的两个错（都已修）**
+
+- 批量加 `MOD_CALL` 的脚本有个缺陷，把 `station.cpp` 里一行代码和下一行注释吞掉了一段。对照原文件逐处核对后只有这一处，已恢复。
+- `ReadConfig` 里登记文件的那个 `ErrorScope` 一开始放在了接异常的范围外面，结果报告里没有文件名。是 `fault` 套件查出来的，已挪进去，并把这条注意事项写进了 `error.md`。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑 1430 项通过；扫两个目录下全部 mod 1477 项通过。（比上一轮各多 9 项，是新加的 `puzzle_fault`。）
+- CoreTest quick：7448 通过、8 失败（都是 polit，即 G2）。报告在 `Forever_UE/Saved/TestReports/review_20261126_ex/core`。
+- 没有进 UE 编辑器验证。
 
 ---
 
@@ -716,11 +787,6 @@ CoreTest quick 从 22 项失败降到 8 项，剩下的 8 项全是 G2（polit�
 
 ## C. Bug
 
-### - [ ] C9 异常处理不全（已确认）
-- [ForeverFrameworkActor.cpp:291](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:291)：`RunGenerationStep` 只 `catch (const ExceptionBase&)`。`std::out_of_range`、`std::bad_alloc`、`stod` 的异常等标准库异常会直接崩，而不是走"打日志退出"。
-- [config.cpp:415](Forever_UE/Source/Core/common/config.cpp:415)：`AddResourcePath` 的 `recursive_directory_iterator` 没带 `error_code`，遇到无权限子目录抛 `filesystem_error`（`AddDllPath` 那边是带了的）。
-- `Config::ReadConfig`：`dll_paths` 等数组里出现非字符串元素时 `AsString()` 抛 `JsonFormatException`，没人接，启动即崩。
-
 ### - [ ] C11 小问题（已确认，优先级低）
 - [room.cpp:369](Forever_UE/Source/Core/map/room.cpp:369)：`Room::AddAsset` 用 `insert_or_assign`，同名资产会被覆盖并泄漏。资产名目前唯一，所以没触发。
 - [config.cpp:196](Forever_UE/Source/Core/common/config.cpp:196)：`seed` 写成负数或超大浮点数时，`double` 转 `unsigned long long` 是未定义行为。
@@ -756,7 +822,7 @@ CoreTest quick 从 22 项失败降到 8 项，剩下的 8 项全是 G2（polit�
 
 ## G. 现有测试失败（不是这几轮改动引起的）
 
-CoreTest quick（`--suite all --quick`）现在只剩 8 项失败，全在 polit 套件。最新报告在 `Forever_UE/Saved/TestReports/review_20261126_c478b/core`。
+CoreTest quick（`--suite all --quick`）现在只剩 8 项失败，全在 polit 套件。最新报告在 `Forever_UE/Saved/TestReports/review_20261126_ex/core`。
 
 前五轮是 20 项；第六轮起因为 `small.roadnet` 改了地图变成 22 项；第十六轮解决了 route 的 12 项（G1）和 perform 的 2 项（G3）。
 

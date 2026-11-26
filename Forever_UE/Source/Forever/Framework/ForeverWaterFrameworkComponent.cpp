@@ -1,5 +1,7 @@
 #include "Framework/ForeverWaterFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/PostProcessVolume.h"
 #include "Kismet/GameplayStatics.h"
@@ -114,12 +116,14 @@ void UForeverWaterFrameworkComponent::GenerateWater(Map* inMap) {
 void UForeverWaterFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverWaterFrameworkComponent::TickComponent")
 
 	if (!map) return;
 	if (const AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(GetOwner())) {
 		if (!frameworkActor->IsInitialGenerationDone()) return;
 	}
 	UpdateWaterParameters();
+	CORE_GUARD_END
 }
 
 void UForeverWaterFrameworkComponent::UpdateWaterParameters() {

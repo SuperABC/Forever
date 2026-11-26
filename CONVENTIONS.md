@@ -62,7 +62,24 @@
 
 ## 4. 跨模块(跨DLL) `new`/`delete` 安全
 
-整个项目靠加载大量DLL(主程序 + Dependence/Core/Basic三层 + 各Mod)实现实际逻辑,跨DLL边界的内存分配/释放处理不当会导致堆错乱、崩溃。这类问题的根本原因都是同一个:**C++没有跨DLL统一的全局`operator new`/`delete`,不同DLL各自静态链接一份CRT,对同一块内存,分配和释放如果发生在不同DLL编译的代码里,两边用的分配器状态不一致,直接堆损坏**。具体落地手法:
+整个项目靠加载大量DLL(主程序 + Dependence/Core/Basic三层 + 各Mod)实现实际逻辑,跨DLL边界的内存分配/释放处理不当会导致堆错乱、崩溃。这类问题的根本原因都是同一个:**宿主和mod用的不是同一个内存分配器,而同一份源码在两边各有一份编译产物**。
+
+具体是这三件事叠在一起:
+
+- **UE模块的`new`/`delete`不走C运行时。** `UnrealEditor-Forever.dll`(打包版是游戏exe)是UE模块,UE给每个模块都换掉了全局`operator new`/`delete`,走引擎自己的`FMemory`(宏`REPLACEMENT_OPERATOR_NEW_AND_DELETE`,定义在引擎的`Modules/Boilerplate/ModuleBoilerplate.h`;每个模块经`HAL/PerModuleInline.inl`各带上一份,崩溃调用栈里看到的就是这个文件)。`Core.lib`和`Dependence.lib`是静态链接进这个模块的,所以Core的代码在游戏里分配内存也走`FMemory`。
+- **mod dll的`new`/`delete`走C运行时的堆。** `Basic.dll`和`Forever_Mod/*`的dll不是UE模块,没有被换掉。
+- **`Dependence.lib`是静态库,链接进谁就在谁那里多一份编译产物。** 同一个函数(比如`Lot`的某个非虚方法、`JsonValue::AsString`)在宿主里有一份,在每个mod dll里又各有一份;谁调用就执行谁那一份,用的也是谁的分配器。
+
+所以对同一块内存,分配和释放如果发生在两侧各自编译的代码里,就是`FMemory`去释放C运行时分配的内存(或者反过来),直接堆损坏。
+
+各工程的运行库设置都是`/MD`(动态链接同一个C运行时)。**这不解决问题**:共用运行时只是让mod和mod之间、mod和普通exe之间用上了同一个堆,UE那一侧仍然是`FMemory`。由此有几点要记住:
+
+- **只有在UE里才会崩**(编辑器和打包版都会)。CoreTest、ModTest、`Tools`下的程序是普通exe,和mod用的是同一个C运行时的堆,这类错误在它们里面不会暴露。**测试通过不能说明跨DLL的分配是安全的**,只能靠下面的规则在写代码时守住。
+- **短字符串不暴露问题。** `std::string`不超过15个字符时存在对象内部、不分配,超过了才上堆。"一直好好的,改了个名字就崩"是这类问题的典型表现(`"mountain"`改成`"terrain_mountain"`那次就是)。
+- **规则按"任何两个模块的分配器都可能不同"来守**,不要依赖"mod之间其实是同一个堆":调试版(`/MDd`)和发布版就是两个堆(`Config::AddDllPath`因此跳过调试版dll),mod作者也可能用别的工具链编译。
+- **怎么认出来。** 两种表现:①退出或关卡销毁时崩,调用栈是某个Core层的析构函数 → `std::vector<T>::_Tidy()` / `basic_string::_Tidy_deallocate` → `operator delete` → `HAL/PerModuleInline.inl`;②一碰到就崩且`Saved/Crashes`里没有崩溃报告(`STATUS_HEAP_CORRUPTION` `0xc0000374`绕过了UE的异常处理),要到Windows的应用程序事件日志里看。
+
+具体落地手法:
 
 - **跨DLL暴露的类,所有会被另一侧DLL调用的公开方法(含析构函数)必须是`virtual`,即使当前没有任何派生类覅要重写**。原因:非虚方法在调用方(如Mod DLL)里会被**静态绑定**到调用方自己链接的那份实现代码,即使`this`指针指向的对象是宿主(UE进程)`new`出来的——这份被静态绑定的实现如果在内部做了任何涉及内存分配/释放的操作(往`unordered_map`插入节点、`std::string`扩容等),实际使用的是调用方自己的CRT分配器,但对象本身的生命周期(构造/析构)可能发生在宿主那一侧,两者对不上。标成`virtual`后,调用会通过对象自带的vtable指针跳转,而vtable是宿主构造对象时装配的,永远指向宿主自己编译的那份实现——分配和释放因此总落在同一侧。这个坑在`<Concept>Factory`上实测复现过:`RegisterX`等方法是非虚函数时,`ScriptFactory`析构时崩溃在`std::list::~list()`(`unordered_map`内部节点链表的析构),标`virtual`后问题消失。
 - **跨DLL传递的对象,销毁必须用分配它的那个模块提供的销毁函数(deleter),不能由另一侧直接`delete`**。`<Concept>Factory::Destroy<Concept>`的实现方式是示范:用`liveInstances`(实例指针→注册id的映射)反查该实例是哪个mod注册的,再调用该mod注册时一并提供的`deleter`函数指针释放,Factory自己永远不对一个由Mod DLL `new`出来的对象调`delete`。
@@ -163,3 +180,43 @@ mod的UE内容(打包版的`.pak`、编辑器里挂载的Content目录)挂载之
 ### 对mod作者的要求
 
 mod不能留下会在卸载后被调用的东西:不开线程、不向系统或别的库注册回调。mod里的`static`状态每局都会重置(dll是重新加载的),不要指望它跨局保留。这两条也写在`Forever_Mod/README.md`里。
+
+## 14. 异常:抛哪一类、在哪接、接住之后怎么办
+
+细节见`Source/Dependence/common/error.md`(异常体系本身)和`Source/Forever/Framework/CoreGuard.md`(UE那一层)。这里只列规则。
+
+### 抛
+
+- 只有三类,按"接住之后该怎么办"分:`DataException`(外部数据写错了:config、layout、脚本、存档、没启用的mod id)、`ModException`(mod交给Core的东西自相矛盾)、`InternalException`(程序自己的不变量被破坏)。拿不准时:改数据文件能修好的是Data,要改mod的C++的是Mod,要改Core/Dependence的是Internal。
+- 用`THROW_EXCEPTION(类, 消息)`抛,不要直接`throw`。
+- 析构函数里不抛;排序比较器这类被标准库反复调用的回调里不抛。
+- 不用异常做流程控制。"试着解析一下"用`TryParseInt`/`TryParseDouble`/`Time::TryParse`,不要写`try { stoi(...) } catch (...) {}`。
+
+### 登记"当时正在做什么"
+
+- 宿主(Core/UE)调mod的代码一律写成`MOD_CALL(mod, mod->Xxx(...))`;工厂里调mod登记的函数指针写成`MOD_ID_CALL(id, ...)`。出错时报告里就有mod的id,不用在调用点写try/catch。
+- 读一个数据文件、做一个有名字的阶段时放一个`ErrorScope`(`kErrorScopeFile`/`kErrorScopeStep`/`kErrorScopeScript`)。它只存指针:传进去的字符串要活得比它久。
+
+### 接
+
+分三层,从里到外:
+
+1. **一个可以整体跳过的操作**(一条脚本指令、一个里程碑的触发条件、一段对话):用`GuardData`。只接数据错误,打一条警告,跳过这一个;mod错误和内部错误原样往外抛。
+2. **一次有明确失败返回值的加载**(存档各段、`Config::ReadConfig`、菜单里的存档/读档/开始游戏):什么异常都接,变成错误文字返回给调用方。前提是这次加载动过的东西在失败时整份丢掉,不留半份。
+3. **会话边界**(UE层):引擎直接调进来、里面会调Core的函数,函数体用`CORE_GUARD_BEGIN`/`CORE_GUARD_END`(或`CoreGuard::Run`)包住。接住之后这一局结束、回菜单并显示原因——世界已经是半更新的,不能接着Tick。**新写这样的函数时要自己加上**,否则异常会穿进UE引擎的栈帧(引擎编译时没开异常),编辑器里是整个编辑器崩。
+
+不允许空的`catch {}`:接住了至少打一条警告,说明丢掉了什么。(唯一的例外在`ErrorScope`自己的析构函数里:异常展开途中记不下轨迹时不能再抛。)
+
+### 接的写法
+
+- 一律`catch (const X&)`或`catch (...)`,不按值接。
+- 接住后第一件事是`DescribeCurrentException()`,拿到一份全是自己这一侧分配的`ErrorReport`;之后只用这份报告,不再碰异常对象,更不把异常对象存起来以后处理。原因:异常可能是mod dll抛的,它的析构函数和类型信息都在那个dll里,而mod dll一局结束就卸载(第13节),内存分配器也和宿主不是同一个(第4节)。
+- `ExceptionBase`不要加"按值返回`std::string`"的虚函数,理由同上。
+
+### 接不住的
+
+空指针解引用、除零、栈溢出不是C++异常,这套东西接不住,也不去接。
+
+### 怎么验证
+
+CoreTest的`fault`套件逐条验证上面的规则:三类异常的归类、`ErrorScope`的顺序和过期清理、`GuardData`只接数据错误、坏config/脚本/layout、mod dll里抛出的三种异常(`Forever_Mod/Test`的`puzzle_fault`)、出错之后世界仍能销毁且mod dll仍能卸干净。它验证不了两件事:UE层`CoreGuard`的回菜单流程(只能在编辑器里看);以及宿主和mod分配器不同带来的问题——CoreTest是普通exe,和mod用的是同一个堆,这类问题只在UE里才会出现。

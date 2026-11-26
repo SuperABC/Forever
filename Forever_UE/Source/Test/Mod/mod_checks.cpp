@@ -1,4 +1,5 @@
 #include "mod_checks.h"
+#include "common/error.h"
 
 #include "test_framework.h"
 
@@ -494,9 +495,10 @@ namespace {
 			DropDuplicates(outcome.problems);
 			CheckReferences(context, outcome);
 		}
-		catch (const exception& e) {
+		catch (...) {
+			// mod可能抛任何东西：统一转成一行文字(带类别；经工厂创建时出的错还带mod id)。
 			outcome.passed = false;
-			outcome.error = e.what();
+			outcome.error = DescribeCurrentException().ToLine();
 		}
 
 		const string firstName = mod->GetName() ? mod->GetName() : "";

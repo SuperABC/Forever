@@ -10,7 +10,7 @@ Mod）共用的JSON实现；`Core/common/config`、存档的JSON段、`PostHandl
 
 - **支持`//`和`/* */`注释**：选它而不是UE自带`Json`模块的原因见`Source/Core/common/config.md`——UE的`FJsonSerializer`是严格
   JSON，不支持注释，而`config.json`需要保留注释能力；同时纯C++、不依赖UE，Mod DLL也能用。
-- **类型转换失败抛`JsonFormatException`**（`AsString`/`AsInt`/`AsUInt`/`AsDouble`/`AsBool`等），解析失败也抛它，
+- **类型转换失败抛`DataException`**（`AsString`/`AsInt`/`AsUInt`/`AsDouble`/`AsBool`等），解析失败也抛它，
   异常体系见`error.md`。
 - `FastWriter`输出紧凑格式，`StyledWriter`输出带缩进的可读格式。
 

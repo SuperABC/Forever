@@ -1,5 +1,7 @@
 #include "Framework/ForeverStoryFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -64,8 +66,15 @@ namespace {
 		for (const auto& action : actions) {
 			if (auto dialogPtr = get_if<const Dialog*>(&action)) {
 				// 交给ShowDialog统一展示/排队。
+				// 一段对话也是一个可以整体跳过的操作：对话里的数据错误(表达式写错)只丢掉这一段。
 				if (framework && framework->GetStoryFramework()) {
-					framework->GetStoryFramework()->ShowDialog(*dialogPtr, context);
+					ErrorReport report;
+					if (!GuardData([&]() {
+						ErrorScope dialogScope(kErrorScopeScript, "dialog");
+						framework->GetStoryFramework()->ShowDialog(*dialogPtr, context);
+					}, report)) {
+						UE_LOG(LogTemp, Warning, TEXT("一段对话无法显示，已跳过：%s"), UTF8_TO_TCHAR(report.ToLine().c_str()));
+					}
 				}
 			}
 			else if (auto changePtr = get_if<const Change*>(&action)) {
@@ -77,10 +86,13 @@ namespace {
 }
 
 void UForeverStoryFrameworkComponent::Init(Story* inStory) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::Init")
 	story = inStory;
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::UpdateSystemTime() {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::UpdateSystemTime")
 	if (!story) return;
 	Script* systemScript = story->GetSystemScript();
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -93,9 +105,11 @@ void UForeverStoryFrameworkComponent::UpdateSystemTime() {
 	systemScript->SetValue("time.hour", ValueType(time->GetHour()));
 	systemScript->SetValue("time.minute", ValueType(time->GetMinute()));
 	systemScript->SetValue("time.second", ValueType(time->GetSecond()));
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastGameStart() {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastGameStart")
 	if (!story || !GEngine) return;
 
 	// 现场构造一个PostImplement，供WrapScript通过Post()查询Core状态(如"random citizen"，见Core/common/implement.md)，
@@ -122,9 +136,11 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 	// 各自脚本里的game_start milestone(加交互选项等)永远不会被触发。
 	GameStartEvent event;
 	BroadcastToAllScripts(event, postImplement, /*includeMain=*/false);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastToScript(Event& event, Script* script, PostImplement& postImplement) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastToScript")
 	if (!story || !script) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	ScriptContext context;
@@ -133,6 +149,7 @@ void UForeverStoryFrameworkComponent::BroadcastToScript(Event& event, Script* sc
 	context.global = story->GetGlobalScript();
 	context.local = &event;
 	ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+	CORE_GUARD_END
 }
 
 namespace {
@@ -188,6 +205,7 @@ namespace {
 }
 
 void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain, const string& category) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastToAllScripts")
 	if (!story) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 
@@ -275,9 +293,11 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 		}
 		broadcastOne(asset->GetScript());
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::StartAssetScript(Asset* asset) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::StartAssetScript")
 	if (!story || !asset) return;
 	if (asset->GetScript() && !asset->IsScriptStarted()) {
 		asset->SetScriptStarted(true);
@@ -297,9 +317,11 @@ void UForeverStoryFrameworkComponent::StartAssetScript(Asset* asset) {
 	TArray<Asset*> children;
 	for (auto& [childName, child] : asset->GetContents()) children.Add(child);
 	for (Asset* child : children) StartAssetScript(child);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyAssetEvent(Asset* root, bool bGet, const string& result, Script* sender) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyAssetEvent")
 	if (!story || !root) return;
 	if (assetEventDepth >= kMaxAssetEventDepth) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverStoryFrameworkComponent::NotifyAssetEvent: nested asset event depth exceeded %d, dropped (do two scripts keep triggering each other?)"),
@@ -327,9 +349,11 @@ void UForeverStoryFrameworkComponent::NotifyAssetEvent(Asset* root, bool bGet, c
 		NotifyAssetResult(bGet, node.type, result, sender ? sender : node.ownScript);
 	}
 	assetEventDepth--;
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset, const string& thrower) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyThrowAsset")
 	if (!story || !asset || !asset->GetScript()) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -342,9 +366,11 @@ void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset, const strin
 		framework ? framework->GetPlayer() : nullptr);
 	ThrowAssetEvent event(asset->GetType(), thrower);
 	BroadcastToScript(event, asset->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyUseAsset(Asset* asset, const string& user) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyUseAsset")
 	if (!story || !asset || !asset->GetScript()) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -357,9 +383,11 @@ void UForeverStoryFrameworkComponent::NotifyUseAsset(Asset* asset, const string&
 		framework ? framework->GetPlayer() : nullptr);
 	UseAssetEvent event(asset->GetName(), asset->GetType(), user);
 	BroadcastToScript(event, asset->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyWeaponFire(Weapon* weapon, const FWeaponFireInfo& info) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyWeaponFire")
 	if (!story || !weapon || !weapon->GetScript()) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -382,10 +410,12 @@ void UForeverStoryFrameworkComponent::NotifyWeaponFire(Weapon* weapon, const FWe
 	event.SetVec3("direction", info.direction.X, info.direction.Y, info.direction.Z);
 	event.SetVec3("normal", info.normal.X, info.normal.Y, info.normal.Z);
 	BroadcastToScript(event, weapon->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyProjectileHit(const string& ownerKey, const FVector& hit, const FVector& normal,
 	const string& sufferer) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyProjectileHit")
 	if (!story || ownerKey.empty()) return;
 	Script* owner = FindScriptByKey(ownerKey);
 	if (!owner) return;
@@ -403,9 +433,11 @@ void UForeverStoryFrameworkComponent::NotifyProjectileHit(const string& ownerKey
 	event.SetVec3("hit", hit.X, hit.Y, hit.Z);
 	event.SetVec3("normal", normal.X, normal.Y, normal.Z);
 	BroadcastToScript(event, owner, postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyAssetResult(bool bGet, const string& type, const string& result, Script* sender) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyAssetResult")
 	if (!story || !sender) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -424,9 +456,11 @@ void UForeverStoryFrameworkComponent::NotifyAssetResult(bool bGet, const string&
 		LoseAssetEvent event(type, result);
 		BroadcastToScript(event, sender, postImplement);
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& message, const string& category) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastGlobalMessage")
 	if (!story) return;
 	if (globalMessageDepth >= kMaxGlobalMessageDepth) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverStoryFrameworkComponent::BroadcastGlobalMessage: nested global_message depth exceeded %d, dropped \"%s\" (do two milestones keep triggering each other?)"),
@@ -448,9 +482,11 @@ void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& messa
 	globalMessageDepth++;
 	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true, category);
 	globalMessageDepth--;
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastWeatherChange(const string& weather) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastWeatherChange")
 	if (!story) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -465,9 +501,11 @@ void UForeverStoryFrameworkComponent::BroadcastWeatherChange(const string& weath
 
 	WeatherChangeEvent event(weather);
 	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::OptionDialog")
 	if (!story || !GEngine) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -534,14 +572,18 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	if (targetCabin && targetCabin->GetScript()) {
 		matchOne(targetCabin->GetScript());
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, Room* room) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastNpcArrive")
 	if (!room) return;
 	BroadcastNpcArrive(citizen, room->GetAddress());
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, const string& address) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastNpcArrive")
 	if (!story || !GEngine || !citizen || address.empty()) return;
 	if (npcArriveDepth >= kMaxNpcArriveDepth) {
 		UE_LOG(LogTemp, Warning, TEXT("npc_arrive nesting too deep, dropped."));
@@ -563,9 +605,11 @@ void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, const
 	if (citizen->GetScheduler()) BroadcastToScript(event, citizen->GetScheduler()->GetScript(), postImplement);
 	if (citizen->GetJob()) BroadcastToScript(event, citizen->GetJob()->GetScript(), postImplement);
 	npcArriveDepth--;
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastMeeting(Citizen* citizen, bool bStart, const string& party, const string& address) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastMeeting")
 	if (!story || !GEngine || !citizen || !citizen->GetScheduler()) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -588,9 +632,11 @@ void UForeverStoryFrameworkComponent::BroadcastMeeting(Citizen* citizen, bool bS
 		MeetingEndEvent event(party, address, home);
 		BroadcastToScript(event, citizen->GetScheduler()->GetScript(), postImplement);
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastExecuteTask(Citizen* citizen, const string& task, const string& destination) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastExecuteTask")
 	if (!story || !GEngine || !citizen || !citizen->GetJob()) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -606,10 +652,12 @@ void UForeverStoryFrameworkComponent::BroadcastExecuteTask(Citizen* citizen, con
 	// 只发给被派任务的员工自己的Job脚本。
 	ExecuteTaskEvent event(task, destination);
 	BroadcastToScript(event, citizen->GetJob()->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastTaskComplete(Organization* organization, const string& task, const string& destination,
 	const string& worker, const string& origin) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastTaskComplete")
 	if (!story || !GEngine || !organization || !organization->GetScript()) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -625,10 +673,12 @@ void UForeverStoryFrameworkComponent::BroadcastTaskComplete(Organization* organi
 	// 只发给派任务的组织自己的脚本。
 	TaskCompleteEvent event(task, destination, worker, origin);
 	BroadcastToScript(event, organization->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastTaskFailed(Organization* organization, const string& task, const string& destination,
 	const string& worker, const string& origin, const string& reason) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastTaskFailed")
 	if (!story || !GEngine || !organization || !organization->GetScript()) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -643,14 +693,18 @@ void UForeverStoryFrameworkComponent::BroadcastTaskFailed(Organization* organiza
 
 	TaskFailedEvent event(task, destination, worker, origin, reason);
 	BroadcastToScript(event, organization->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& name, const FString& reason) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastCitizenDecease")
 	CitizenDeceaseEvent event(string(TCHAR_TO_UTF8(*name)), string(TCHAR_TO_UTF8(*reason)));
 	BroadcastCitizenDecease(event);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(CitizenDeceaseEvent& event) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastCitizenDecease")
 	if (!story || !GEngine) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -685,9 +739,11 @@ void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(CitizenDeceaseEven
 	if (target && target->GetScheduler()) {
 		matchOne(target->GetScheduler()->GetScript());
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastCitizenInjured(CitizenInjuredEvent& event) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastCitizenInjured")
 	if (!story || !GEngine) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -708,9 +764,11 @@ void UForeverStoryFrameworkComponent::BroadcastCitizenInjured(CitizenInjuredEven
 	if (target && target->GetScheduler() && target->GetScheduler()->GetScript()) {
 		BroadcastToScript(event, target->GetScheduler()->GetScript(), postImplement);
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastFleeStart(const string& name, const string& from, const string& destination) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastFleeStart")
 	if (!story || !GEngine) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -726,9 +784,11 @@ void UForeverStoryFrameworkComponent::BroadcastFleeStart(const string& name, con
 	if (!target || !target->GetScheduler() || !target->GetScheduler()->GetScript()) return;
 	FleeStartEvent event(name, from, destination);
 	BroadcastToScript(event, target->GetScheduler()->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastFleeEnd(const string& name, const string& from, const string& reason) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastFleeEnd")
 	if (!story || !GEngine) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -744,9 +804,11 @@ void UForeverStoryFrameworkComponent::BroadcastFleeEnd(const string& name, const
 	if (!target || !target->GetScheduler() || !target->GetScheduler()->GetScript()) return;
 	FleeEndEvent event(name, from, reason);
 	BroadcastToScript(event, target->GetScheduler()->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyControlChange")
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetName(), context)).data());
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -770,9 +832,11 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 	if (framework && framework->GetBuildingFramework()) {
 		framework->GetBuildingFramework()->RequestFreezeUntilLodSettled();
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyStartPuzzle")
 	FString puzzleId = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetPuzzle(), context)).data());
 	// param是剧情脚本给小游戏的启动参数，空串表示脚本没传，不求值
 	FString param;
@@ -785,9 +849,11 @@ void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* 
 
 	puzzleOwnerKey = FindScriptKey(context.self);
 	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId, param);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::NotifyPuzzleFinished(PuzzleResultEvent& event) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::NotifyPuzzleFinished")
 	if (!story || puzzleOwnerKey.empty()) return;
 	Script* owner = FindScriptByKey(puzzleOwnerKey);
 	puzzleOwnerKey.clear();
@@ -803,9 +869,11 @@ void UForeverStoryFrameworkComponent::NotifyPuzzleFinished(PuzzleResultEvent& ev
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 	BroadcastToScript(event, owner, postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyOpenShop(const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyOpenShop")
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Society* society = framework ? framework->GetSociety() : nullptr;
 	if (!society) return;
@@ -818,9 +886,11 @@ void UForeverStoryFrameworkComponent::ApplyOpenShop(const ScriptContext& context
 	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 	if (!playerController || !playerController->GetShopWidget()) return;
 	playerController->GetShopWidget()->OpenShop(organization);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplySpawnActor(const SpawnActorChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplySpawnActor")
 	UWorld* world = GetWorld();
 	if (!world || change->GetActor().empty()) return;
 
@@ -861,9 +931,11 @@ void UForeverStoryFrameworkComponent::ApplySpawnActor(const SpawnActorChange* ch
 		bridge->OwnerScriptKey = UTF8_TO_TCHAR(FindScriptKey(context.self).c_str());
 	}
 	actor->FinishSpawning(transform);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyPayWage(const PayWageChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyPayWage")
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Society* society = framework ? framework->GetSociety() : nullptr;
 	Citizen* citizen = framework ? framework->GetControlledCitizen() : nullptr;
@@ -884,9 +956,11 @@ void UForeverStoryFrameworkComponent::ApplyPayWage(const PayWageChange* change, 
 		return;
 	}
 	Economy::PayWage(*society, organization, citizen, amount);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyEnterVehicle")
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -897,9 +971,11 @@ void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange
 	if (!playerController) return;
 
 	trafficFramework->ApplyEnterVehicle(name, playerController);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyBoardVehicle(const BoardVehicleChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyBoardVehicle")
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -908,9 +984,11 @@ void UForeverStoryFrameworkComponent::ApplyBoardVehicle(const BoardVehicleChange
 	if (!trafficFramework || !playerController) return;
 
 	trafficFramework->ApplyBoardVehicle(name, playerController);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyLeaveVehicle(const LeaveVehicleChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyLeaveVehicle")
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -919,9 +997,11 @@ void UForeverStoryFrameworkComponent::ApplyLeaveVehicle(const LeaveVehicleChange
 	if (!trafficFramework || !playerController) return;
 
 	trafficFramework->ApplyLeaveVehicle(name, playerController, /*bForce=*/false);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ApplyForceLeave(const ForceLeaveChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyForceLeave")
 	FString name;
 	if (!change->GetVehicle().empty()) {
 		name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
@@ -933,9 +1013,11 @@ void UForeverStoryFrameworkComponent::ApplyForceLeave(const ForceLeaveChange* ch
 	if (!trafficFramework || !playerController) return;
 
 	trafficFramework->ApplyLeaveVehicle(name, playerController, /*bForce=*/true);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastToVehicle(Event& event, Vehicle* vehicle) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastToVehicle")
 	if (!story || !vehicle || !vehicle->GetScript()) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -949,9 +1031,11 @@ void UForeverStoryFrameworkComponent::BroadcastToVehicle(Event& event, Vehicle* 
 		framework ? framework->GetPlayer() : nullptr);
 
 	BroadcastToScript(event, vehicle->GetScript(), postImplement);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const ScriptContext& context, int32 insertIndex) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::EnqueueDialog")
 	if (!dialog) return;
 
 	// Dialog自己的condition：非空且求值为假就整段不展示(求值时机是入队的这一刻，所以同一个里程碑里
@@ -995,17 +1079,21 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 
 	insertIndex = FMath::Clamp(insertIndex, 0, pendingQueue.Num());
 	pendingQueue.Insert(items, insertIndex);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ShowDialog(const Dialog* dialog, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ShowDialog")
 	bool wasEmpty = pendingQueue.Num() == 0;
 	EnqueueDialog(dialog, context, pendingQueue.Num());
 	if (wasEmpty) {
 		ShowCurrentItem();
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::AdvanceDialog() {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::AdvanceDialog")
 	if (pendingQueue.Num() == 0) return;
 
 	std::string finishedLabel = pendingQueue[0].bBranch ? std::string() : pendingQueue[0].label;
@@ -1014,10 +1102,12 @@ void UForeverStoryFrameworkComponent::AdvanceDialog() {
 	// ShowDialog自己就显示)；下面的ShowCurrentItem重复显示同一项没有副作用。
 	if (!finishedLabel.empty()) BroadcastSpeakingFinish(finishedLabel);
 	ShowCurrentItem();
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, const string& kind, const string& name, bool entering,
 	Script* target) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastPlayerLocation")
 	if (!story) return;
 
 	if (Script* systemScript = story->GetSystemScript()) {
@@ -1042,6 +1132,7 @@ void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, cons
 		framework ? framework->GetPlayer() : nullptr);
 
 	BroadcastToScript(event, target, postImplement);
+	CORE_GUARD_END
 }
 
 string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) const {
@@ -1303,12 +1394,7 @@ namespace {
 	TimerResolve ResolveTimerTarget(const string& mode, const string& timeText, const Time& now, Time& target, double* realSeconds) {
 		if (mode == "absolute") {
 			Time parsed;
-			try {
-				parsed = Time(timeText);
-			}
-			catch (const ExceptionBase&) {
-				return TimerResolve::Unparsable;
-			}
+			if (!Time::TryParse(timeText, parsed)) return TimerResolve::Unparsable;
 			if (!parsed.IsValid()) return TimerResolve::NeedsDate;
 			if (parsed <= now) return TimerResolve::Past;
 			target = parsed;
@@ -1351,6 +1437,7 @@ namespace {
 }
 
 void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyCreateTimer")
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* player = framework ? framework->GetPlayer() : nullptr;
 	if (!story || !player || !player->GetTime()) return;
@@ -1385,6 +1472,7 @@ void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* 
 	case TimerResolve::Unparsable: warn("cannot parse time."); break;
 	case TimerResolve::UnknownMode: warn("unknown mode (absolute/relative/real/next)."); break;
 	}
+	CORE_GUARD_END
 }
 
 bool UForeverStoryFrameworkComponent::ResolveJumpTarget(const JumpTimeChange* change, const ScriptContext& context, Time& outTarget) {
@@ -1420,27 +1508,33 @@ bool UForeverStoryFrameworkComponent::ResolveJumpTarget(const JumpTimeChange* ch
 }
 
 void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyRemoveTimer")
 	if (!story) return;
 	// 只删执行这个change的脚本自己名下的计时器(不同脚本可以有同名计时器)。
 	string ownerKey = FindScriptKey(context.self);
 	if (ownerKey.empty()) return;
 	story->RemoveTimer(ToString(EvaluateExpression(change->GetName(), context)), ownerKey);
+	CORE_GUARD_END
 }
 
 // 每帧最多处理的到时计时器数；8点/9点这类几千个岗位脚本同时到时，多出的留到后面几帧。
 static constexpr size_t kMaxStoryTimersPerFrame = 16;
 
 void UForeverStoryFrameworkComponent::FireExpiredTimers(float deltaSeconds) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::FireExpiredTimers")
 	if (!story) return;
 	story->AdvanceRealTimers(deltaSeconds);
 	FireTimerBatch(kMaxStoryTimersPerFrame);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::DrainExpiredTimers(int32 maxIterations) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::DrainExpiredTimers")
 	for (int32 i = 0; i < maxIterations; i++) {
 		if (!FireTimerBatch(kMaxStoryTimersPerFrame)) return;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("DrainExpiredTimers: still has due timers after %d batches (a timer re-arming at the same instant?)."), maxIterations);
+	CORE_GUARD_END
 }
 
 bool UForeverStoryFrameworkComponent::FireTimerBatch(size_t maxCount) {
@@ -1488,6 +1582,7 @@ bool UForeverStoryFrameworkComponent::FireTimerBatch(size_t maxCount) {
 }
 
 void UForeverStoryFrameworkComponent::ShowCurrentBackground() {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ShowCurrentBackground")
 	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 	UBackgroundSpeakingWidget* widget = playerController ? playerController->GetBackgroundSpeakingWidget() : nullptr;
 
@@ -1504,9 +1599,11 @@ void UForeverStoryFrameworkComponent::ShowCurrentBackground() {
 		world->GetTimerManager().SetTimer(backgroundTimer, this, &UForeverStoryFrameworkComponent::AdvanceBackground,
 			item.background, false);
 	}
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::AdvanceBackground() {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::AdvanceBackground")
 	if (backgroundQueue.Num() == 0) return;
 
 	std::string finishedLabel = backgroundQueue[0].label;
@@ -1515,25 +1612,31 @@ void UForeverStoryFrameworkComponent::AdvanceBackground() {
 	// 往backgroundQueue里追加后台台词，这时后台已经在播(或确实空闲)，不会重复启动计时。
 	ShowCurrentBackground();
 	if (!finishedLabel.empty()) BroadcastSpeakingFinish(finishedLabel);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::BeginPlay() {
 	Super::BeginPlay();
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BeginPlay")
 	// 弹射物蓝图(mod里)报告命中 -> projectile_hit事件发给所有者脚本。
 	UForeverProjectileBridgeComponent::HitHandler().BindLambda(
 		[this](const FString& ownerKey, const FVector& hit, const FVector& normal, const FString& sufferer) {
 			NotifyProjectileHit(string(TCHAR_TO_UTF8(*ownerKey)), hit, normal, string(TCHAR_TO_UTF8(*sufferer)));
 		});
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+	CORE_GUARD_ALWAYS_BEGIN("UForeverStoryFrameworkComponent::EndPlay")
 	UForeverProjectileBridgeComponent::HitHandler().Unbind();
 	if (UWorld* world = GetWorld()) world->GetTimerManager().ClearTimer(backgroundTimer);
 	backgroundQueue.Reset();
+	CORE_GUARD_END
 	Super::EndPlay(EndPlayReason);
 }
 
 void UForeverStoryFrameworkComponent::BroadcastSpeakingFinish(const string& label) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastSpeakingFinish")
 	if (!story) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -1548,9 +1651,11 @@ void UForeverStoryFrameworkComponent::BroadcastSpeakingFinish(const string& labe
 
 	SpeakingFinishEvent event(label);
 	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::SelectDialogOption(int32 index) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::SelectDialogOption")
 	if (pendingQueue.Num() == 0 || !pendingQueue[0].bBranch) return;
 
 	// 值拷贝一份再RemoveAt——selected是对这份拷贝里的Option取引用，RemoveAt(0)之后原数组
@@ -1579,9 +1684,11 @@ void UForeverStoryFrameworkComponent::SelectDialogOption(int32 index) {
 	}
 
 	ShowCurrentItem();
+	CORE_GUARD_END
 }
 
 void UForeverStoryFrameworkComponent::ShowCurrentItem() {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ShowCurrentItem")
 	// 队首的后台台词放行：它能排到队首，说明它前面的前台条目都播完了(后台等前台)；转走后马上
 	// 显示下一条前台条目(前台不等后台)。
 	bool backgroundWasIdle = backgroundQueue.Num() == 0;
@@ -1635,4 +1742,5 @@ void UForeverStoryFrameworkComponent::ShowCurrentItem() {
 	// (见UI/SectionSpeakingWidget.h)。每次都设一遍，重复设置无副作用。
 	playerController->bShowMouseCursor = true;
 	UWidgetBlueprintLibrary::SetInputMode_UIOnlyEx(playerController, widgetToFocus, EMouseLockMode::DoNotLock, false);
+	CORE_GUARD_END
 }

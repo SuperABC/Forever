@@ -19,8 +19,8 @@ concept只需要唯一一个"当前生效"的取名算法给`Populace`用，不�
   `ReserveName(name)`，要求"不能和脚本占位名撞"（不要求"生成的市民之间互不重名"）。
   `GenerateName`两个重载内部是"生成一个候选，撞上`reserve`就重试，最多
   `kMaxReserveRetryAttempts`（1000）次"——仍然撞上就直接`THROW_EXCEPTION(
-  DeadLoopException, ...)`，不能静默返回一个撞名的结果；`common/error.h`已有的
-  `DeadLoopException`语义正好贴合"重试循环没能在预期内终止"这个场景。这个异常和
+  ModException, ...)`，不能静默返回一个撞名的结果；重试这么多次还撞名是取名mod的问题，
+  所以归到mod错误(`common/error.md`)。这个异常和
   `AForeverFrameworkActor::ValidateMainStoryDependencies()`的校验失败一起，统一
   交给`BeginPlay()`的`try/catch`处理（打日志+退出游戏）。方法签名不变，两个重载都是
   `const`，`reserve`只读不写，`const`语义不受影响。
@@ -31,8 +31,8 @@ concept只需要唯一一个"当前生效"的取名算法给`Populace`用，不�
 
 ## 依赖关系
 
-- 依赖：`name_mod.h`、`name_factory.h`、`common/error.h`（`NullPointerException`/
-  `DeadLoopException`）。
+- 依赖：`name_mod.h`、`name_factory.h`、`common/error.h`（`DataException`/
+  `ModException`）。
 - 被谁依赖：`Source/Core/populace/populace.h/.cpp`（`Populace::InitNames()`构造
   `Name*`+调`ReserveName`，`GenerateCitizens()`调`name->GenerateName(...)`/
   `name->GetSurname(...)`）。

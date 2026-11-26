@@ -103,10 +103,10 @@
 
 ## common/error.h、common/json.h 说明
 
-`error.h/.cpp`(异常类`ExceptionBase`及派生类、`THROW_EXCEPTION`宏)和`json.h/.cpp`
+`error.h/.cpp`(三类异常`DataException`/`ModException`/`InternalException`、`THROW_EXCEPTION`宏、`ErrorScope`/`ErrorReport`，见`common/error.md`)和`json.h/.cpp`
 (JsonCpp衍生的宽松JSON解析器，支持`//`/`/* */`注释)均为原样移植的支持代码，不逐函数写
 文档。`Core/common/config.cpp`用`json.h`解析`config.json`；`json.cpp`的`AsString`/
-`AsInt`等类型转换方法用`error.h`的`THROW_EXCEPTION(JsonFormatException, ...)`在类型不
+`AsInt`等类型转换方法用`error.h`的`THROW_EXCEPTION(DataException, ...)`在类型不
 匹配时抛异常。
 
 ## common/、map/、story/的跨domain共享原语

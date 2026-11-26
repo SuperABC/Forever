@@ -1,5 +1,7 @@
 #include "Mod/ForeverSaveSubsystem.h"
 
+#include "common/error.h"
+
 #include "Mod/ForeverDialogUtils.h"
 #include "Mod/ForeverModSubsystem.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -133,7 +135,7 @@ namespace {
 	}
 }
 
-bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) {
+bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) try {
 	AForeverFrameworkActor* framework = FindFramework(GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr);
 	if (!framework || !framework->GetMap()) {
 		OutError = TEXT("当前不在游戏中，无法保存");
@@ -207,6 +209,13 @@ bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) {
 	UE_LOG(LogTemp, Log, TEXT("ForeverSaveSubsystem: saved %s (%d bytes, %llu uncompressed)"), *Path, file.Num(), static_cast<uint64>(body.size()));
 	return true;
 }
+catch (...) {
+	// 存档途中抛了异常(多半来自mod或坏数据)：变成一条错误提示，不让它穿进引擎。
+	const ErrorReport report = DescribeCurrentException();
+	UE_LOG(LogTemp, Error, TEXT("存档失败：\n%s"), UTF8_TO_TCHAR(report.ToText().c_str()));
+	OutError = FString::Printf(TEXT("存档失败：%s"), UTF8_TO_TCHAR(report.ToLine().c_str()));
+	return false;
+}
 
 bool UForeverSaveSubsystem::SaveWithDialog(FString& OutError) {
 	OutError.Reset();
@@ -256,7 +265,7 @@ bool UForeverSaveSubsystem::ReadArchive(const FString& Path, SaveArchive& OutArc
 	return true;
 }
 
-bool UForeverSaveSubsystem::RequestLoad(const FString& Path, FString& OutError) {
+bool UForeverSaveSubsystem::RequestLoad(const FString& Path, FString& OutError) try {
 	TSharedPtr<FForeverPendingLoad> load = MakeShared<FForeverPendingLoad>();
 	load->path = Path;
 	if (!ReadArchive(Path, load->archive, OutError)) return false;
@@ -302,6 +311,18 @@ bool UForeverSaveSubsystem::RequestLoad(const FString& Path, FString& OutError) 
 		}
 	}
 	return true;
+}
+catch (...) {
+	// 读档途中抛了异常(多半来自mod或坏数据)：变成一条错误提示，不让它穿进引擎。
+	const ErrorReport report = DescribeCurrentException();
+	UE_LOG(LogTemp, Error, TEXT("读档失败：\n%s"), UTF8_TO_TCHAR(report.ToText().c_str()));
+	// 读档中途可能已经把mod dll加载进来了：在菜单里(没有正在进行的一局)就卸载回去。
+	if (!FindFramework(GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)) {
+		Script::ClearCache();
+		Registry::Get().UnloadMods();
+	}
+	OutError = FString::Printf(TEXT("读档失败：%s"), UTF8_TO_TCHAR(report.ToLine().c_str()));
+	return false;
 }
 
 bool UForeverSaveSubsystem::LoadWithDialog(FString& OutError) {

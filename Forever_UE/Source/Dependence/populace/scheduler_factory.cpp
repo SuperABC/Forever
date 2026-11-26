@@ -1,5 +1,7 @@
 #include "scheduler_factory.h"
 
+#include "common/error.h"
+
 #include "common/random.h"
 
 
@@ -17,7 +19,7 @@ SchedulerMod* SchedulerFactory::CreateScheduler(const string& id) {
 	if (!IsEnabled(id)) return nullptr;
 
 	auto argsIt = configuredArgs.find(id);
-	SchedulerMod* instance = it->second.creator(argsIt->second);
+	SchedulerMod* instance = MOD_ID_CALL(it->first, it->second.creator(argsIt->second));
 	if (instance) {
 		liveInstances[instance] = id;
 		RandomRegistry::BindInstance(instance, id);
@@ -77,7 +79,7 @@ bool SchedulerFactory::IsEnabled(const string& id) const {
 
 float SchedulerFactory::GetPower(const string& id) const {
 	auto it = registries.find(id);
-	return IsEnabled(id) ? it->second.power() : 0.f;
+	return IsEnabled(id) ? MOD_ID_CALL(it->first, it->second.power()) : 0.f;
 }
 
 vector<pair<string, SchedulerMod*>> SchedulerFactory::GetLiveInstances() const {

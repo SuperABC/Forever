@@ -3,6 +3,9 @@
 #include "error.h"
 #include "common/random.h"
 
+#include <cerrno>
+#include <climits>
+#include <cstdlib>
 #include <ctime>
 #include <chrono>
 #include <iomanip>
@@ -112,6 +115,18 @@ Time::Time(bool online) :
 Time::Time(int y, int mon, int d, int h, int min, int s, int ms)
 	: year(y), month(mon), day(d), hour(h), minute(min), second(s), millisecond(ms) {
 	NormalizeTime();
+}
+
+bool Time::TryParse(const string& text, Time& out) noexcept {
+	try {
+		Time parsed(text);
+		out = parsed;
+		return true;
+	}
+	catch (...) {
+		ClearErrorTrace(); // 这次失败是预料之中的，不留轨迹
+		return false;
+	}
 }
 
 Time::Time(string time) :
@@ -225,7 +240,7 @@ Time::Time(string time) :
 	}
 
 	// 如果所有格式都不匹配，抛出异常
-	THROW_EXCEPTION(InvalidArgumentException, "无法解析时间字符串: " + time);
+	THROW_EXCEPTION(DataException, "无法解析时间字符串: " + time);
 }
 
 bool Time::IsValid() const {
@@ -555,22 +570,22 @@ string Time::DayOfWeekName() const {
 void Time::Validate() const {
 	// 校验月份范围
 	if (month < 1 || month > 12)
-		THROW_EXCEPTION(OutOfRangeException, "Month must be between 1-12.");
+		THROW_EXCEPTION(DataException, "Month must be between 1-12.");
 	// 校验日期范围
 	if (day < 1 || day > DaysInMonth(year, month))
-		THROW_EXCEPTION(OutOfRangeException, "Invalid day for given month and year.");
+		THROW_EXCEPTION(DataException, "Invalid day for given month and year.");
 	// 校验小时范围
 	if (hour < 0 || hour > 23)
-		THROW_EXCEPTION(OutOfRangeException, "Hour must be between 0-23.");
+		THROW_EXCEPTION(DataException, "Hour must be between 0-23.");
 	// 校验分钟范围
 	if (minute < 0 || minute > 59)
-		THROW_EXCEPTION(OutOfRangeException, "Minute must be between 0-59.");
+		THROW_EXCEPTION(DataException, "Minute must be between 0-59.");
 	// 校验秒数范围
 	if (second < 0 || second > 59)
-		THROW_EXCEPTION(OutOfRangeException, "Second must be between 0-59.");
+		THROW_EXCEPTION(DataException, "Second must be between 0-59.");
 	// 校验毫秒范围
 	if (millisecond < 0 || millisecond > 999)
-		THROW_EXCEPTION(OutOfRangeException, "Millisecond must be between 0-999.");
+		THROW_EXCEPTION(DataException, "Millisecond must be between 0-999.");
 }
 
 int Time::DaysInMonth(int year, int month) {
@@ -796,6 +811,30 @@ string ToString(const ValueType& value) {
 	}, value);
 }
 
+bool TryParseInt(const string& text, int& out, size_t* consumed) {
+	const char* begin = text.c_str();
+	char* end = nullptr;
+	errno = 0;
+	const long value = strtol(begin, &end, 10);
+	if (end == begin) return false; // std::stoi在这里抛invalid_argument
+	if (errno == ERANGE || value < INT_MIN || value > INT_MAX) return false; // std::stoi在这里抛out_of_range
+	out = static_cast<int>(value);
+	if (consumed) *consumed = static_cast<size_t>(end - begin);
+	return true;
+}
+
+bool TryParseDouble(const string& text, double& out, size_t* consumed) {
+	const char* begin = text.c_str();
+	char* end = nullptr;
+	errno = 0;
+	const double value = strtod(begin, &end);
+	if (end == begin) return false;
+	if (errno == ERANGE) return false;
+	out = value;
+	if (consumed) *consumed = static_cast<size_t>(end - begin);
+	return true;
+}
+
 ValueType FromString(const string& s) {
 	// 空字符串直接返回空string
 	if (s.empty()) {
@@ -825,23 +864,21 @@ ValueType FromString(const string& s) {
 		}
 	}
 
-	try {
-		size_t pos;
-		int int_val = stoi(s, &pos);
-		if (pos == s.length()) {
+	{
+		size_t pos = 0;
+		int int_val = 0;
+		if (TryParseInt(s, int_val, &pos) && pos == s.length()) {
 			return int_val;
 		}
 	}
-	catch (const exception&) {}
 
-	try {
-		size_t pos;
-		double double_val = stod(s, &pos);
-		if (pos == s.length()) {
+	{
+		size_t pos = 0;
+		double double_val = 0.0;
+		if (TryParseDouble(s, double_val, &pos) && pos == s.length()) {
 			return double_val;
 		}
 	}
-	catch (const exception&) {}
 
 	// 判断是否纯数字字符串
 	bool is_all_digit = !s.empty();
@@ -857,12 +894,9 @@ ValueType FromString(const string& s) {
 		if ((s.length() > 1 && s[0] == '0') || s.length() > 10) {
 			return s;
 		}
-		try {
-			return stoi(s);
-		}
-		catch (const exception&) {
-			return s;
-		}
+		int int_val = 0;
+		if (TryParseInt(s, int_val)) return int_val;
+		return s;
 	}
 
 	// 数字开头：尝试识别浮点数格式
@@ -891,10 +925,8 @@ ValueType FromString(const string& s) {
 		}
 
 		if (!has_non_digit && (has_dot || has_exponent)) {
-			try {
-				return stod(s);
-			}
-			catch (const exception&) {}
+			double double_val = 0.0;
+			if (TryParseDouble(s, double_val)) return double_val;
 		}
 	}
 

@@ -1,5 +1,7 @@
 #include "Framework/ForeverDoorFrameworkComponent.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
@@ -70,6 +72,7 @@ void UForeverDoorFrameworkComponent::DespawnDoor(FDoorEntry& entry) {
 void UForeverDoorFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	CORE_GUARD_BEGIN("UForeverDoorFrameworkComponent::TickComponent")
 
 	if (!map || entries.IsEmpty() || !IsWorldGenerationDone()) return;
 
@@ -128,4 +131,5 @@ void UForeverDoorFrameworkComponent::TickComponent(float DeltaTime, ELevelTick T
 		if (entry.component.IsValid()) activeEntries.Add(candidate.Value);
 		spawned++;
 	}
+	CORE_GUARD_END
 }

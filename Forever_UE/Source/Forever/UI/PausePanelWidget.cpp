@@ -1,5 +1,7 @@
 #include "UI/PausePanelWidget.h"
 
+#include "Framework/CoreGuard.h"
+
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "Mod/ForeverSaveSubsystem.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -51,7 +53,9 @@ FReply UPausePanelWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKe
 
 void UPausePanelWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	Super::NativeTick(MyGeometry, DeltaTime);
+	CORE_GUARD_BEGIN("UPausePanelWidget::NativeTick")
 	if (IsOpen()) RefreshStatus();
+	CORE_GUARD_END
 }
 
 void UPausePanelWidget::RefreshStatus() {

@@ -1,4 +1,5 @@
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/CoreGuard.h"
 
 #include "map/map.h"
 #include "map/room.h"
@@ -136,6 +137,8 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 
 void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// 收尾即使这一局已经失败也得跑(RunAlways)；释放过程里再出异常只记日志，不能让它穿进引擎。
+	CoreGuard::RunAlways(TEXT("AForeverFrameworkActor::EndPlay"), [this]() {
 	// 同步释放各域(原因见头文件EndPlay声明处)。删除顺序互不影响内存安全，按创建的相反顺序只是保持直觉。
 
 	// 先等异步寻路任务跑完;不能用"派发GameThread任务再等"的方式，EndPlay本身在GameThread上会死锁。
@@ -168,6 +171,8 @@ void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 还有mod实例活着(=泄漏)的dll不会被卸载，Registry会打警告(LogForeverCore)，见CONVENTIONS.md"mod dll的生命周期"。
 	Script::ClearCache();
 	Registry::Get().UnloadMods();
+	});
+	CoreGuard::EndSession();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -175,6 +180,10 @@ void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AForeverFrameworkActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 新的一局：清掉上一局的失败标记，登记自己(出异常时CoreGuard靠它找到世界、切回菜单)。
+	CoreGuard::BeginSession(this);
+	CORE_GUARD_BEGIN("AForeverFrameworkActor::BeginPlay")
 
 	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with its framework components"));
 
@@ -193,6 +202,7 @@ void AForeverFrameworkActor::BeginPlay()
 
 	// 世界生成拆成一串阶段由Tick每帧执行一个，阶段顺序即依赖顺序，见.md"分阶段生成"。
 	BuildGenerationStages();
+	CORE_GUARD_END
 }
 
 void AForeverFrameworkActor::BuildGenerationStages()
@@ -281,7 +291,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 
 void AForeverFrameworkActor::RunGenerationStep()
 {
-	if (bGenerationFailed || bInitialGenerationDone) return;
+	if (bInitialGenerationDone) return;
 
 	// LoadMap刚结束的头几帧先空等：让黑屏和第0格进度先真正渲染出来。
 	if (generationStartDelayFrames > 0) {
@@ -297,16 +307,11 @@ void AForeverFrameworkActor::RunGenerationStep()
 	}
 	bStageLabelShown = false;
 
-	try {
+	// 这一阶段里抛出的异常由Tick外面的CORE_GUARD接住：这一局结束，回菜单显示原因。这里只登记"当时在做哪个阶段"。
+	{
+		const std::string stageName = TCHAR_TO_UTF8(*generationStages[generationStageIndex].label.ToString());
+		ErrorScope stageScope(kErrorScopeStep, stageName);
 		generationStages[generationStageIndex].run();
-	}
-	catch (const ExceptionBase& e) {
-		bGenerationFailed = true;
-		UE_LOG(LogTemp, Error, TEXT("生成世界时发生致命错误，拒绝继续，退出游戏：%s"),
-			UTF8_TO_TCHAR(e.GetDetailedInfo().data()));
-		UKismetSystemLibrary::QuitGame(this, UGameplayStatics::GetPlayerController(GetWorld(), 0),
-			EQuitPreference::Quit, false);
-		return;
 	}
 
 	generationStageIndex++;
@@ -352,7 +357,7 @@ void AForeverFrameworkActor::ValidateMainStoryDependencies() {
 	for (const std::string& scriptPath : scripts) {
 		for (const std::string& id : Script::GetModDependences(scriptPath)) {
 			if (!Registry::Get().CheckModRegistered(id)) {
-				THROW_EXCEPTION(RuntimeException, "Main story script depends on mod '" + id + "' which is not registered.\n");
+				THROW_EXCEPTION(DataException, "Main story script depends on mod '" + id + "' which is not registered.\n");
 			}
 		}
 	}
@@ -379,9 +384,22 @@ namespace {
 }
 
 void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext& context) {
+	if (!change) return;
+	// 一条脚本指令是一个"可以整体跳过"的操作：指令里的数据错误(表达式写错、名字找不到……)只跳过这一条并打警告，
+	// 后面的指令照常执行；mod错误和内部错误不在这里接，往外抛给CoreGuard结束这一局。
+	const std::string& changeType = change->GetType();
+	ErrorReport report;
+	if (!GuardData([&]() {
+		ErrorScope changeScope(kErrorScopeScript, changeType);
+		ApplyChangeUnguarded(change, context);
+	}, report)) {
+		UE_LOG(LogTemp, Warning, TEXT("脚本指令 %s 执行失败，已跳过：%s"), UTF8_TO_TCHAR(changeType.c_str()), UTF8_TO_TCHAR(report.ToLine().c_str()));
+	}
+}
+
+void AForeverFrameworkActor::ApplyChangeUnguarded(const Change* change, const ScriptContext& context) {
 	// 所有Change自己的condition：非空且求值为假就不执行。for_range的子change、分支选项的changes、
 	// 里程碑的changes都走这个入口，所以这里统一判断一次。
-	if (!change) return;
 	if (!change->GetCondition().empty() && !EvaluateExpressionBool(change->GetCondition(), context)) return;
 
 	// 脚本给自己加/删选项($$self.name)：脚本记着它的所有者，直接作用在所有者上，不按名字去各个域查找。
@@ -836,10 +854,7 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 
 	// 生日：Time能识别的带日期写法(如"2000-08-31"、"2000年8月31日")。
 	Time birthday;
-	try {
-		birthday = Time(birthdayText);
-	}
-	catch (const ExceptionBase&) {}
+	Time::TryParse(birthdayText, birthday);
 	if (!birthday.IsValid()) {
 		UE_LOG(LogTemp, Warning, TEXT("spawn_npc \"%s\": cannot parse birthday \"%s\", skipped."),
 			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(birthdayText.c_str()));
@@ -863,8 +878,8 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 		int64_t depositCents = -1;
 		const std::string depositText = ToString(EvaluateExpression(change->GetDeposit(), context));
 		if (!depositText.empty()) {
-			try { depositCents = static_cast<int64_t>(std::llround(std::stod(depositText) * 100.0)); }
-			catch (const std::exception&) {}
+			double deposit = 0.0;
+			if (TryParseDouble(depositText, deposit)) depositCents = static_cast<int64_t>(std::llround(deposit * 100.0));
 		}
 		Settlement::InitFunds(*society, citizen, depositCents);
 	}
@@ -1053,6 +1068,8 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	CORE_GUARD_BEGIN("AForeverFrameworkActor::Tick")
+
 	// 世界还在一阶段一阶段地生成：驱动生成，且不推进游戏时钟/调度——此时domain对象只有一部分存在，
 	// 开局当天的"第一帧强制跨天"也必须等story建好之后才能触发。
 	if (!bInitialGenerationDone) {
@@ -1105,6 +1122,7 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 
 	// destroy_asset登记的资产在这里才真正销毁：此刻没有脚本在执行，不会删掉正在用的context.self。
 	if (assetFramework) assetFramework->FlushPendingDestroy();
+	CORE_GUARD_END
 }
 
 WorldStepHooks AForeverFrameworkActor::MakeStepHooks()

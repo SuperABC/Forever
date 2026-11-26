@@ -1,5 +1,7 @@
 #include "polit/polit_save.h"
 
+#include "common/error.h"
+
 #include "polit/polit.h"
 #include "polit/party_factory.h"
 #include "map/map.h"
@@ -167,12 +169,8 @@ Polit* PolitSaveCodec::Load(const SaveArchive& archive, Map& map, Populace& popu
 		polit->Bind(map, populace, society);
 		return polit.release();
 	}
-	catch (const exception& e) {
-		error = string("polit load failed: ") + e.what();
-		return nullptr;
-	}
 	catch (...) {
-		error = "polit load failed with an unknown error";
+		error = "polit load failed: " + DescribeCurrentException().ToLine();
 		return nullptr;
 	}
 }

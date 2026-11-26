@@ -1,5 +1,7 @@
 #include "industry/storage.h"
 
+#include "common/error.h"
+
 #include <algorithm>
 
 using namespace std;
@@ -10,7 +12,7 @@ Storage::Storage(StorageFactory* factory, const string& id, const string& name) 
 	valid = (mod != nullptr);
 	if (!mod) return;
 
-	mod->SetProperty();
+	MOD_CALL(mod, mod->SetProperty());
 	categories = mod->categories;
 	capacity = mod->capacity;
 	canTake = mod->canTake;

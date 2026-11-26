@@ -1,5 +1,7 @@
 #include "industry_save.h"
 
+#include "common/error.h"
+
 #include "industry/industry.h"
 #include "map/map.h"
 
@@ -130,8 +132,8 @@ Industry* IndustrySaveCodec::Load(const SaveArchive& archive, const Map& map, st
 			return nullptr;
 		}
 	}
-	catch (const exception& e) {
-		error = e.what();
+	catch (...) {
+		error = "industry load failed: " + DescribeCurrentException().ToLine();
 		delete industry;
 		return nullptr;
 	}

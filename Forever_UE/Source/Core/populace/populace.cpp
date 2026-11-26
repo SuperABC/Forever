@@ -308,10 +308,10 @@ void Populace::InitNames() {
 	// AForeverFrameworkActor::BeginPlay()的try/catch统一处理(打日志+退出游戏)。和Map::InitRoadnet同一个处理。
 	const string activeId = Config::GetUniqueConceptMod("Names");
 	if (activeId.empty()) {
-		THROW_EXCEPTION(RuntimeException, "No name mod enabled.\n");
+		THROW_EXCEPTION(DataException, "No name mod enabled.\n");
 	}
 	if (!nameFactory.CheckRegistered(activeId)) {
-		THROW_EXCEPTION(RuntimeException, "Name mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
+		THROW_EXCEPTION(DataException, "Name mod '" + activeId + "' is enabled in the config but no loaded dll provides it.\n");
 	}
 	name = new Name(&nameFactory, activeId);
 
