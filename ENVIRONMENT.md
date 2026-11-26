@@ -25,7 +25,7 @@
 2. 运行 `Forever_UE/build.bat`，按顺序编译：
    1. `Source/Framework.sln`（Dependence / Core / Basic / Test，Release x64）。Basic 是运行期 DLL，由 `config.json` 的 `dll_paths` 加载，不链进 UE 模块。
    2. UE 模块 `ForeverEditor Win64 Development`（UBT；含 `ForeverTest` 测试模块）。
-   3. 外部 mod：`Forever_Mod/{Empty,Test,Yuanshen,Wxdj}/Cpp/*.sln`（Release x64）。
+   3. 外部 mod：`Forever_Mod/{Empty,Test,Yuanshen,Wxdj,Tutorial}/Cpp/*.sln`（Release x64）。
 3. 生成头像：`cd Forever_UE/Tools/AvatarGen && npm install && node generate.mjs`（输出 `Resource/Avatars`，被忽略，没有则头像缺失）。
 4. 用编辑器打开 `Forever.uproject`，进 `/Game/Levels/World` 或从菜单关卡开始。
 

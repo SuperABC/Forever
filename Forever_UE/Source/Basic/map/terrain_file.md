@@ -12,6 +12,8 @@
 - **贴图**：自己没有声明任何材质(`SetupTexture` 只设地图色；文件里的格子地形串是 `plain`/`terrain_mountain` 等，不会是 `terrain_file`)。`plain` 的材质在 `Map::GetTerrainAppearances()` 里硬编码(沙地)；文件里其它字符串(含 `terrain_mountain`/`terrain_beach` 等)只有对应 mod 也启用时才有自己的材质，否则那些格子渲染成纯灰并在日志里打 `LogTerrainMaterial` 错误。**要让文件里的山/海/河有材质，就把这几个 mod 也启用并加 `--skip`**（只提供贴图、不再随机生成），例如 `terrain_mods`: `["terrain_file --path=…", "terrain_mountain --skip", "terrain_ocean --skip", "terrain_river --skip"]`（河 mod 依赖山 mod，三个一起开）。
 - 不写 fine heights，所以没有河岸精细高度。
 
+- **内嵌版(`Tools/MapEmbed`)**：`terrain_file.cpp` 里 `// [map_embed:load begin]`/`// [map_embed:load end]` 之间是"按 --path 读文件进 `data`"的一段，`embed_map.py` 拿这两个文件当模板生成内嵌数据的 mod 时只换掉这一段(加类名/id/显示名/`--path` 解析几处替换)。改这两个文件要保持标记和那几处写法，改完把已生成的内嵌 mod 重新生成一遍。
+
 ## 依赖关系
 只依赖 Dependence（`map/terrain_mod.h`、`common/utility.h`）。编辑器侧读写见 `Tools/MapEditor/js/io.js`。
 

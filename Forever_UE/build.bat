@@ -30,6 +30,10 @@ echo ==== Building Forever_Mod\Wxdj ====
 "%MSBUILD%" "%MOD_ROOT%\Wxdj\Cpp\Wxdj.sln" /p:Configuration=Release /p:Platform=x64 /m
 if errorlevel 1 goto :fail
 
+echo ==== Building Forever_Mod\Tutorial ====
+"%MSBUILD%" "%MOD_ROOT%\Tutorial\Cpp\Tutorial.sln" /p:Configuration=Release /p:Platform=x64 /m
+if errorlevel 1 goto :fail
+
 echo ==== All builds succeeded ====
 exit /b 0
 

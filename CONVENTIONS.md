@@ -131,13 +131,14 @@ Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverPlaye
 
 ## 9. 外部Mod插件(`Forever_Mod/*`)不在`Framework.sln`里,改公共头文件要记得单独重新编译
 
-`Forever_Mod/Empty`、`Forever_Mod/Test`、`Forever_Mod/Yuanshen`、`Forever_Mod/Wxdj`各自是独立的`.sln`工程,产出自己的DLL,运行时由`Config`/`ModLoader`按`config.json`的`dll_paths`扫描加载——它们`#include`和`Source/Basic`相同的`Dependence`头文件,但**不会**随`Framework.sln`的编译自动重新生成。修改任何`Source/Dependence`下的头文件(尤其是`<Concept>Mod`基类新增字段)后,除了重新编译`Framework.sln`,**必须额外手动编译这几个外部Mod工程**,否则它们的DLL仍然按旧的(更短的)结构体布局分配对象,Core之后按新布局读取这些对象会读到越界内存,容易表现成"看似随机但其实是读到了旧对象末尾之外的内存"的诡异崩溃或读数(实测复现过一次:一个被追加了新字段的`Mod`基类,某个外部Mod插件没跟着重新编译,导致该插件创建的实例在读取新字段时读出一个看起来合理却完全是垂悬数据的数字)。
+`Forever_Mod/Empty`、`Forever_Mod/Test`、`Forever_Mod/Yuanshen`、`Forever_Mod/Wxdj`、`Forever_Mod/Tutorial`各自是独立的`.sln`工程,产出自己的DLL,运行时由`Config`/`ModLoader`按`config.json`的`dll_paths`扫描加载——它们`#include`和`Source/Basic`相同的`Dependence`头文件,但**不会**随`Framework.sln`的编译自动重新生成。修改任何`Source/Dependence`下的头文件(尤其是`<Concept>Mod`基类新增字段)后,除了重新编译`Framework.sln`,**必须额外手动编译这几个外部Mod工程**,否则它们的DLL仍然按旧的(更短的)结构体布局分配对象,Core之后按新布局读取这些对象会读到越界内存,容易表现成"看似随机但其实是读到了旧对象末尾之外的内存"的诡异崩溃或读数(实测复现过一次:一个被追加了新字段的`Mod`基类,某个外部Mod插件没跟着重新编译,导致该插件创建的实例在读取新字段时读出一个看起来合理却完全是垂悬数据的数字)。
 
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "<repo>\Forever_Mod\Empty\Cpp\Empty.sln" /p:Configuration=Release /p:Platform=x64 /m
 & "...\MSBuild.exe" "<repo>\Forever_Mod\Test\Cpp\Test.sln" /p:Configuration=Release /p:Platform=x64 /m
 & "...\MSBuild.exe" "<repo>\Forever_Mod\Yuanshen\Cpp\Yuanshen.sln" /p:Configuration=Release /p:Platform=x64 /m
 & "...\MSBuild.exe" "<repo>\Forever_Mod\Wxdj\Cpp\Wxdj.sln" /p:Configuration=Release /p:Platform=x64 /m
+& "...\MSBuild.exe" "<repo>\Forever_Mod\Tutorial\Cpp\Tutorial.sln" /p:Configuration=Release /p:Platform=x64 /m
 ```
 
 ## 10. C++改动必须跑一次真实编译才能算完成

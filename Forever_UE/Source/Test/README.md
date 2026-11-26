@@ -9,7 +9,7 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 `core` 管线先对 config 里 `dll_paths` 下的全部 mod dll 跑 ModTest(报告在 `<out>/../mod`)，再跑 CoreTest。
 单独跑 ModTest：`x64\Release\ModTest.exe <mod.dll|目录>... [--with <dll|目录>] [--config config.json] [--seed N] [--out dir]`，全量(含 `Forever_Mod` 下所有 mod、查重名)用 `x64\Release\ModTest.exe x64\Release ..\Forever_Mod`。
 单独跑 CoreTest：`x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,perform,route,green,presets,plateau,polit,transit,terrain,unload,fault|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
-先编译：`MSBuild Source\Framework.sln /p:Configuration=Release /p:Platform=x64`(必须编整个 sln：只编 `Source/Test/Core/Test.vcxproj`(输出仍是 `CoreTest.exe`)不会重编 Core.lib，改了 Core 会测到旧代码)。改了 `Dependence` 头文件要把 `Forever_Mod` 下 Empty/Test/Wxdj/Yuanshen 也各自重编，lint 会检查 DLL 是否比头文件旧。UE 代码用 UBT 编 `ForeverEditor Win64 Development`。
+先编译：`MSBuild Source\Framework.sln /p:Configuration=Release /p:Platform=x64`(必须编整个 sln：只编 `Source/Test/Core/Test.vcxproj`(输出仍是 `CoreTest.exe`)不会重编 Core.lib，改了 Core 会测到旧代码)。改了 `Dependence` 头文件要把 `Forever_Mod` 下 Empty/Test/Wxdj/Yuanshen/Tutorial 也各自重编，lint 会检查 DLL 是否比头文件旧。UE 代码用 UBT 编 `ForeverEditor Win64 Development`。
 
 ## 套件
 - random：同种子跨进程所有阶段严格一致、各阶段无未包作用域的随机、DLL 导出 BindModHost、源码里无绕过 GetRandom 的随机源、流状态快照恢复。

@@ -72,11 +72,12 @@ void FileTerrain::DistributeTerrain(int width, int height,
 	const function<bool(int, int, bool, float)>& setWater,
 	const function<bool(int, int, const float*)>& setFineHeights) const {
 
+	vector<char> data;
+	// [map_embed:load begin] Tools/MapEmbed生成内嵌数据mod时把begin/end之间换成从内嵌数组读进data，这一段之外的代码原样拷过去。
 	if (path.empty()) {
 		debugf(DebugLevel::Warning, "FileTerrain has no --path, terrain left untouched.\n");
 		return;
 	}
-	vector<char> data;
 	{
 		ifstream file(path, ios::binary);
 		if (!file) {
@@ -85,6 +86,7 @@ void FileTerrain::DistributeTerrain(int width, int height,
 		}
 		data.assign(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
 	}
+	// [map_embed:load end]
 
 	// 格式见terrain_file.md：魔数FTRN, u32 w,h, 调色板(u16条数,每条u16长度+UTF8), u16[w*h]下标, f32[w*h]高度, f32[w*h]水位(NaN=无水)。
 	Reader reader(data);

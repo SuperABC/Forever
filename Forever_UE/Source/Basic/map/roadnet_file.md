@@ -21,6 +21,8 @@
 - **行道树/路灯（tag）**：`roads[]` 的每一段（**不分 kind**）带 `treeTag`/`lampTag`（字符串，空=这条路没有）；游戏只看这个指定，指定放什么就放什么：不再跳过隧道/桥/隧道口，Core 也不再对路树/路灯做水面/挖洞过滤（mod 的 `filterRoadPlants=false`，只丢出图的点）。编辑器给 `ground`/`hug` 路填 `default`，其余类型留空是用户的选择，不是代码限制。mod 读进 `treeTags`/`lampTags`（下标=`roads` 下标；Core 的 `hostRoads` 前面和 `mod->roads` 一一对应，起点 id 对不上就跳过），`LayoutTrees/LayoutLamps` 按 tag 查 `roadnet_file.cpp` 里的 `TreeAssetFor`/`LampAssetFor`（tag→网格/蓝图、间距、人行道内偏移比例等）选资产。现在只有 `default`：资产和间距常量与 `roadnet_checkboard.cpp` 完全一致（`TREE_*`/`LAMP_*`，两份各抄，改要同步）。未知 tag 告警并跳过；要加新资产就在两个查表函数里加一行，编辑器里给道路填同名 tag。
   排点几何同 checkboard 的 `LayoutRows`（扣掉路口缩进、避开 `Road::GetOpenings`、按人行道位置偏移、跳过小路；不按路的类型/高度筛）：直路一整段连续树位发一条 `AddTreeLine/AddLampLine`；**曲线路**按弧长逐点取位置和切线，每点发一个 `num=1` 的线（朝向取该点切线）。路灯朝向=路方向±90°(side 0 为-90°)+资产的 `yawOffset`。
 
+- **内嵌版(`Tools/MapEmbed`)**：`roadnet_file.cpp` 里 `// [map_embed:load begin]`/`// [map_embed:load end]` 之间是"按 --path 读文件进 `text`"的一段，`embed_map.py` 拿这两个文件当模板生成内嵌数据的 mod 时只换掉这一段(加类名/id/显示名/`--path` 解析几处替换)。改这两个文件要保持标记和那几处写法，改完把已生成的内嵌 mod 重新生成一遍。
+
 ## 依赖关系
 只依赖 Dependence（`map/roadnet_mod.h`、`common/json.h`）。
 

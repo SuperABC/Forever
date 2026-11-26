@@ -161,6 +161,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 	treeTags.clear();
 	lampTags.clear();
 
+	// [map_embed:load begin] Tools/MapEmbed生成内嵌数据mod时把begin/end之间换成从内嵌数组构造text，这一段之外的代码原样拷过去。
 	if (path.empty()) {
 		debugf(DebugLevel::Warning, "FileRoadnet has no --path, roadnet left empty.\n");
 		return;
@@ -171,6 +172,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		return;
 	}
 	string text((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+	// [map_embed:load end]
 	JsonValue root;
 	JsonReader reader;
 	if (!reader.Parse(text, root, false) || !root.IsObject() || !root["output"].IsObject()) {
