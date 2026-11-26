@@ -2,6 +2,8 @@
 
 开发辅助工具索引。除特别说明外都**不在** `Source/Framework.sln` 里，不随 `build.bat` 编译，需要时单独构建。
 
+链接了 Dependence/Core/Basic 的几个程序(JunctionTest、ModHost、ModWeb、RoadnetViz)在 Dependence 的头文件改过之后必须重编，否则里面的 mod 对象布局、虚函数表和新的 dll 对不上。最近一次四个一起重编是 2026-11-26(之后 Dependence 头文件再改过就又要重编)。ModWeb 的 `build_web.bat` 不要从 Git Bash 里启动：环境里带着 `MSYSTEM` 时 emsdk 会把 PATH 写成 `/c/...` 的形式，接着就报找不到 `em++`；从 cmd 或 PowerShell 启动。
+
 | 目录 | 用途 | 构建/运行 |
 |---|---|---|
 | AvatarGen | 生成市民头像 PNG（按年龄段/性别），输出 `Resource/Avatars`（被 git 忽略，新机器需重新生成） | Node.js：`npm install` 后 `node generate.mjs`，详见其 README |

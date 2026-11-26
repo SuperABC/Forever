@@ -94,7 +94,7 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
 
 `Wheel Radius` 和 `Center Of Mass Offset` 在基类 `BeginPlay` 里应用（用 `SetWheelRadius` 按轮位覆盖，不用为每种车型建轮子蓝图子类）。基类里没有任何车型特判。
 
-父类要**直接**选 `VehicleElement`，不要从别的载具蓝图派生：子蓝图会继承父蓝图上填的所有值（轮骨名、`Line Controller Class` 等），以后在父蓝图上调任何值都会连带影响它。`BP_BusElement` 目前是从 `BP_VehicleElement` 派生的（建得比这份说明早），所以 `Line Controller Class` 只能设在 `BP_BusElement` 上，不要设在 `BP_VehicleElement` 上。
+父类要**直接**选 `VehicleElement`，不要从别的载具蓝图派生：子蓝图会继承父蓝图上填的所有值（轮骨名、`Line Controller Class` 等），以后在父蓝图上调任何值都会连带影响它。
 
 ## 六、在 Basic 里注册车型（C++）
 

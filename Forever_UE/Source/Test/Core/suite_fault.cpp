@@ -15,6 +15,8 @@
 #include "player/phone.h"
 #include "player/player.h"
 #include "player/puzzle.h"
+#include "player/puzzle_factory.h"
+#include "player/puzzle_mod.h"
 #include "polit/polit.h"
 #include "populace/populace.h"
 #include "society/society.h"
@@ -376,22 +378,33 @@ namespace {
 		delete world.map; world.map = nullptr;
 	}
 
-	// mod dll里抛出的异常。puzzle_fault在Forever_Mod/Test里(见它的.md)，默认不启用，这里临时启用。
+	// mod里抛出的异常。用测试自己的工厂和一个假的小游戏mod，不需要任何dll：出错方式由SetParam指定，在Init里出错。
+	// 消息故意比15个字符长(短字符串存在对象内部，长的才在堆上分配)。
+	struct FaultPuzzleMod : PuzzleMod {
+		FOREVER_MOD_GENERIC_UNIT_TEST("puzzle")
+		const char* GetType() const override { return "fake_fault_puzzle"; }
+		const char* GetName() override { return "fault"; }
+		void SetParam(const string& param) override { mode = param; }
+		void Init(Canvas*, PostHandle*) override {
+			if (mode == "std") throw runtime_error("the fake puzzle threw a std::runtime_error on purpose");
+			if (mode == "data") THROW_EXCEPTION(DataException, "the fake puzzle threw a DataException on purpose");
+			if (mode == "unknown") throw 42;
+		}
+		JsonValue* Loop(Canvas*, int, PostHandle*) override { return nullptr; }
+		string mode;
+	};
+
 	void CheckModExceptions() {
 		TestRun& run = TestRun::Get();
-		const string id = "puzzle_fault";
-		Config::SetModEnabled("Puzzles", id, true);
-		Registry::Get().RefreshMods();
-		PuzzleFactory& factory = Registry::Get().GetPuzzleFactory();
-		if (!factory.CheckRegistered(id)) {
-			run.Check(false, "the fault-injection puzzle mod is available", "puzzle_fault is not registered: is Forever_Mod/Test built and in dll_paths?");
-			return;
-		}
+		const string id = "fake_fault_puzzle";
+		PuzzleFactory factory;
+		factory.SetModArgs({ { id, "" } });
+		factory.RegisterPuzzle(id, [](const string&) -> PuzzleMod* { return new FaultPuzzleMod(); }, [](PuzzleMod* mod) { delete mod; });
 
 		struct Case { const char* param; ErrorKind kind; const char* messagePart; const char* locationPart; };
 		const Case cases[] = {
 			{ "std", ErrorKind::Mod, "std::runtime_error on purpose", "" },
-			{ "data", ErrorKind::Data, "DataException on purpose", "puzzle_fault.h" },
+			{ "data", ErrorKind::Data, "DataException on purpose", "suite_fault.cpp" },
 			{ "unknown", ErrorKind::Mod, "unknown exception", "" },
 		};
 		for (const Case& item : cases) {
@@ -404,12 +417,12 @@ namespace {
 				Puzzle puzzle(&factory, id);
 				created = true;
 				puzzle.SetParam(item.param);
-				puzzle.Init(&canvas, nullptr); // 这里抛；Puzzle的析构在展开途中把mod实例还给它自己的dll
+				puzzle.Init(&canvas, nullptr); // 这里抛；Puzzle的析构在展开途中把mod实例还回去
 			}, report);
-			run.Check(created && !finished, "an exception thrown inside a mod dll reaches the host" + label);
+			run.Check(created && !finished, "an exception thrown inside a mod reaches the caller of the Core object" + label);
 			run.Check(report.kind == item.kind, "it is classified correctly" + label, ErrorKindName(report.kind));
 			run.Check(report.mod == id, "it names the mod that threw" + label, "mod=" + report.mod + " context=" + JoinContext(report));
-			run.Check(Contains(report.message, item.messagePart), "its message crosses the dll boundary intact" + label, report.message);
+			run.Check(Contains(report.message, item.messagePart), "its message is reported intact" + label, report.message);
 			if (item.locationPart[0]) run.Check(Contains(report.location, item.locationPart), "its throw location points into the mod's source" + label, report.location);
 		}
 		// 正常路径没被弄坏：不给参数就不出错。

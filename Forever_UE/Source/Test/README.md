@@ -18,7 +18,7 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - terrain：地形覆盖图烘焙(2026-11-24)。`terrain_coverage`的纯函数：覆盖度和=255、对称、直边单调、45°斜线边界模糊后沿对角线波纹≤8(不模糊>100)、mip链、降采样、非法输入、大图耗时。UE侧材质画面只能 PIE 目测。
 - green：绿化区(2026-11-20)。纯函数(`polygon_util`)、直接构造`green_park`测凹多边形圆/连路圆校验丢弃，再用`Tools/MapEditor/samples/demo.roadnet`(一块连路、一块不连路的凹多边形绿化)+`demo.terrain`替换config里的路网/地形生成世界：圆在多边形内且互不重叠、装饰物在多边形内、`LocateGreen`地址往返、房间↔圆的行人路线、地图存档往返字节稳定、市民站在/走向绿化区的存档往返和Core行进到达。demo文件缺失=失败；`make_demo.js`改动后要重新生成。
 - unload(2026-11-25)：一局结束后Core有没有泄漏、mod dll能不能卸干净。子进程里对已生成的世界连做3轮"销毁(和UE的`EndPlay`同一个顺序)→查泄漏→`Registry::UnloadMods`→重新加载→再生成"：销毁后没有活着的`Script`(`Script::ClearCache`返回true)、23个Factory里没有活着的mod实例、每个dll都卸载并且确实不在进程里(`GetModuleHandle`)、没有mod id还留着注册、卸载重载后同种子生成的世界指纹和第一次一致、相邻两轮销毁后的私有内存不持续上涨(涨幅小于一个世界的20%)。最后故意留一个取名mod的实例不销毁，查保护：只有它所在的dll被留下、别的照常卸载、实例还能用还能销毁、销毁后再卸一次全部走干净。这个套件是CoreTest里唯一会销毁世界的地方。
-- fault：故障注入，逐条验证异常体系的规则(`Dependence/common/error.md`)。父进程里(不需要mod)：三类异常的类别/消息/抛出位置、不是`ExceptionBase`的异常按"当时是不是在mod里"归类、`ErrorScope`的顺序和过期清理、`GuardData`只接数据错误、`MOD_CALL`、`TryParseInt`/`TryParseDouble`和`stoi`/`stod`逐个输入一致、坏config读完是空的不是半份。子进程里(一个种子、256的小地图)：`Forever_Mod/Test`的`puzzle_fault`在mod dll里抛三种异常(标准库异常/`DataException`/`throw 42`)，宿主都能接住、归类正确、指名到这个mod；坏的脚本/layout/表达式是数据错误且报告里带文件；出过这些错之后世界仍能销毁、没有泄漏、mod dll仍能全部卸掉。验证不了的：UE层`CoreGuard`的回菜单流程；宿主和mod分配器不同的问题(CoreTest和mod用同一个堆，只有UE里才不同)。
+- fault：故障注入，逐条验证异常体系的规则(`Dependence/common/error.md`)。父进程里(不需要mod)：三类异常的类别/消息/抛出位置、不是`ExceptionBase`的异常按"当时是不是在mod里"归类、`ErrorScope`的顺序和过期清理、`GuardData`只接数据错误、`MOD_CALL`、`TryParseInt`/`TryParseDouble`和`stoi`/`stod`逐个输入一致、坏config读完是空的不是半份。子进程里(一个种子、256的小地图)：测试自带的假小游戏mod(登记在测试自己的工厂里，不经过dll)抛三种异常(标准库异常/`DataException`/`throw 42`)，都能接住、归类正确、指名到这个mod；坏的脚本/layout/表达式是数据错误且报告里带文件；出过这些错之后世界仍能销毁、没有泄漏、mod dll仍能全部卸掉。验证不了的：UE层`CoreGuard`的回菜单流程；异常从mod dll里抛出、穿过dll边界到宿主这一段(原来有一个专门出错的mod`puzzle_fault`覆盖它，2026-11-26删掉了)；宿主和mod分配器不同的问题(CoreTest和mod用同一个堆，只有UE里才不同)。
 - plateau：非0高度地块(2026-11-23)。`Tools/MapEditor/samples/plateau.roadnet/.terrain`(make_plateau.js生成：抹平出z=3的平台+平台上方框路(节点z=3)+一块居住地块+一条贴合路下山)，config仅换路网/地形mod，其余mod照常自动填充地块。对每个所属地块z≠0的建筑/园区检查：平台格`IsConstruction`但高度不为0、地块z=平台高度、`GetGroundZ()`=地块z、房间导航节点z=`GetFloorWorldZ`、建筑门不低于地坪、园区大门/内部路z=地坪、地块边界路水平且同高。夹具缺失=失败。
 - presets：路网预设(2026-11-21)。`Tools/MapEditor/samples/presets.roadnet`(make_presets.js生成：方框路+一块地+4个预设，含子地块里的、一个id不存在的)，config里`zone_residence_high --skip`：zone只有3个预设的、矩形(Quad中心位置)和编辑器模拟器一致、`--skip`生效、无效id只告警不崩。
 - transit：MapEditor"线路"工具手动设计的火车线路(2026-11-23)。`Tools/MapEditor/samples/transit.roadnet`(make_transit.js生成：方框路+一块地+2个火车站预设+n0->n1平地铁轨、n1->n2曲线桥+一个线路环[s0停,n0,n2,s1停])，config里`route_mods`换成只有`route_train --skip`：环规划成1条线2段(停靠站之间)、每段所有片段首尾相接(<1e-3)且接缝朝向突变<25°、n0处右手铁轨出发点偏中轴+0.25而左手铁轨到达点偏-0.25(两轨相距0.5)、桥面升到节点高度。fixture缺失=失败；`make_transit.js`改动后要重新生成并同步`suite_transit.cpp`里的坐标。另有两份(同一个站在环里出现两次，往返各停一次)：`transit_twice`(东西两侧各一条铁轨，铁轨原路掉头)、`transit_hub`(没有铁轨，两个孤立节点夹在站两侧，节点处掉头)：1条线2段、两段都从该站出发回到该站、两次停靠落在不同轨道。第四份 `transit_bus`(2026-11-23，MapEditor"路网路线"手动公交)：方框路上顺时针 4 个站成一个环，config 里 `route_mods` 是 `route_bus --skip`：4 个 `BusStop_L0_S*` 站(没有自动的棋盘格站)、都挂在路上、不压同侧车辆开口，1 条线 4 段、每段连两个不同的站。四份依次各跑一遍子进程。
@@ -65,6 +65,21 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 
 - 发现(changes)：首轮实测 enter_vehicle 102ms(生成并附身载具)、create_timer 约 50ms、remove_timer 约 49ms、global_message 约 42ms，是主线程耗时最长的几个，其余都在 10ms 以内。create_timer/remove_timer 单次 50ms 这么大值得查；`leave_work` 等计时器每次执行 10~17ms 与此一致。
 - 已修：脚本 `start_puzzle` 指向未注册/未启用的 puzzle id 原来会因 `Puzzle::Puzzle` 抛未捕获的异常(现在归为 DataException)崩游戏；现在 `UPuzzleWidget::StartPuzzle` 先创建新的这局并捕获，失败就打 Warning 日志并忽略(正在进行的上一局保留)。changes 套件用未启用的 id 覆盖这条路径(首次约 30ms，是首个 C++ 异常的开销)。
+
+## 2026-11-25～26 这批改动里还没在 UE 里验证的
+这两天的全项目 review 一共改了 25 轮，每轮只做了全量编译 + ModTest + CoreTest，**UE 管线一次没跑，编辑器/PIE 一次没开**。验证过一项就从这里删一项。
+- 先跑 `run_tests.bat quick ue`，它能覆盖其中不需要人看的部分：
+  - changes 套件：`Change` 改成按 `ChangeKind` 分派之后，UE 层 `ApplyChange` 的 37 个 `case` 没有在游戏里执行过。
+  - saveload 套件：读档会销毁并重建世界，走一遍"各域销毁 → 注销并卸载 mod dll → 重新加载"。跑完在 `Forever.log` 里搜 `still alive after the game ended`，出现就说明有对象没跟着一局结束销毁、对应的 dll 没被卸载。
+  - 任意套件的 `Forever.log` 里应该有 `LogForeverCore` 的行，Core 和 mod 里打的日志(比如 Basic 生成地形时的那几条)都在里面。
+- 要进游戏看的：
+  - "进游戏 → 退回菜单 → 再进游戏"多试几轮；在菜单界面替换一个 mod 的 dll 再开局。
+  - 开局装备现在由主线脚本用 `grant_asset` 发(`Forever_Mod/Test/Resource/test.script`)：左肩手枪、右肩步枪、背包里的东西是否和原来一样，读档后不会重复发。
+  - 手机桌面：`showOnDesktop=false` 的应用不出现，其它应用照常。
+  - 线路调试线(颜色改成按站点类型名哈希)能否分得开；轿车旁边"上车"选项的触发范围(触发盒改成按车身包围盒外扩)是否合适。
+  - 没调 `SetMaterial` 的地形用平原那套贴图显示是否正常。
+  - 游戏时钟的速度不随帧率变。
+  - 改了脚本文件后重开 PIE 能生效；连开两局时市民名字从头编；存档覆盖同名存档。
 
 ## 待做
 - 车辆流式压测、带画面 GPU 采样。

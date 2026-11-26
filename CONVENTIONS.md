@@ -225,4 +225,4 @@ mod不能留下会在卸载后被调用的东西:不开线程、不向系统或�
 
 ### 怎么验证
 
-CoreTest的`fault`套件逐条验证上面的规则:三类异常的归类、`ErrorScope`的顺序和过期清理、`GuardData`只接数据错误、坏config/脚本/layout、mod dll里抛出的三种异常(`Forever_Mod/Test`的`puzzle_fault`)、出错之后世界仍能销毁且mod dll仍能卸干净。它验证不了两件事:UE层`CoreGuard`的回菜单流程(只能在编辑器里看);以及宿主和mod分配器不同带来的问题——CoreTest是普通exe,和mod用的是同一个堆,这类问题只在UE里才会出现。
+CoreTest的`fault`套件逐条验证上面的规则:三类异常的归类、`ErrorScope`的顺序和过期清理、`GuardData`只接数据错误、坏config/脚本/layout、mod里抛出的三种异常(测试自带的假小游戏mod,不经过dll)、出错之后世界仍能销毁且mod dll仍能卸干净。它验证不了三件事:UE层`CoreGuard`的回菜单流程(只能在编辑器里看,2026-11-26在PIE里用一个会抛异常的mod验证过一次);异常从mod dll里抛出、穿过dll边界到宿主这一段(没有专门为此留一个会出错的mod);以及宿主和mod分配器不同带来的问题——CoreTest是普通exe,和mod用的是同一个堆,这类问题只在UE里才会出现。
