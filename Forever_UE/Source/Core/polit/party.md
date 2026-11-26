@@ -5,7 +5,7 @@
 
 ## 状态字段(公开，只有`Polit`和`PolitSaveCodec`读写)
 - `members`：党员(`Citizen*`)；`leader`：党首(目前只记录/存档/写日志，没有实际用处，以后再补)；
-- `meetingAddress`/`meetingRoom`：会议室地址与解析出的房间(空=没有会议室；读档时由地址重新解析)；
+- `meetingAddress`/`meetingRoom`：会议室地址与解析出的房间(空=没有会议室；读档时由地址重新解析)；`MeetsOnline()`=没有会议室，党代会线上召开(见`polit.md`"党代会")；
 - `ruling`/`terms`：是否执政党、连续执政期数(执政期间>=1)；
 - `powers`：(权力id, 担任者)，只在执政期间有内容；
 - `congress`：当月党代会进度(`monthKey`、`plan`日程、`started`/`ended`/`skipLogged`)。

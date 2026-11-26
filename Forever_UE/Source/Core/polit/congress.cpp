@@ -1,4 +1,5 @@
-// 党代会：每月由党派mod给出日程，开始/结束时通知党员，结束时统计到场者并投票选党首。设计见polit.md"党代会"一节。
+// 党代会：每月由党派mod给出日程，开始/结束时通知党员，结束时统计到场者并投票选党首。没有会议室的党线上召开。
+// 设计见polit.md"党代会"一节。
 #include "polit/polit.h"
 
 #include "common/error.h"
@@ -30,7 +31,7 @@ void Polit::PushNotice(const Party& party, bool start) {
 	MeetingNotice notice;
 	notice.party = party.GetId();
 	notice.start = start;
-	notice.address = party.meetingAddress;
+	notice.address = party.MeetsOnline() ? string() : party.meetingAddress; // 线上召开：地址为空，收到通知的人不用去任何地方
 	for (Citizen* member : party.members) {
 		if (member && member->IsActive()) notice.members.push_back(member);
 	}
@@ -73,8 +74,9 @@ void Polit::UpdateCongress(Party& party, const Time& now) {
 		PushNotice(party, true);
 		size_t count = 0;
 		for (Citizen* member : party.members) if (member && member->IsActive()) count++;
-		PolitLog(now, "congress_start", "party=" + party.GetId() + " address=" + party.meetingAddress +
-			" notified=" + to_string(count) + (party.meetingAddress.empty() ? " note=no_meeting_room" : ""));
+		const bool online = party.MeetsOnline();
+		PolitLog(now, "congress_start", "party=" + party.GetId() + " address=" + (online ? string() : party.meetingAddress) +
+			" notified=" + to_string(count) + (online ? " mode=online" : ""));
 	}
 	// 跳时间时start和end可能在同一步都过了，先补start再补end。
 	if (party.congress.started && !party.congress.ended && now >= endTime) {
@@ -86,9 +88,15 @@ void Polit::UpdateCongress(Party& party, const Time& now) {
 }
 
 void Polit::ElectLeader(Party& party, const Time& now) {
-	// 到场者 = 会议室里的党员。
+	// 到场者：有会议室 = 这时候在会议室里的党员；没有会议室 = 线上召开，全体在城党员都算到场。
+	const bool online = party.MeetsOnline();
 	vector<Citizen*> attendees;
-	if (party.meetingRoom) {
+	if (online) {
+		for (Citizen* member : party.members) {
+			if (member && member->IsActive()) attendees.push_back(member);
+		}
+	}
+	else {
 		const vector<Citizen*>& occupants = party.meetingRoom->GetOccupants();
 		for (Citizen* member : party.members) {
 			if (member && member->IsActive() && find(occupants.begin(), occupants.end(), member) != occupants.end()) {
@@ -99,7 +107,7 @@ void Polit::ElectLeader(Party& party, const Time& now) {
 	string names;
 	for (Citizen* attendee : attendees) names += (names.empty() ? "" : ",") + attendee->GetName();
 	PolitLog(now, "attendance", "party=" + party.GetId() + " present=" + to_string(attendees.size()) + "/" +
-		to_string(party.members.size()) + " list=" + names + (party.meetingRoom ? "" : " note=no_meeting_room"));
+		to_string(party.members.size()) + " list=" + names + (online ? " mode=online" : ""));
 
 	if (attendees.size() < 2) {
 		PolitLog(now, "leader_vote", "party=" + party.GetId() + " skipped reason=fewer_than_2_attendees keep=" +

@@ -31,6 +31,8 @@ public:
 	Citizen* leader = nullptr;        // 党首：目前只记录/存档/写日志，不参与任何其它逻辑
 	std::string meetingAddress;       // 会议室地址(空=没有会议室)
 	Room* meetingRoom = nullptr;      // meetingAddress解析出的房间(读档时由地址重新解析)
+	// 没有会议室的党，党代会"线上"召开：通知里的地址为空(没有人需要走过去)，全体在城党员都算到场，党首照常选。
+	bool MeetsOnline() const { return meetingRoom == nullptr; }
 
 	bool ruling = false;
 	int terms = 0;                    // 连续执政期数(当前是执政党时>=1)

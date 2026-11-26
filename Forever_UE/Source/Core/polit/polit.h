@@ -16,7 +16,7 @@
 struct MeetingNotice {
 	std::string party;               // 党派注册id
 	bool start = true;               // true=开始，false=结束
-	std::string address;             // 会议室地址(空=没有会议室)
+	std::string address;             // 会议室地址；空=这个党没有会议室，党代会线上召开，收到通知的人不用去任何地方
 	std::vector<Citizen*> members;   // 发出通知那一刻的全体在城党员
 };
 

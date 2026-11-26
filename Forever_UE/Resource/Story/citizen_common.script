@@ -12,7 +12,8 @@
 	//   - citizen_decease：清掉记录。
 	//
 	// 党代会(Core/polit，只发给该党的党员)：
-	//   - meeting_start：有会议室($$local.address非空)就把党派记到$$self.meeting_party并导航过去；没有会议室什么都不做。
+	//   - meeting_start：有会议室($$local.address非空)就把党派记到$$self.meeting_party并导航过去；地址为空是线上召开(这个党没有会议室)，
+//     什么都不做——不导航、不记录，党首由Core照常选(全体在城党员都算到场)。
 	//   - meeting_end：散会，$$self.meeting_party非空(即之前真的去开会了)就导航回家$$local.home，然后清掉记录。
 	"milestones": [
 		{

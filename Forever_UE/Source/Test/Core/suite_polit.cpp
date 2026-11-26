@@ -176,6 +176,7 @@ namespace {
 		int maxTerms = 0;
 		set<string> everRuled;
 		bool anyAttendeeVote = false;
+		int onlineLeaderVotes = 0;                // 线上召开并选出了党首的党代会次数
 	};
 
 	vector<double> SnapshotPolicy(const GovernmentPolicy& policy) {
@@ -284,14 +285,21 @@ namespace {
 			if (!party) continue;
 			if (notice.start) {
 				run.Check(!party->ruling, "the ruling party does not hold a congress", notice.party);
-				run.Check(notice.address == party->meetingAddress, "start notice carries the party's meeting room address");
+				const bool online = party->MeetsOnline();
+				run.Check(notice.address == (online ? string() : party->meetingAddress),
+					"start notice carries the party's meeting room address, or an empty one when the congress is online", notice.address);
 				sim.starts[notice.party]++;
 				sim.leaderBefore[notice.party] = party->leader;
 				vector<Citizen*>& attendees = sim.present[notice.party];
 				attendees.clear();
-				// 出席情况按月轮换：全到(0)/约60%(1)/没人(2)。
+				// 有会议室：出席情况按月轮换，全到(0)/约60%(1)/没人(2)。
+				// 没有会议室：线上召开，谁也不挪动，全体收到通知的党员都算到场。
 				const int mode = sim.monthIndex % 3;
 				for (size_t i = 0; i < notice.members.size(); i++) {
+					if (online) {
+						attendees.push_back(notice.members[i]);
+						continue;
+					}
 					const bool attend = mode == 0 || (mode == 1 && ((i * 7 + sim.monthIndex) % 5) < 3);
 					if (attend && party->meetingRoom) {
 						notice.members[i]->SetCurrentRoom(party->meetingRoom);
@@ -305,13 +313,17 @@ namespace {
 				if (attendees.size() >= 2) {
 					const bool leaderIsAttendee = party->leader && find(attendees.begin(), attendees.end(), party->leader) != attendees.end();
 					run.Check(leaderIsAttendee, "the elected leader is one of the attendees", party->GetId());
+					if (party->MeetsOnline()) sim.onlineLeaderVotes++;
 					if (party->leader != sim.leaderBefore[notice.party]) sim.leaderChanges++;
 				}
 				else {
 					run.Check(party->leader == sim.leaderBefore[notice.party], "fewer than 2 attendees: the leader is unchanged", party->GetId());
 				}
 				if (party->leader) run.Check(party->HasMember(party->leader), "the leader is a party member", party->GetId());
-				for (Citizen* member : attendees) member->SetCurrentRoom(member->GetRoom()); // 散会回家
+				run.Check(notice.address == (party->MeetsOnline() ? string() : party->meetingAddress), "end notice carries the same address as the start notice", notice.address);
+				if (!party->MeetsOnline()) {
+					for (Citizen* member : attendees) member->SetCurrentRoom(member->GetRoom()); // 散会回家
+				}
 				sim.present[notice.party].clear();
 			}
 		}
@@ -430,7 +442,9 @@ namespace {
 		string address;
 		for (const Party* party : polit.GetParties()) if (!party->meetingAddress.empty()) { address = party->meetingAddress; break; }
 		if (address.empty() || polit.GetParties().size() < 2) {
-			run.Check(false, "overlap test needs a real meeting room and two parties", address);
+			// 这个世界里没有任何党拿到会议室(地图上没有room_meeting)或者只有一个党：冲突没法造，这里的党代会全是线上开的，
+			// 线上那条路已经由主模拟每个月走一遍。
+			run.Note("meeting-room overlap test skipped: no party has a meeting room in this world (or there is only one party)");
 			return;
 		}
 		sim.log.clear();
@@ -453,15 +467,31 @@ namespace {
 			}
 		}
 		run.Check(attempts == 4 && overlaps == 4, "log shows exactly 4 overlapping attempts for the second party", to_string(attempts) + "/" + to_string(overlaps));
-		// 没有会议室的党开会：start照发(address为空)，end时没人到场。
+		// 没有会议室的党线上开会：start/end照发但地址为空(脚本据此不让任何人走动)，全体在城党员都算到场，党首照常选出。
 		sim.log.clear();
 		probe.Step(Time(2100, 1, 1, 0, 0, 0)); // 第一次Step只记录月份
 		const_cast<Party*>(first)->ruling = true; // 让没有会议室的第二个党成为本月唯一开会的党
-		probe.Step(Time(2100, 1, 1, 16, 0, 0));
-		probe.ConsumeMeetingNotices();
-		bool sawNoRoom = false;
-		for (const string& line : sim.log) if (line.find("no_meeting_room") != string::npos) sawNoRoom = true;
-		run.Check(sawNoRoom, "a party without a meeting room logs 'no_meeting_room' instead of crashing");
+		probe.Step(Time(2100, 1, 1, 16, 0, 0)); // 12:00开始、15:00结束都已经过了，同一步里依次补发
+		const vector<MeetingNotice> onlineNotices = probe.ConsumeMeetingNotices();
+		bool onlineNoticesOk = onlineNotices.size() == 2;
+		for (const MeetingNotice& notice : onlineNotices) {
+			if (notice.party != second->GetId() || !notice.address.empty()) onlineNoticesOk = false;
+		}
+		run.Check(onlineNoticesOk, "a party without a meeting room still gets start+end notices, both with an empty address", to_string(onlineNotices.size()));
+		int activeMembers = 0;
+		for (const Citizen* member : second->members) if (member && member->IsActive()) activeMembers++;
+		bool sawOnline = false;
+		int present = -1;
+		for (const string& line : sim.log) {
+			if (Category(line) != "attendance" || Field(line, "party") != second->GetId()) continue;
+			sawOnline = Field(line, "mode") == "online";
+			present = atoi(Field(line, "present").c_str()); // "present=到场/全体"，atoi取到场数
+		}
+		run.Check(sawOnline && present == activeMembers, "an online congress counts every active member as present",
+			to_string(present) + "/" + to_string(activeMembers));
+		if (activeMembers >= 2) {
+			run.Check(second->leader != nullptr && second->HasMember(second->leader), "an online congress still elects a party leader", second->GetId());
+		}
 	}
 
 	// ---- 没启用党派：一切保持默认 ----
@@ -553,6 +583,7 @@ void PolitSuiteBody(TestWorld& world, const TestOptions& options) {
 		bool disjoint = true, adults = true, sized = true;
 		set<const Room*> rooms;
 		bool roomsDistinct = true, roomsTyped = true;
+		int partiesWithRoom = 0;
 		const Time now = *world.player->GetTime();
 		for (const Party* party : world.polit->GetParties()) {
 			if (static_cast<int>(party->members.size()) > party->GetMod()->memberCount) sized = false;
@@ -567,11 +598,15 @@ void PolitSuiteBody(TestWorld& world, const TestOptions& options) {
 			}
 			run.Check(party->ruling == false && party->terms == 0 && party->leader == nullptr, "a new party is not ruling and has no leader", party->GetId());
 			run.Check(!party->members.empty(), "party has members", party->GetId());
-			run.Check(party->meetingRoom != nullptr, "party got a meeting room at creation", party->GetId());
+			// 拿不到会议室不是错误(地图上可能根本没有room_meeting)，这样的党线上开党代会；只要求地址和房间指针一致。
+			run.Check((party->meetingRoom != nullptr) == !party->meetingAddress.empty(), "a party has a meeting room exactly when it has a meeting address", party->GetId());
+			if (party->meetingRoom) partiesWithRoom++;
 		}
 		run.Check(disjoint, "a citizen belongs to at most one party");
 		run.Check(adults, "all party members are active adults");
 		run.Check(sized, "no party has more members than its memberCount");
+		run.Metric("polit.parties_with_meeting_room", partiesWithRoom);
+		if (partiesWithRoom == 0) run.Note("no party has a meeting room in this world: every congress is held online");
 		run.Check(roomsDistinct, "parties never share a meeting room");
 		run.Check(roomsTyped, "meeting rooms are room_meeting rooms and their addresses resolve");
 		run.Check(world.polit->GetRulingParty() == nullptr, "there is no ruling party at the start");
@@ -647,6 +682,7 @@ void PolitSuiteBody(TestWorld& world, const TestOptions& options) {
 	run.Check(sim.leaderChanges >= 0, "leader bookkeeping ran");
 	CheckLog(sim);
 	run.Check(sim.anyAttendeeVote, "at least one congress had enough attendees to vote for a leader");
+	run.Metric("polit.online_leader_votes", sim.onlineLeaderVotes);
 
 	// 把关键日志行也写进测试报告(放在后面几个会清日志的场景之前)。
 	for (const string& line : sim.log) {
