@@ -15,7 +15,7 @@
   紧接着`AForeverFrameworkActor::EnsurePlayerGenerated()`会调用一次`SetTime`把年份改成
   市民繁衍模拟算出来的年份，见下"开局时间=人口模拟结束年份"一节——`Init()`本身不处理
   这件事，只负责先把时钟建好。
-- `Tick(float delta)`：每帧按`delta * 60 * 1000 * timeFlowRatio`毫秒推进时钟，即
+- `Tick(float delta)`：每帧按`delta * 60 * 1000 * timeFlowRatio`毫秒推进时钟(时钟只走整毫秒，不足1毫秒的零头记在`pendingMilliseconds`里累加到下一帧，所以时钟速度不随帧率变)，即
   `timeFlowRatio == 1.0`时"1真实秒 = 1游戏分钟"。默认值`10.0`（1现实秒=10游戏分钟，一天
   1440分钟需要144现实秒）。**不要把`timeFlowRatio`调得太高**：流速太快时`Populace::Tick`/
   `Society::Tick`的`jobTimerSet`/`organizationTimerSet`会在同一时刻堆积大量到期节点，

@@ -74,15 +74,12 @@ ScriptMod* Script::GetMod() const {
 	return mod;
 }
 
-pair<bool, ValueType> Script::GetValue(const string& name) const {
+const ValueType* Script::FindValue(const string& name) const {
 	auto it = variables.find(name);
-	if (it != variables.end()) {
-		return { true, it->second };
-	}
-	return { false, ValueType() };
+	return it != variables.end() ? &it->second : nullptr;
 }
 
-void Script::SetValue(const string& name, ValueType value) {
+void Script::SetValue(const string& name, const ValueType& value) {
 	variables[name] = value;
 }
 

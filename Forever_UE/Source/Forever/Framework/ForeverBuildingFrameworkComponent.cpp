@@ -65,10 +65,6 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 	if (!GetOwner()) return;
 
 	if (buildingBaseMaterial) {
-		defaultLodMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
-		if (defaultLodMaterial) {
-			defaultLodMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.5f, 0.5f, 0.5f));
-		}
 		defaultWallMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
 		defaultFloorMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
 		defaultCeilingMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
@@ -91,16 +87,12 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 	}
 }
 
-UMaterialInstanceDynamic* UForeverBuildingFrameworkComponent::ResolveLodMaterial(Building* building) {
-	return ResolveMaterial(building->GetLodMaterialPath(), defaultLodMaterial);
-}
-
 UMaterialInstanceDynamic* UForeverBuildingFrameworkComponent::ResolveMaterial(const string& softPath,
 	UMaterialInstanceDynamic* fallback) {
 	if (softPath.empty()) return fallback;
 
 	FString key = UTF8_TO_TCHAR(softPath.c_str());
-	if (auto* found = lodMaterialCache.Find(key)) {
+	if (auto* found = materialCache.Find(key)) {
 		return *found;
 	}
 
@@ -108,7 +100,7 @@ UMaterialInstanceDynamic* UForeverBuildingFrameworkComponent::ResolveMaterial(co
 	if (!base) return fallback;
 
 	UMaterialInstanceDynamic* mid = UMaterialInstanceDynamic::Create(base, this);
-	lodMaterialCache.Add(key, mid);
+	materialCache.Add(key, mid);
 	return mid;
 }
 

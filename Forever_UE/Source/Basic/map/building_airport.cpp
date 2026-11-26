@@ -39,8 +39,16 @@ void AirportBuilding::Layout(int& direction, const Quad& quad,
 	for (int slot = 0; slot < 2; slot++) AssignRoom(1, slot, "room_empty", kComponent, kComponentId);
 	// 1楼2个停机坪(layout的parkings 0~1，各自和single 0~1同一个矩形)：spacing=-1=整个矩形就是一个机位，
 	// 所以矩形多宽都只会有一架飞机(机场占地随地块变，不能靠固定间距凑)。机位归入矩形对应的空房。
-	// stocked：开局每个机位停一架飞机(飞机没有主人，不走AssignVehicles)。
-	for (int i = 0; i < 2; i++) AssignStockedParking(0, i, i, -1.f, { "plane" });
+	// stocked：开局每个机位停一架飞机(飞机没有主人，不走AssignVehicles)。offRoad：机位在停机坪上，不接公路(layout里没有车行连接)。
+	for (int i = 0; i < 2; i++) {
+		ParkingSlotSpec spec;
+		spec.parkingIndex = i;
+		spec.spacing = -1.f;
+		spec.categories = { "plane" };
+		spec.stocked = true;
+		spec.offRoad = true;
+		AssignParking(0, i, spec);
+	}
 	// 两层各2台电梯，3台电梯井编号同layout的elevators。
 	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
 	AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });

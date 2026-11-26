@@ -11,7 +11,7 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
 
 `DoorSpec`：一扇门"长什么样、谁能开"的纯数据描述，供`BuildingMod`/`RoomMod`/`ZoneMod`
 共用，分别填在`doorSpecs`表（按layout标签`tag`索引）或`ZoneGateSpec.door`里。本身不含
-任何UE类型，`mesh`只是一个待`LoadObject`的软路径字符串，和`BuildingMod::lodMaterial`
+任何UE类型，`mesh`只是一个待`LoadObject`的软路径字符串，和`BuildingMod::gapMaterial`
 这类"纯数据，UE层按路径加载"的字段是同一个约定。
 
 ### 关键设计

@@ -56,8 +56,8 @@ void VideoCompanyOrganization::CollectServices(Container* script, const vector<s
 	services.clear();
 	if (!script) return;
 	// 系统每天把在岗人数写进self.employees；产能=在岗视频制作员数x每人每天份数。
-	auto [exist, value] = script->GetValue("employees");
-	int employees = exist ? ToInt(value) : 0;
+	const ValueType* value = script->FindValue("employees");
+	int employees = value ? ToInt(*value) : 0;
 	if (employees <= 0) return;
 
 	ServiceOffer offer;

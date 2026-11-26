@@ -3099,8 +3099,7 @@ std::shared_ptr<Map::SearchGraph> Map::AcquireSearchGraph(const NavGraph& graph,
 }
 
 vector<int> Map::FindPath(const NavGraph& graph,
-	int fromNodeId, int toNodeId, const unordered_map<int, const Node*>* coords) const {
-	(void)coords; // 坐标改由编译图自带
+	int fromNodeId, int toNodeId) const {
 	if (fromNodeId == toNodeId) return { fromNodeId };
 
 	std::shared_ptr<SearchGraph> search = AcquireSearchGraph(graph, &graph == &vehicleNavGraph ? vehicleSearchGraph : pedestrianSearchGraph);
@@ -3267,7 +3266,7 @@ vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const 
 	// 只在检查/重建时持锁；之后多个线程并发只读nodeIndex（重建只会发生在地图生成阶段，那时还没有异步寻路）。
 	EnsureNodeIndex();
 
-	vector<int> idPath = FindPath(pedestrianNavGraph, fromNodeId, toNodeId, &nodeIndex);
+	vector<int> idPath = FindPath(pedestrianNavGraph, fromNodeId, toNodeId);
 	if (idPath.empty()) return {};
 
 	vector<const Node*> result;

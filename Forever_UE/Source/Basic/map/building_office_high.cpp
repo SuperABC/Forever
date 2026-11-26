@@ -67,7 +67,6 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);
 	}
-	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
 	SetSurfaceMaterial("pavement", "/Game/Asset/Building/Material/Pavement.Pavement");
 	// 楼体与建筑范围之间的空隙铺人行道材质。

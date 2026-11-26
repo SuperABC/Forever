@@ -702,31 +702,6 @@ bool Config::IsModIdEnabled(const string& id) {
 	return false;
 }
 
-bool Config::IsDllActive(const string& dllPath) {
-	auto it = dllConceptIds.find(dllPath);
-	if (it == dllConceptIds.end())
-		return false;
-	for (const auto& [conceptKey, modId] : it->second) {
-		if (IsModEnabled(conceptKey, modId)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-vector<string> Config::GetActiveDllPaths() {
-	vector<string> result;
-	for (const auto& [rootPath, dlls] : dllPaths) {
-		(void)rootPath;
-		for (const auto& dll : dlls) {
-			if (IsDllActive(dll)) {
-				result.push_back(dll);
-			}
-		}
-	}
-	return result;
-}
-
 vector<pair<string, string>> Config::GetModIdsForDll(const string& dllPath) {
 	auto it = dllConceptIds.find(dllPath);
 	return it != dllConceptIds.end() ? it->second : vector<pair<string, string>>();

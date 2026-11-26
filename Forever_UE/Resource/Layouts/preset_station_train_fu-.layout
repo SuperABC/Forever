@@ -73,9 +73,59 @@
 		],
 	}],
 	"pedestrianNavigation": {
-		"nodes": [],
+		"nodes": [
+			{
+				"position": [0.3, 0.2, 0.25, 0],
+			},
+			{
+				"position": [0.7, -0.2, 0.25, 0],
+			},
+			{
+				"position": [0.7, -0.2, 0.75, 0],
+			},
+			{
+				"position": [0.3, 0.2, 0.75, 0],
+			},
+		],
 		"lines": [],
-		"connections": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+		],
 	},
 	"vehicleNavigation": {
 		"nodes": [],

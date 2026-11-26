@@ -126,9 +126,147 @@
 		"wallTags": {"1":{"east":"clay","west":"clay"}},
 	}],
 	"pedestrianNavigation": {
-		"nodes": [],
+		"nodes": [
+			{
+				"position": [0.2, -0.2, 0.15, 0],
+			},
+			{
+				"position": [0.8, 0.2, 0.15, 0],
+			},
+			{
+				"position": [0.8, 0.2, 0.85, 0],
+			},
+			{
+				"position": [0.2, -0.2, 0.85, 0],
+			},
+			{
+				"position": [0.2, -0.2, 0.25, 0],
+			},
+			{
+				"position": [0.8, 0.2, 0.25, 0],
+			},
+			{
+				"position": [0.8, 0.2, 0.75, 0],
+			},
+			{
+				"position": [0.2, -0.2, 0.75, 0],
+			},
+		],
 		"lines": [],
-		"connections": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "node",
+					"idx": 6,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "node",
+					"idx": 7,
+				},
+			},
+		],
 	},
 	"vehicleNavigation": {
 		"nodes": [],

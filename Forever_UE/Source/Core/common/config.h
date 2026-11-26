@@ -99,11 +99,6 @@ public:
 	// 只认id字符串、不看concept，给依赖校验用
 	static bool IsModIdEnabled(const std::string& id);
 
-	// DLL里任意一个id启用即算"被加载"(DLL只能整体加载)，与依赖声明无关
-	static bool IsDllActive(const std::string& dllPath);
-
-	static std::vector<std::string> GetActiveDllPaths();
-
 	// AddDllPath探测阶段缓存的(conceptKey,modId)列表
 	static std::vector<std::pair<std::string, std::string>> GetModIdsForDll(const std::string& dllPath);
 

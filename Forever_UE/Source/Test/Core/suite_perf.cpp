@@ -66,7 +66,8 @@ namespace {
 		vector<SlotRef> slots;
 		for (const auto& [name, building] : world.map->GetBuildings()) {
 			for (Room* room : building->GetRooms()) {
-				for (ParkingSlot* slot : room->GetParkingSlots()) if (slot->navigationNode) slots.push_back({ room, slot });
+				// offRoad车位(船位/机位这类)不在车行图里，不参与公路寻路抽样；它们的核对在route套件。
+				for (ParkingSlot* slot : room->GetParkingSlots()) if (slot->navigationNode && !slot->offRoad) slots.push_back({ room, slot });
 			}
 		}
 		run.Check(slots.size() > 1, "world has parking slots to route between");

@@ -39,9 +39,15 @@ void PortBuilding::Layout(int& direction, const Quad& quad,
 		AssignRoom(0, singleIndex, "room_empty", kComponent, kComponentId);
 	}
 	// 8个船位(fg layout的parkings 0~7)都归入这间小房；stocked：开局每个船位停一艘船(船没有主人，不走AssignVehicles)。
-	// spacing=-1=整个矩形一个船位，矩形多大都只停一艘。
+	// spacing=-1=整个矩形一个船位，矩形多大都只停一艘。offRoad：船位在水里，不接公路(layout里没有车行连接)。
 	for (int parkingIndex = 0; parkingIndex < kBoatSlotCount; parkingIndex++) {
-		AssignStockedParking(0, 0, parkingIndex, -1.f, { "boat" });
+		ParkingSlotSpec spec;
+		spec.parkingIndex = parkingIndex;
+		spec.spacing = -1.f;
+		spec.categories = { "boat" };
+		spec.stocked = true;
+		spec.offRoad = true;
+		AssignParking(0, 0, spec);
 	}
 }
 

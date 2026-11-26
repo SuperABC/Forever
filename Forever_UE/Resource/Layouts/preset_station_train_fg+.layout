@@ -170,9 +170,190 @@
 		],
 	}],
 	"pedestrianNavigation": {
-		"nodes": [],
+		"nodes": [
+			{
+				"position": [0.5, 0, 0, 0],
+			},
+			{
+				"position": [0.5, 0, 0.5, 0],
+			},
+			{
+				"position": [0.3, 0.2, 0.15, 0],
+			},
+			{
+				"position": [0.7, -0.2, 0.15, 0],
+			},
+			{
+				"position": [0.3, 0.2, 0.85, 0],
+			},
+			{
+				"position": [0.7, -0.2, 0.85, 0],
+			},
+			{
+				"position": [0.3, 0.2, 0.5, 0],
+			},
+			{
+				"position": [0.7, -0.2, 0.5, 0],
+			},
+		],
 		"lines": [],
-		"connections": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "outside",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "single",
+					"idx": 2,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 2,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 3,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "single",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "node",
+					"idx": 2,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "node",
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+		],
 	},
 	"vehicleNavigation": {
 		"nodes": [],

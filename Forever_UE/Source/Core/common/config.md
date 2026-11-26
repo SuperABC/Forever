@@ -102,10 +102,9 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - **`story_scripts`（`AddStoryScript`/`RemoveStoryScript`/`GetStoryScripts`）**：Story
   screen的"添加`.script`文件"操作维护的一份列表，列表里的脚本全部一起加载，不是
   "多选一激活"（和`main_story`单独一个字段、决定主线挂载哪个`ScriptMod`是两件事）。
-- **`IsModIdEnabled`/`IsDllActive`/`GetActiveDllPaths`/`GetModDependences`**：给游戏启动
+- **`IsModIdEnabled`/`GetModDependences`**：给游戏启动
   配置界面的依赖校验用。`IsModIdEnabled(id)`不看concept，只要id在任意一个已启用的
-  `(concept, modId)`里出现过就算数（不看id的格式）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
-  加载/不加载，这个函数只管"要不要加载这个DLL"，和下面的依赖声明粒度无关）；
+  `(concept, modId)`里出现过就算数（不看id的格式）；
   `GetModDependences(modId)`按modId查`AddDllPath`探测阶段缓存的、来自
   `GetModDependences()`导出符号的依赖声明——粒度是单个mod id，不是DLL：同一个DLL
   注册的多个mod可以各自声明不同的依赖，不需要共用一份。

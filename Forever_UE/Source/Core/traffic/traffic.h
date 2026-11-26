@@ -125,7 +125,7 @@ public:
 	// 按Time::DifferenceInSeconds累加经过的游戏秒数(elapsedSeconds单调递增，跨天由
 	// DifferenceInSeconds自己的日历感知差值处理，不需要另外补偿)，再对每条route调用
 	// route->Update(elapsedSeconds)驱动线路车辆。
-	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
+	void Tick(const Time& currentTime);
 
 	// 取走所有线路自上次调用以来的停站/离站事件(见Route::StopEvent)，AForeverFrameworkActor在
 	// Tick之后调用、转发给对应载具的script。读档后调用SilenceInitialStopEvents()让下一次Tick不补发。
@@ -140,12 +140,15 @@ private:
 	void InitStations(Map* map);
 	void InitRoadsideStations(Map* map);
 	void InitRoutes(Map* map);
-	// 给所有stocked车位(BuildingMod::AssignStockedParking)预置一辆车，不挂资产；Core不认识具体种类。
+	// 给所有stocked车位(ParkingSlotSpec::stocked)预置一辆车，不挂资产；Core不认识具体种类。
 	void InitStockedVehicles(Map* map);
 	// 生成一辆category类的车放进room的第slotIndex个车位，建VehicleAsset(Traffic持有)并挂到所有者的资产列表。
 	VehicleAsset* CreateOwnedVehicle(const std::string& category, Room* room, int slotIndex,
 		Citizen* ownerCitizen, Organization* ownerOrganization);
 	void RemoveVehicleAsset(const Vehicle* vehicle);
+	// 车被delete之前调用：取消它的任务行程和通勤行程、让出它占着和预订的车位、摘掉它的资产，不留悬空的Vehicle*。
+	// 放在Traffic而不是~Vehicle里：整个世界销毁时~Traffic会delete所有车，那时不该再去碰房间和车位。
+	void DetachVehicle(Vehicle* vehicle);
 	void InitTransitVehicles();
 
 	VehicleFactory& vehicleFactory;

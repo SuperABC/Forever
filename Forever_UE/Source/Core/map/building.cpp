@@ -866,7 +866,6 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	if (static_cast<int>(floorHeights.size()) != expected) {
 		floorHeights.assign(expected, kDefaultFloorHeight);
 	}
-	lodMaterialPath = mod->lodMaterial;
 	gapMaterialPath = mod->gapMaterial;
 	floorSpecs.clear();
 	for (auto& [level, spec] : mod->floors) floorSpecs[level] = spec;
@@ -1016,6 +1015,7 @@ void Building::BuildParkingSlots() {
 				slotData.direction = dir;
 				slotData.categories = spec.categories;
 				slotData.stocked = spec.stocked;
+				slotData.offRoad = spec.offRoad;
 				auto [wx, wy] = LocalToWorld(slotData.centerX, slotData.centerY);
 				slotData.navigationNode = new Node("building", wx, wy, z);
 				ParkingSlot* created = room->AddParkingSlot(slotData);
@@ -1244,7 +1244,6 @@ float Building::GetBodySizeY() const { return bodySizeY; }
 int Building::GetBasementCount() const { return basements; }
 int Building::GetLayerCount() const { return layers; }
 const vector<float>& Building::GetFloorHeights() const { return floorHeights; }
-const string& Building::GetLodMaterialPath() const { return lodMaterialPath; }
 const string& Building::GetGapMaterialPath() const { return gapMaterialPath; }
 const vector<DecorationInstance>& Building::GetDecorations() const { return decorations; }
 

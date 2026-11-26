@@ -28,17 +28,27 @@ int ToInt(const ValueType& value);
 double ToDouble(const ValueType& value);
 bool ToBool(const ValueType& value);
 std::string ToString(const ValueType& value);
+// Container::FindValue返回的是指针。指针能隐式转成bool再构造出ValueType，所以ToInt(指针)能编译过、结果恒为1；
+// 这里把指针版本直接禁掉，忘了写*会在编译期报错。
+int ToInt(const ValueType* value) = delete;
+double ToDouble(const ValueType* value) = delete;
+bool ToBool(const ValueType* value) = delete;
+std::string ToString(const ValueType* value) = delete;
 
 // 自动推断字面量类型(bool/int/double/string)解析成ValueType，脚本里写时间/数值字面量时用。
 ValueType FromString(const std::string& s);
 
-// 键值容器接口
+// 键值容器接口。实现在宿主(Script)，mod通过虚函数调用，所以ValueType不能按值过这条边界：
+// 值是长字符串时按值传/按值返回就是"一侧分配、另一侧释放"(CONVENTIONS.md第4节)。
 class Container {
 public:
 	virtual ~Container() = default;
 
-	virtual std::pair<bool, ValueType> GetValue(const std::string& name) const = 0;
-	virtual void SetValue(const std::string& name, ValueType value) = 0;
+	// 返回容器自己持有的那个值的指针，没有这个变量返回nullptr。只读；要留着用就自己拷一份(拷贝发生在调用方这一侧)。
+	// 指针在这个变量被删掉之前有效，但同名SetValue之后指向的是新值。
+	virtual const ValueType* FindValue(const std::string& name) const = 0;
+	// 容器自己拷一份value存起来。
+	virtual void SetValue(const std::string& name, const ValueType& value) = 0;
 };
 
 // ---- 日志(设计见utility.md"debugf") ----

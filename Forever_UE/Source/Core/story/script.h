@@ -47,9 +47,9 @@ public:
 	const std::string& GetStableKey() const;
 	void SetStableKey(std::string key) const;
 
-	std::pair<bool, ValueType> GetValue(const std::string& name) const override;
+	const ValueType* FindValue(const std::string& name) const override;
 
-	void SetValue(const std::string& name, ValueType value) override;
+	void SetValue(const std::string& name, const ValueType& value) override;
 
 	void RemoveValue(const std::string& name);
 

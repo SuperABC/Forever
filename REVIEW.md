@@ -1,15 +1,15 @@
 # 全项目 Review（2026-11-25）
 
-初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮（B1/B2/B4/B5/B6）、第七轮（D7）、第八轮（D6）、第九轮（D5）、第十轮（D4）、第十一轮（D3）、第十二轮（D1）、第十三轮（D8）和第十四轮（F2）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
+初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮到第十四轮也已入库（`021e707`、`3a402f1`）；第十五轮（D9）、第十六轮（G1/G3）和第十七轮（C4/C7/C8）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
 
 **怎么读这份清单**
 
-- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C5、C6、C10、D1、D3、D4、D5、D6、D7、D8、D10、F2、F3 和整个 E 节（E1–E4）已修并删掉，B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
+- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C4、C5、C6、C7、C8、C10、D1、D3、D4、D5、D6、D7、D8、D9、D10、F2、F3、G1、G3 和整个 E 节（E1–E4）已修并删掉（D9 里 `VehicleMod::drivable`/`capacity` 你决定留着），B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
 - 可信度：
   - **已确认**：读过对应代码，行号核对过。
   - **潜伏**：代码确实有问题，但当前没有调用路径会触发。
   - **推测**：有依据但没有实际复现/回退验证。
-- 行号对应第十四轮结束时的工作区。
+- 行号对应第十七轮结束时的工作区。
 
 **覆盖范围**
 
@@ -17,6 +17,131 @@
 
 - mod 感知（A、B）：对 Core/Dependence/Forever 三层的字符串字面量和标识符做了全量扫描，再逐处读上下文核对，这部分比较全。
 - 找 bug（C）：重点精读 + 模式扫描，不是逐行通读。精读过的：`Core/common` 全部、`traffic.cpp`/`vehicle.cpp`、`room.cpp`、`economy.cpp`、`market.cpp`、`election.cpp`、`script.cpp` 的非词汇表部分、`map.cpp` 的前 1200 行和寻路部分、`ForeverFrameworkActor.cpp` 的前 1200 行、`ForeverModSubsystem.cpp`。Basic 各 mod、大部分 UI、存档编解码、`building.cpp`、`route.cpp` 主体只做了扫描，没有精读。
+
+---
+
+## 第十七轮：C4、C7、C8
+
+**C4 游戏时钟不再随帧率变**
+
+- `Player::Tick` 把每帧不足 1 毫秒的零头记在新成员 `pendingMilliseconds` 里，累加到下一帧。时钟仍然只走整毫秒。
+- 零头不进存档（不到 1 毫秒）。
+
+**C7 销毁车辆时把指向它的引用都解开**
+
+- `Traffic` 加了私有函数 `DetachVehicle`：取消这辆车的任务行程和通勤行程、让出它占着的车位、清掉它预订的车位、摘掉它的资产。`DestroyVehicle` 和 `CreateVehicle` 的同名覆盖分支在 `delete` 之前都调它。
+- **和我原来的建议不同的一点**：原建议是在 `~Vehicle` 里释放车位。我改成放在 `Traffic` 里，因为整个世界销毁时 `~Traffic` 会 `delete` 所有车，析构函数里再去碰房间和车位，就要求地图一定晚于交通销毁。UE 里现在确实是这个顺序，但这种隐含要求容易被以后的改动打破。
+
+**C8 `Container` 不再按值跨 DLL 传 `ValueType`**
+
+- `SetValue` 改成收 `const ValueType&`，和原建议一致。
+- **`GetValue` 没有按原建议改成"按引用输出参数"，那个建议是错的**：宿主往 mod 传进来的变量里赋一个长字符串，缓冲区仍然是宿主分配、mod 释放，问题原样还在。
+- 实际改法：`GetValue` 换成 `FindValue(name)`，返回容器自己持有的那个值的 `const ValueType*`，没有这个变量返回 `nullptr`。调用方只读；要留着就自己拷一份，拷贝发生在调用方那一侧。
+- 13 处调用点跟着改了（`expression.cpp` 3 处、`economy.cpp` 2 处、Basic 的商店/餐馆/视频公司 5 处、UE 层 3 处）。
+
+**改 C8 时我出过一个错，已修**
+
+- 商店和餐馆各有一行 `offer.capacity = ToInt(value)` 我漏加了 `*`。指针会被隐式转成 `bool` 再构造出 `ValueType`，所以能编译过，结果恒为 1：每家店每种货只能卖 1 份。
+- 编译通过，所有测试的通过数也没变。是对比 econ 套件的摘要才发现的：消费税从 18.7 万掉到 2.4 万。
+- 修法：补上 `*`；另外在 `utility.h` 里把 `ToInt`/`ToDouble`/`ToBool`/`ToString` 的指针版本声明成 `= delete`，以后忘写 `*` 是编译错误。加了之后全量编译没有别处报错，说明没有第三处漏改。
+- 修完后 econ 的 4 份摘要和改动前逐字节相同，polit 的指标也回到改动前的值。
+
+**新增的测试（都在 world 套件）**
+
+- 时钟零头：2400 帧、每帧 0.4167 毫秒，合计应走 1000 毫秒。改之前这种情况下时钟完全不走。
+- 销毁车辆：先让一个市民开始开车通勤（车停在车位里，并预订了目的车位），再销毁这辆车，检查原车位空出来、预订清掉、通勤行程和资产都不再指向它。两个种子都走到了真实通勤行程这条分支。
+
+**需要你知道的**
+
+- `Container` 的虚函数表变了，四个外部 mod 已随 `build.bat` 重编；`Tools` 下单独编译的 RoadnetViz、JunctionTest、ModHost、ModWeb 没有重编。
+- 顺带发现两个相关的小问题，没有改，记在 C11 里：销毁线路上的车时 `Route` 里还留着指针；`Event::GetLocalValue` 和 C8 是同一种写法（目前没有 mod 调用）。
+- C4 的改动我只用测试验证了，没有在 UE 里看实际的时钟速度。
+
+**验证**
+
+- `build.bat` 全量通过（含四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑 1421 项通过；扫两个目录下全部 mod 1468 项通过。
+- CoreTest quick：7370 通过、8 失败（都是 polit，即 G2）。报告在 `Forever_UE/Saved/TestReports/review_20261126_c478b/core`。
+- 时钟零头的测试是全量跑完之后加的，只重编了测试并单独重跑 world 套件：108 项全过。报告在同目录的 `world_only`。
+- 没有进 UE 编辑器验证。
+
+---
+
+## 第十六轮：G1、G3 解决（行人图 + 不接公路的车位）
+
+CoreTest quick 从 22 项失败降到 8 项，剩下的 8 项全是 G2（polit）。
+
+**第一步：你把孤立房间接进了行人图**
+
+- 你改了 6 个 layout（机场 2 个、港口 1 个、火车站 3 个），补了行人导航节点和连接。
+- 没接进行人图的房间从 42 个降到 0，G1 里行人相关的 10 项全过。"反向路线不是正向的倒序"和三条路线缓存检查原来失败，就是因为孤立房间当起点时会算出一条凭空的路线。
+
+**第二步：车位分成"接公路"和"不接公路"**
+
+- 剩下 4 项（route 2、perform 2）的原因：测试从全地图所有车位里随机抽，其中 20 个车位的节点不在车行图里——两个港口各 8 个船位，两个机场各 2 个机位。两个种子共 52 条失败路线，每一条的起点或终点都落在这 20 个车位上。
+- 做法是按车位声明，不按载具种类推（种类是 mod 自己起的字符串，Core 不认识）：
+  - `ParkingSlotSpec` 加成员 `offRoad`（默认 false），Core 抄到 `ParkingSlot::offRoad`，**进存档**。
+  - `BuildingMod` 加一个非虚重载 `AssignParking(level, slot, spec)`，直接收完整的 `ParkingSlotSpec`。原来五个参数的 `AssignParking` 签名没动，内部改成填好 spec 再转给它。
+  - 港口的船位、机场的机位改用这个重载，声明 `stocked = true`、`offRoad = true`。
+- 测试跟着改：
+  - route、perform 只在 `offRoad == false` 的车位之间抽样。
+  - route 新增检查"接公路的车位都在车行图里"：以后哪个停车场的 layout 漏画了车行连接，这条会失败并按房间列出来。
+  - route 新增检查"`offRoad` 的车位不在车行图里"：防止标错。
+  - save 新增检查"车位的几何、可停种类、`offRoad` 存读一致"。
+  - route 的车辆部分每条失败路线会记一行（起点房间、终点房间、状态码）。
+
+**需要你知道的**
+
+- **旧存档读不了了**：每个车位多存一个字节，按约定没升版本号。（第十五轮删 `lodMaterialPath` 已经让旧存档失效，这次是同一批。）
+- `ParkingSlotSpec` 的对象布局变了，`build.bat` 里的四个外部 mod 已经一起重编；`Tools` 下单独编译的 RoadnetViz、JunctionTest、ModHost、ModWeb 没有重编。
+- `BuildingMod::AssignStockedParking` 在港口和机场改用新重载之后没有调用方了，随后按你的决定删掉。要开局就停着车的车位，现在的写法是 `AssignParking(level, slot, spec)` 并把 `spec.stocked` 设为 true。提到它的注释和文档（`building_mod.md`、`room.md`、`vehicle_boat.md`、`Test/README.md`、`Tools/VehicleRig/README.md`）一起改了。
+- Core 只抄 `offRoad` 这个标记，自己没有任何逻辑读它，目前唯一的使用方是测试。寻路本身没有改：往 `offRoad` 车位规划公路路线仍然是返回失败，和以前一样。
+
+**验证**
+
+以下是删掉 `AssignStockedParking` 之后最后一次的结果：
+
+- `build.bat` 全量通过（含四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑是 1421 项通过；扫 `x64/Release` 和 `Forever_Mod` 两个目录下全部 mod 是 1468 项通过。
+- CoreTest quick：7352 通过、8 失败（都是 polit，即 G2）；route 66 项、perform 36 项、save 90 项全过。两个种子各有 20 个 `offRoad` 车位，存读一致，开局都停了船或飞机。报告在 `Forever_UE/Saved/TestReports/review_20261126_stocked/core`。
+- 没有进 UE 编辑器验证：没看市民实际走进机场/港口/火车站，也没试开船开飞机。这次没有改 UE 层代码。
+
+---
+
+## 第十五轮：D9 删掉没人用的代码
+
+`VehicleMod::drivable`/`capacity` 按你的决定留着，其余四处删了。
+
+**删了什么**
+
+- `UForeverBuildingFrameworkComponent::ResolveLodMaterial` 和成员 `defaultLodMaterial`：没有调用方。
+- `Traffic::Tick` 的 `crossedDay`、`post` 两个参数：函数里没用，现在只收当前时间。
+- `Map::FindPath` 的 `coords` 参数：函数里早就不用它了，节点坐标来自编译好的寻路图。
+- `Config::IsDllActive`、`Config::GetActiveDllPaths`：没有调用方。
+
+对应文档一起改了：`ForeverBuildingFrameworkComponent.md`、`traffic.md`、`map.md`、`config.md`。
+
+**顺手改正的一句文档**
+
+- `map.md` 原来说车辆寻路"不传 coords，是纯 Dijkstra"。实际上行人图和车辆图走同一段代码：图里所有节点都有坐标就用 A*，否则才是 Dijkstra。已按代码改。
+
+**需要你知道的**
+
+- 删掉 `ResolveLodMaterial` 之后，`BuildingMod::lodMaterial` 这个字段就完全没人读了。随后按你的决定一起删了：
+  - `BuildingMod::lodMaterial`、`Building::lodMaterialPath`、`Building::GetLodMaterialPath()`。
+  - 存档里 Building 的这一个字符串（读、写两处）。
+  - Basic 里 6 个建筑 mod 的注释"lodMaterial 留空 -> 用渲染层默认灰色"。
+  - UE 层的材质缓存 `lodMaterialCache` 改名 `materialCache`：它缓存的是墙/地/顶/空隙材质，和 LOD 已经无关。
+- **旧存档读不了了。** 存档里少了一个字符串，按约定没有升版本号、没有写迁移，所以读旧存档不会报"版本不对"，而是从建筑这一段开始读错位。
+- `BuildingMod` 少了一个成员，对象布局变了。`build.bat` 里的四个外部 mod 已经一起重编；`Tools` 下单独编译的程序（RoadnetViz、JunctionTest、ModHost、ModWeb）没有重编，用之前要重编一次。
+
+**验证**
+
+- `build.bat` 全量通过。
+- ModTest：1421 / 1468 项全过。
+- CoreTest quick：7332 通过、22 失败，失败的 22 项和上一轮逐条相同。报告在 `Forever_UE/Saved/TestReports/review_20261125_d9/core`。
+- 没有进 UE 编辑器验证。改动在 UE 层只是删掉一个没人调用的函数和一个没人读的成员，编译通过即可说明没有别处引用。
+- 删 `lodMaterial` 之后重新验证：`build.bat` 全量通过；ModTest 1421 / 1468 项全过；CoreTest quick 里 save 套件 88 项全过（存档读写改动由它覆盖）。同样没有进 UE 编辑器验证。
 
 ---
 
@@ -591,24 +716,6 @@
 
 ## C. Bug
 
-### - [ ] C4 `Player::Tick` 每帧截断毫秒，不累计余数（已确认）
-- 位置：[player.cpp:52](Forever_UE/Source/Core/player/player.cpp:52)
-- 问题：`int deltaMs = static_cast<int>(delta * 60 * 1000 * timeFlowRatio)`，小数部分每帧丢掉。
-- 影响：游戏时钟速度随帧率变化（倍率 1、144 帧时每帧 416.67ms 截成 416，慢约 0.16%）；倍率小到每帧不足 1ms 时时钟完全不走。
-- 建议：保留一个 `double` 余数累加。
-
-### - [ ] C7 销毁车辆不释放车位和行程（潜伏）
-- 位置：[vehicle.cpp:36](Forever_UE/Source/Core/traffic/vehicle.cpp:36)（`~Vehicle`）、[traffic.cpp:633](Forever_UE/Source/Core/traffic/traffic.cpp:633)（`DestroyVehicle`）、[615](Forever_UE/Source/Core/traffic/traffic.cpp:615)（`CreateVehicle` 同名覆盖分支）
-- 问题：析构不调 `ReleaseSlot`/`ClearReservation`，`ParkingSlot::parkedVehicle`/`reservedBy` 留悬空指针，车位永远不空闲。`DestroyVehicle` 只取消组织任务行程，不取消通勤行程（`trips` 里留悬空 `Vehicle*`）；同名覆盖分支两种行程都不取消。
-- 当前状态：`Traffic::DestroyVehicle` 没有任何调用方，车名也不会重复，所以还没触发。
-- 建议：在 `~Vehicle` 里释放车位和预订；`DestroyVehicle` 补上 `FindTripByVehicle` 的取消。
-
-### - [ ] C8 `Container::GetValue`/`SetValue` 按值跨 DLL 传 `ValueType`（潜伏）
-- 位置：[utility.h:40-41](Forever_UE/Source/Dependence/common/utility.h:40)
-- 问题：`GetValue` 按值返回 `pair<bool, ValueType>`，`SetValue` 按值收 `ValueType`。实现在宿主（`Script`），mod 通过虚函数调用。`ValueType` 是含 `std::string` 的 variant，值是超过 15 字符的字符串时就是"一侧分配、另一侧释放"，正是 `CONVENTIONS.md` 第 4 节禁止的情况。
-- 当前状态：mod 里只有 `organization_shop`/`restaurant`/`video_company` 在调，读写的都是整数，所以没炸。
-- 建议：改成按引用输出（`bool GetValue(name, ValueType& out)`）和 `const ValueType&` 入参。
-
 ### - [ ] C9 异常处理不全（已确认）
 - [ForeverFrameworkActor.cpp:291](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:291)：`RunGenerationStep` 只 `catch (const ExceptionBase&)`。`std::out_of_range`、`std::bad_alloc`、`stod` 的异常等标准库异常会直接崩，而不是走"打日志退出"。
 - [config.cpp:415](Forever_UE/Source/Core/common/config.cpp:415)：`AddResourcePath` 的 `recursive_directory_iterator` 没带 `error_code`，遇到无权限子目录抛 `filesystem_error`（`AddDllPath` 那边是带了的）。
@@ -619,18 +726,13 @@
 - [config.cpp:196](Forever_UE/Source/Core/common/config.cpp:196)：`seed` 写成负数或超大浮点数时，`double` 转 `unsigned long long` 是未定义行为。
 - [ForeverFrameworkActor.cpp:841](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:841)：`ApplySpawnNpc` 里 `*player->GetTime()` 没判空（世界生成完之后 `player` 一定非空，实际不会触发）。
 - `Map::CreateBuildingAt`（[map.cpp:665](Forever_UE/Source/Core/map/map.cpp:665)）：建筑重名时 `delete building`，但之前已经登记的 `entityNav[building]` 和 `pendingBuildingRoadAccess` 里的 `owner` 指针还留着。mod 名字唯一，所以没触发。
+- `Traffic::DestroyVehicle` 销毁线路上的车（公交/火车/飞机）时，`Route::lineVehicles` 里还留着它的指针，`Route` 没有移除车辆的入口。第十七轮修 C7 时发现；`DestroyVehicle` 目前没有调用方，所以没触发。
+- `Event::GetLocalValue` 和 C8 修之前的 `Container::GetValue` 是同一种写法：虚函数按值返回 `pair<bool, ValueType>`。目前没有任何 mod 调用它或调用 `EvaluateExpression`，所以不跨 DLL 边界；以后 mod 要读事件字段时得先改。它的值是现算出来的，不能像 `FindValue` 那样返回指针。
 - `Config::GetScriptPath`/`GetResourceFilePath`：遍历 `unordered_map`，多个资源目录里有同名文件时取哪个不确定；`GetResourceFilePath` 每次 post 都重新递归扫盘。
 
 ---
 
 ## D. 设计问题
-
-### - [ ] D9 死代码
-- `VehicleMod::drivable`/`capacity`：Core 和 UE 都没有读取（`Vehicle::IsDrivable`/`GetCapacity` 无调用方）。
-- `UForeverBuildingFrameworkComponent::ResolveLodMaterial`/`defaultLodMaterial`：无调用方。
-- `Traffic::Tick` 的 `crossedDay`、`post` 两个参数没用。
-- `Map::FindPath` 的 `coords` 参数没用（函数里 `(void)coords`）。
-- `Config::GetActiveDllPaths`/`IsDllActive`：B8 删掉后在 `Source` 和 `Tools` 里都没有调用方了（`config.md` 里还有它们的说明）。
 
 ---
 
@@ -654,22 +756,11 @@
 
 ## G. 现有测试失败（不是这几轮改动引起的）
 
-CoreTest quick（`--suite all --quick`）前五轮都是同样的 20 项失败，逐条对比完全相同。
+CoreTest quick（`--suite all --quick`）现在只剩 8 项失败，全在 polit 套件。最新报告在 `Forever_UE/Saved/TestReports/review_20261126_c478b/core`。
 
-第六轮变成 22 项：你在提交 `1d86cff` 里改了 `Resource/Mod/Basic/small.roadnet`，地图变了，下面的数字跟着变。用改之前的地图重跑寻路套件，结果和之前完全一样，所以不是代码改动引起的。最新报告在 `Forever_UE/Saved/TestReports/review_20261125_b/core`。
-
-### - [ ] G1 route 套件 12 项失败（已确认是旧问题；新地图下多 1 项）
-- 11-24 13:23 的旧报告（`Saved/TestReports/core`）里就有同样的 11 项。
-- 内容：
-  - 每个种子都有 42 个带导航节点的房间没接进行人图（`every room with a navigation node is connected to the pedestrian graph`；旧地图是 39 个）。
-  - 反向路线不是正向路线的倒序（14-18 条；旧地图 9-10 条）。
-  - 路线缓存：反向没命中同一条缓存、新增了缓存项、24 小时无命中的项没保留。
-  - 随机车位到车位的车辆路线失败率超过 5%：seed 11 是 30/300，seed 12 是 22/300（旧地图只有 seed 11 超标，18/300）。
+前五轮是 20 项；第六轮起因为 `small.roadnet` 改了地图变成 22 项；第十六轮解决了 route 的 12 项（G1）和 perform 的 2 项（G3）。
 
 ### - [ ] G2 polit 套件 8 项失败（推测与小地图配置有关）
 - 只出现在 seed 12：两个党派创建时都没拿到会议室，后面的党代会、会议室冲突测试跟着失败。
 - 11-24 的旧报告里 polit 是全过的。中间隔了提交 `7731158`（改了 `config.json`：小地图）。我没有回退验证，是推测。
 - 值得看的点：地图上没有会议室房间时党派就没有会议室，这本身是个脆弱点（会议室只出现在 `ResidenceHighBuilding` 的一种布局里）。
-
-### - [ ] G3 perform 套件 2 项失败
-- `at most 5% of random slot-to-slot routes fail`（seed 11 是 18/200，seed 12 是 15/200；旧地图只有 seed 11 超标，14/200），和 G1 的车辆路线失败是同一类。旧报告里 perform 有 4 项失败。

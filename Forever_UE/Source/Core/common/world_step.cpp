@@ -72,7 +72,7 @@ DailyReport WorldStep::Step(const WorldDomains& domains, bool crossedDay, const 
 		if (hooks.onPoliticsTicked) hooks.onPoliticsTicked();
 	}
 	if (domains.traffic) {
-		domains.traffic->Tick(now, crossedDay, &post);
+		domains.traffic->Tick(now);
 		if (hooks.onTrafficTicked) hooks.onTrafficTicked();
 	}
 	if (domains.story) domains.story->Tick(now, crossedDay, &post);

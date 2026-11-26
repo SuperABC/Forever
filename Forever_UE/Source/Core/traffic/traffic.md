@@ -26,8 +26,8 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
    编辑器"路网路线"画了手动公交站(`Map::GetTransit().roadLines`)时：数据里 `stop.station==某mod` 且该mod登记了`RegisterManualAssign`，就改调它的`AssignManualRoads`(跳过自动`AssignRoads`)；指向没登记手动函数的id的站告警忽略；站名重复丢弃后到的并告警(不再`insert_or_assign`覆盖泄漏)。见`station_mod.md`。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
    `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
-4. `InitStockedVehicles`：机场的飞机、港口的船这类没有"主人"的载具，由建筑mod用`BuildingMod::AssignStockedParking`声明车位
-   (`ParkingSlot::stocked`)，开局每个这样的车位停一辆（不挂资产）：从车位自己的`categories`随机选一个种类，再用
+4. `InitStockedVehicles`：机场的飞机、港口的船这类没有"主人"的载具，由建筑mod把车位声明成stocked
+   (`ParkingSlotSpec::stocked` -> `ParkingSlot::stocked`)，开局每个这样的车位停一辆（不挂资产）：从车位自己的`categories`随机选一个种类，再用
    `VehicleFactory::GetIdsByCategory(种类)`随机选车型，`BindSlot`停进车位。Core不写死任何具体种类。**只在新开局的`Init`里跑一次**，
    读档(`TrafficSaveCodec::Load`)不再调`Init`，所以不会补车：玩家开走的船读档后还是1艘、在存档时的位置。**普通停车位的车不在`Init`里生成**，由
    `AssignVehicles`按人分配（见下）。
@@ -62,7 +62,7 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 
 ### Tick
 
-`Tick(currentTime, crossedDay, post)`按`Time::DifferenceInSeconds`累加`elapsedSeconds`(`double`：它一直累加，`float`到约194游戏天后每帧的增量就加不进去了)
+`Tick(currentTime)`按`Time::DifferenceInSeconds`累加`elapsedSeconds`(`double`：它一直累加，`float`到约194游戏天后每帧的增量就加不进去了)
 （单调递增，不存在需要补偿的跨天问题；`lastTickTime`不存档，读档后第一帧只记时间），再对每条
 `Route`调`Update(elapsedSeconds)`驱动线路车辆。
 
@@ -111,5 +111,5 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 `categories`按顺序试，第一个可行的赢：空串=走路(目的房间≠当前房间)；非空=开组织的这类载具——停着、无路线/预订/其他任务、停车房与员工**当前所在建筑**同栋，
 且目的建筑里有接受该类别的空闲车位(`PickFreeSlot`)，目的车位出发时预订。员工已在目的建筑里则不开车(`already_there`)。
 都不行就不建行程、不占车，`failReason`=`no_worker`/`no_vehicle`/`no_slot`/`already_there`。**没有原车位预留**：车开走后原车位空出来，返程由脚本再派任务另找车。
-到达(走进目的房间)`EndTask`；`CancelTask`在非WalkOut阶段清车的预订；车被销毁`DestroyVehicle`会连带取消行程；员工死亡/离城时`worker=nullptr`，车仍开到站。
+到达(走进目的房间)`EndTask`；`CancelTask`在非WalkOut阶段清车的预订；车被销毁`DestroyVehicle`会连带取消行程(任务行程和通勤行程都取消，并让出它占着/预订的车位，见`DetachVehicle`)；员工死亡/离城时`worker=nullptr`，车仍开到站。
 任务期间员工脚本变量`task`被置位。存档：traffic段末尾任务行程块(task/员工下标/车名/parkOrigin/parkDest/destSlot/destRoom/originRoom/phase)，`ResolveVehicleAssets`还原。

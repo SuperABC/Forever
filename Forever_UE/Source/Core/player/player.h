@@ -211,6 +211,8 @@ private:
 	// 默认1现实秒=10游戏分钟，一天(1440分钟)需要144现实秒(2.4分钟)。未被脚本
 	// (global_settings.time_flow_ratio)覆盖时就是这个值生效。
 	double timeFlowRatio = 10.0;
+	// Tick里还没凑够1毫秒的零头(毫秒)，累加到下一帧；时钟只走整毫秒。不进存档(不到1毫秒)。
+	double pendingMilliseconds = 0.0;
 
 	// 天气(默认晴天，自动换天气的倒计时在Weather自己里面)
 	Weather weather;

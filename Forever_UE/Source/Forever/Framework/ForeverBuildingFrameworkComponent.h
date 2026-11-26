@@ -57,7 +57,6 @@ public:
 	// 供ABuildingElement调用——按BuildingMod软路径覆盖返回对应的材质/网格，路径为空或加载
 	// 失败时回退到调用方传入的fallback(通常是下面几个Get默认值)。按软路径缓存，避免同一个
 	// 软路径被不同building各自重复LoadObject。
-	UMaterialInstanceDynamic* ResolveLodMaterial(Building* building);
 	UMaterialInstanceDynamic* ResolveMaterial(const std::string& softPath, UMaterialInstanceDynamic* fallback);
 	UStaticMesh* ResolveMesh(const std::string& softPath, UStaticMesh* fallback);
 
@@ -174,9 +173,6 @@ private:
 	float shellCullDistance = 0.f;
 
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> defaultLodMaterial; // 远处默认灰色(Pure+Color染灰)
-
-	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> defaultWallMaterial; // 近处墙体默认白色(这次不分内外墙)
 
 	UPROPERTY()
@@ -198,7 +194,7 @@ private:
 	TObjectPtr<UStaticMesh> defaultCabinMesh; // 默认电梯轿厢网格(/Game/Asset/Building/Mesh/Elevator.Elevator)
 
 	UPROPERTY()
-	TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> lodMaterialCache; // 按软路径缓存MID(远处LOD/近处墙地顶材质共用一份缓存)
+	TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> materialCache; // 按软路径缓存MID(墙/地/顶/空隙填充材质共用一份缓存)
 
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UStaticMesh>> meshCache; // 按软路径缓存UStaticMesh(楼梯/坡道网格)

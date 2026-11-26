@@ -102,7 +102,7 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
    - `SetProperty()` 里填：`blueprintPath`（`/Game/.../BP_XxxElement.BP_XxxElement_C`）、`sizeX/Y/Z`（包围盒）、`scriptModName="script_empty"` 和 `milestoneNames`（可驾驶的车复用 `vehicle_basic`，即靠近弹出"上车"）、`exitOffsetX/Y/Z`（下车点，车身局部坐标，Z 默认 100，站不下人会拒绝下车）、`drivable=true`。
 2. `basic.cpp` 三处：依赖表里加 `{ XxxVehicle::GetId(), { kScriptEmpty } }`；`GetModVehicles` 的列表；`RegisterModVehicles` 里 `factory->RegisterVehicle(...)`。
 3. `Resource/Config/config.json` 的 `vehicle_mods` 里加 `"vehicle_xxx"`。
-4. 想让它在停车位刷出来：车位接受哪些种类由建筑 mod 在 `Layout()` 里用 `AssignParking(..., { 种类... })`/`AssignStockedParking(...)` 声明(如 `Source/Basic/map/building_industry_high.cpp`)。`AssignStockedParking` 的车位开局各预置一辆(种类里随机挑、再从该种类已启用的车型里随机挑，没有已启用车型就空着)；普通车位的车由 `Core/traffic/traffic.cpp` 的 `Traffic::AssignVehicles` 按人分配，目前只分配 `car`(市民)和 `truck`(组织)两个种类，别的种类不会被自动分配。
+4. 想让它在停车位刷出来：车位接受哪些种类由建筑 mod 在 `Layout()` 里用 `AssignParking(..., { 种类... })` 声明(如 `Source/Basic/map/building_industry_high.cpp`)；要开局就停着车，改用 `AssignParking(level, slot, spec)` 并把 `spec.stocked` 设为 true(如 `Source/Basic/map/building_port.cpp`)。`stocked` 的车位开局各预置一辆(种类里随机挑、再从该种类已启用的车型里随机挑，没有已启用车型就空着)；普通车位的车由 `Core/traffic/traffic.cpp` 的 `Traffic::AssignVehicles` 按人分配，目前只分配 `car`(市民)和 `truck`(组织)两个种类，别的种类不会被自动分配。
 5. `build.bat` 全量编译（Basic 是运行时 DLL）。重启编辑器。
 
 ## 七、测试

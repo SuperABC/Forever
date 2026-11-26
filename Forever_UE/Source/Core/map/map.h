@@ -641,9 +641,10 @@ private:
 	static float ProjectPointOntoRoad(Road* road, float px, float py);
 
 	// FindPedestrianPath/FindVehiclePath共享的寻路核心，只按节点id运算，边权=Connection::CalcDistance()；返回含起终点的id序列，
-	// 不连通/id不存在返回空。coords非空时按A*运算(启发值=到终点的水平直线距离，不超过真实路径长度，保证最优)。
+	// 不连通/id不存在返回空。节点坐标由编译图(SearchGraph)自带：全部节点都有坐标时按A*运算(启发值=缩放后到终点的水平直线距离，
+	// 不超过真实路径长度，保证最优)，否则是Dijkstra。
 	std::vector<int> FindPath(const NavGraph& graph,
-		int fromNodeId, int toNodeId, const std::unordered_map<int, const Node*>* coords = nullptr) const;
+		int fromNodeId, int toNodeId) const;
 
 	// 寻路用的"编译图"：把unordered_map邻接表一次性转成按下标的数组，边权(CalcDistance要采样17个曲线点，很贵)只算一次，
 	// 并带节点坐标做A*启发、行人完整路线缓存。NavGraph::revision变了会自动重建(缓存随之作废)。

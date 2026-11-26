@@ -14,6 +14,9 @@
 #include "society/job.h"
 #include "society/ledger.h"
 #include "traffic/traffic.h"
+#include "traffic/vehicle.h"
+#include "player/vehicle_asset.h"
+#include "player/player.h"
 
 #include <algorithm>
 #include <cmath>
@@ -72,7 +75,7 @@ namespace {
 		run.Check(unparked == 0, "every plane bay has a parked plane", to_string(unparked) + " empty");
 	}
 
-	// 港口：layout的1个parkings矩形只切一个船位(AssignStockedParking spacing=-1)，开局停一艘船。
+	// 港口：layout的1个parkings矩形只切一个船位(spacing=-1)，开局停一艘船。
 	// 另外通用检查：所有stocked车位(机场飞机/港口船)开局都停了车(Traffic::InitStockedVehicles)，没有stocked的车位不会被它抢先占用
 	// ——由人/组织拥有的车才走AssignVehicles，所以这里只验stocked那一侧。
 	void CheckPortBoats(TestWorld& world) {
@@ -401,6 +404,96 @@ namespace {
 		run.Check(filledJobs == employed, "filled jobs equal employed citizens", to_string(filledJobs) + " vs " + to_string(employed));
 		run.Check(world.society->GetLedger().Total() == 0, "ledger total is zero", to_string(static_cast<long long>(world.society->GetLedger().Total())));
 	}
+	// 游戏时钟按整毫秒走，但不足1毫秒的零头要累加：每帧只有0.4毫秒时时钟也得前进，总量不随帧数变。
+	// 会把时钟往前拨1秒，放在world套件靠后跑。
+	void CheckClockRemainder(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		if (!world.player || !world.player->GetTime()) return;
+		const auto millisOfDay = [](const Time& t) {
+			return ((static_cast<long long>(t.GetHour()) * 60 + t.GetMinute()) * 60 + t.GetSecond()) * 1000 + t.GetMillisecond();
+		};
+		const double ratio = world.player->GetTimeFlowRatio();
+		world.player->SetTimeFlowRatio(1.0);
+		const long long before = millisOfDay(*world.player->GetTime());
+		// 倍率1时1现实秒=60000游戏毫秒；每帧1/144000秒=0.4167毫秒，2400帧合计正好1000毫秒。
+		for (int i = 0; i < 2400; i++) world.player->Tick(1.0f / 144000.0f);
+		const long long day = 24LL * 60 * 60 * 1000;
+		const long long elapsed = ((millisOfDay(*world.player->GetTime()) - before) % day + day) % day;
+		world.player->SetTimeFlowRatio(ratio);
+		run.Check(elapsed >= 999 && elapsed <= 1001, "clock keeps sub-millisecond remainders across ticks (2400 ticks of 0.4167ms = 1000ms)", to_string(elapsed) + " ms");
+	}
+
+	// 销毁车辆：它占着的车位、预订的车位、通勤行程、资产都要一起解开，不能留指向它的指针。
+	// 会改动世界(少一辆车)，所以放在world套件最后跑。
+	void CheckDestroyVehicle(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		if (!world.traffic) return;
+		// 先尽量造一条真实的通勤行程(车停在车主所在的楼里、别的楼有空车位)，这样一次销毁能同时覆盖车位、预订和行程。
+		vector<VehicleAsset*> assets = world.traffic->GetVehicleAssets();
+		sort(assets.begin(), assets.end(), [](const VehicleAsset* a, const VehicleAsset* b) { return a->GetVehicle()->GetName() < b->GetVehicle()->GetName(); });
+		vector<string> buildingNames;
+		for (const auto& [name, building] : world.map->GetBuildings()) if (building && !building->GetRooms().empty()) buildingNames.push_back(name);
+		sort(buildingNames.begin(), buildingNames.end());
+		Vehicle* victim = nullptr;
+		Citizen* driver = nullptr;
+		int tried = 0;
+		for (VehicleAsset* asset : assets) {
+			if (victim || tried >= 40) break;
+			Citizen* owner = asset->GetOwnerCitizen();
+			if (!owner || !asset->GetVehicle() || !asset->GetVehicle()->GetParkingSlot()) continue;
+			tried++;
+			for (const string& name : buildingNames) {
+				Traffic::CommuteTrip* trip = world.traffic->BeginCommute(owner, world.map->GetBuildings().at(name)->GetRooms()[0]);
+				if (!trip) continue;
+				victim = trip->vehicle;
+				driver = owner;
+				break;
+			}
+		}
+		// 造不出行程(这个种子里没有合适的车)就退一步：随便找一辆停着的车，手动给它预订一个空车位。
+		if (!victim) {
+			run.Note("destroy-vehicle check: no commute trip could be started, trip cleanup not exercised in this seed");
+			vector<string> names;
+			for (const auto& [name, vehicle] : world.traffic->GetVehicles()) if (vehicle->GetParkingSlot() && !vehicle->GetReservedRoom() && !vehicle->GetRoute()) names.push_back(name);
+			sort(names.begin(), names.end());
+			if (!names.empty()) victim = world.traffic->FindVehicleByName(names[0]);
+			if (victim) {
+				bool reserved = false;
+				for (const string& name : buildingNames) {
+					for (Room* room : world.map->GetBuildings().at(name)->GetRooms()) {
+						const vector<ParkingSlot*>& slots = room->GetParkingSlots();
+						for (size_t i = 0; i < slots.size() && !reserved; i++) {
+							if (slots[i]->IsFree()) reserved = victim->ReserveSlot(room, static_cast<int>(i));
+						}
+						if (reserved) break;
+					}
+					if (reserved) break;
+				}
+			}
+		}
+		run.Check(victim != nullptr, "world has a parked vehicle to destroy");
+		if (!victim) return;
+		const string victimName = victim->GetName();
+		ParkingSlot* parkedSlot = victim->GetParkingSlot();
+		ParkingSlot* reservedSlot = victim->GetReservedSlot();
+		run.Check(parkedSlot && parkedSlot->parkedVehicle == victim, "vehicle to destroy is parked in a slot");
+		run.Check(reservedSlot && reservedSlot->reservedBy == victim, "vehicle to destroy holds a reservation on another slot");
+		const size_t vehiclesBefore = world.traffic->GetVehicles().size();
+
+		world.traffic->DestroyVehicle(victimName);
+
+		// victim之后只当作一个地址来比较，不再解引用。
+		run.Check(world.traffic->FindVehicleByName(victimName) == nullptr && world.traffic->GetVehicles().size() + 1 == vehiclesBefore, "destroyed vehicle is gone from the vehicle table");
+		if (parkedSlot) run.Check(parkedSlot->parkedVehicle == nullptr && parkedSlot->IsFree(), "destroying a vehicle frees the slot it was parked in");
+		if (reservedSlot) run.Check(reservedSlot->reservedBy == nullptr && reservedSlot->IsFree(), "destroying a vehicle releases the slot it had reserved");
+		if (driver) run.Check(world.traffic->FindTrip(driver) == nullptr, "destroying a vehicle cancels its commute trip");
+		bool tripLeft = false, taskLeft = false, assetLeft = false;
+		for (const auto& [citizen, trip] : world.traffic->GetTrips()) if (trip.vehicle == victim) tripLeft = true;
+		for (const Traffic::TaskTrip& task : world.traffic->GetTasks()) if (task.vehicle == victim) taskLeft = true;
+		for (const VehicleAsset* asset : world.traffic->GetVehicleAssets()) if (asset->GetVehicle() == victim) assetLeft = true;
+		run.Check(!tripLeft && !taskLeft, "no commute or task trip still points at the destroyed vehicle");
+		run.Check(!assetLeft, "no vehicle asset still points at the destroyed vehicle");
+	}
 }
 
 void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
@@ -420,6 +513,8 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckRouteLegGeometry(world);
 	CheckPedestrianConnectivity(world);
 	CheckPopulaceAndSociety(world);
+	CheckClockRemainder(world);
+	CheckDestroyVehicle(world); // 会销毁一辆车，必须最后跑
 }
 
 void RunWorldSuite(const TestOptions& options) {

@@ -1026,8 +1026,8 @@ void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, cons
 			systemScript->SetValue(key, ValueType(name));
 		}
 		else {
-			auto [found, current] = systemScript->GetValue(key);
-			if (found && ToString(current) == name) systemScript->SetValue(key, ValueType(string()));
+			const ValueType* current = systemScript->FindValue(key);
+			if (current && ToString(*current) == name) systemScript->SetValue(key, ValueType(string()));
 		}
 	}
 

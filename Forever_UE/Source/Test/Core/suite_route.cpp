@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -246,13 +247,36 @@ namespace {
 
 	void MeasureVehicles(TestWorld& world, const TestOptions& options, unsigned long long seed) {
 		TestRun& run = TestRun::Get();
+		// 只在接公路的车位之间抽样；offRoad车位(船位/机位这类)本来就不在车行图里，单独核对。
 		vector<SlotRef> slots;
+		const NavGraph& vehicleGraph = world.map->GetVehicleNavGraph();
+		map<string, int> isolatedByRoom, offRoadInGraphByRoom;
+		int offRoad = 0, isolated = 0, offRoadInGraph = 0;
 		for (const auto& [name, building] : world.map->GetBuildings()) {
 			for (Room* room : building->GetRooms()) {
-				for (ParkingSlot* slot : room->GetParkingSlots()) if (slot->navigationNode) slots.push_back({ room, slot });
+				for (ParkingSlot* slot : room->GetParkingSlots()) {
+					if (!slot->navigationNode) continue;
+					const bool inGraph = vehicleGraph.count(slot->navigationNode->GetId()) > 0;
+					const string where = room->GetAddress() + " (" + room->GetName() + ")";
+					if (slot->offRoad) {
+						offRoad++;
+						if (inGraph) { offRoadInGraph++; offRoadInGraphByRoom[where]++; }
+						continue;
+					}
+					if (!inGraph) { isolated++; isolatedByRoom[where]++; }
+					slots.push_back({ room, slot });
+				}
 			}
 		}
 		run.Metric("parking slots", static_cast<double>(slots.size()), "");
+		run.Metric("parking slots off-road", offRoad, "");
+		// 接公路的车位必须都在车行图里：不在图里的车位既开不出去也开不进来(layout漏画了车行连接)。
+		for (const auto& [where, count] : isolatedByRoom) run.Note("parking slots not in the vehicle graph: " + where + " x" + to_string(count));
+		run.Metric("vehicle isolated parking slots", isolated, "");
+		run.Check(isolated == 0, "every on-road parking slot is connected to the vehicle graph", to_string(isolated) + " isolated");
+		// 反过来，声明了offRoad的车位不该出现在车行图里(标错了，或者layout多画了连接)。
+		for (const auto& [where, count] : offRoadInGraphByRoom) run.Note("off-road parking slots found in the vehicle graph: " + where + " x" + to_string(count));
+		run.Check(offRoadInGraph == 0, "off-road parking slots are not in the vehicle graph", to_string(offRoadInGraph) + " connected");
 		run.Check(slots.size() > 1, "world has parking slots to route between");
 		if (slots.size() < 2) return;
 		const int samples = options.quick ? 300 : 2000;
@@ -270,7 +294,12 @@ namespace {
 			const double ms = chrono::duration<double, milli>(chrono::steady_clock::now() - begin).count();
 			all.push_back(ms);
 			if (plan.status == Map::VehicleRoutePlan::OK) { okOnly.push_back(ms); totalPoints += plan.points.size(); }
-			else failed++;
+			else {
+				failed++;
+				run.Note("vehicle route failed: " + from.room->GetAddress() + " (" + from.room->GetName() + ") slot node=" + to_string(from.slot->navigationNode->GetId())
+					+ " -> " + to.room->GetAddress() + " (" + to.room->GetName() + ") slot node=" + to_string(to.slot->navigationNode->GetId())
+					+ " status=" + to_string(static_cast<int>(plan.status)));
+			}
 		}
 		RecordMemory("route: after vehicle routes"); // 车辆路线不缓存，这里内存不该随样本数增长
 		const Map::RouteCacheStats cacheAfter = world.map->GetPedestrianRouteCacheStats();

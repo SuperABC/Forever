@@ -16,8 +16,13 @@
   `#include <windows.h>`，句柄只在.cpp里出现"的约定一致，避免和UE的`CoreMinimal.h`宏
   冲突。
 - **`ValueType`是脚本引擎的核心值类型**——`story/expression.h`的`ExpressionNode::Evaluate`、
-  `Container::GetValue`/`SetValue`都以它为载体，`FromString`会自动推断字面量类型（布尔/
+  `Container::FindValue`/`SetValue`都以它为载体，`FromString`会自动推断字面量类型（布尔/
   整数/浮点/字符串），`ToString`则会把浮点数的多余尾零裁掉（整数值输出`5`，`2.5`输出`2.5`），方便脚本里做字符串比较/拼接。存档按类型下标+二进制值写变量，不经过`ToString`。
+- **`Container`不按值过DLL边界传`ValueType`**：实现在宿主（`Script`），mod通过虚函数调用。
+  `FindValue(name)`返回容器自己持有的那个值的`const ValueType*`（没有这个变量=`nullptr`），调用方只读，
+  要留着就自己拷一份——拷贝发生在调用方那一侧，用的是调用方自己的分配器；`SetValue(name, const ValueType&)`
+  由容器自己拷一份存起来。不能改回"按值返回/按值传参"，也不能改成"按引用输出参数"：值是超过15字符的字符串时，
+  这两种写法都是宿主分配、mod释放（或反过来），见`CONVENTIONS.md`第4节。
 - **`OBJECT_HOLDER`/`COSTOM_INIT`/`COSTOM_RUNTIME`是纯标记宏**（定义为空），用于在声明处
   标注"这个指针成员持有对象所有权"之类的语义，不影响编译，纯粹给读代码的人看。
 - **`GetRandomNormal(mean, stddev)`**：正态分布随机浮点数，和`GetRandom(int)`一样先看随机作用域(有流就用Box-Muller，固定消耗2次抽取)，没有才退回现场构造`mt19937`+`normal_distribution`。给

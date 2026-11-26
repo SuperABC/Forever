@@ -9,6 +9,7 @@
 #include "story/expression.h"
 
 #include <algorithm>
+#include <cmath>
 
 using namespace std;
 
@@ -49,7 +50,11 @@ void Player::Init() {
 
 void Player::Tick(float delta) {
 	day = time->GetDay();
-	int deltaMs = static_cast<int>(delta * 60 * 1000 * timeFlowRatio);
+	// 时钟按整毫秒走，零头留到下一帧：直接截断的话时钟速度会随帧率变，每帧不足1毫秒时还会完全不走。
+	const double exactMs = static_cast<double>(delta) * 60.0 * 1000.0 * timeFlowRatio + pendingMilliseconds;
+	const double wholeMs = std::floor(exactMs);
+	pendingMilliseconds = exactMs - wholeMs;
+	int deltaMs = static_cast<int>(wholeMs);
 	time->AddMilliseconds(deltaMs);
 	weather.Tick(deltaMs, time->GetMonth());
 }

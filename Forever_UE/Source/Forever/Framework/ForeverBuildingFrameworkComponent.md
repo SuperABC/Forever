@@ -46,7 +46,6 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 - **近处（`ELod::Near`）**：外壳之上再加楼梯/坡道网格(按层、只排有楼梯坡道的层)、电梯轿厢、
   自定义模型；门由门框架组件按距离另行流式加载。离开近处只销毁这些，外壳不动。
 - **远处（`ELod::Far`）**：只有外壳(没有"整栋一个灰box"的远景替身)。
-  `ResolveLodMaterial`/`defaultLodMaterial`目前没有调用方。
 - **切换距离，两个阈值形成迟滞区间**：`lodNearEnterDistance`（默认16，远→近的触发距离）/
   `lodFarExitDistance`（默认32，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
   地图单位。近→远的阈值故意比远→近的大——已经精细化的building要离得更远才会退回只有外壳，
@@ -272,7 +271,7 @@ UE对"同一个Actor根组件下挂大量Static简单碰撞子组件"会做"焊�
 
 - 依赖：`Source/Forever/Element/BuildingElement.h`（`GenerateBuildings()`
   `SpawnActor<ABuildingElement>()`）、`map/map.h`（`Map::GetBuildings()`）、
-  `map/building.h`（`Building`，只用来取`GetLodMaterialPath()`）、
+  `map/building.h`（`Building`，读层数、装饰物和各层的楼梯/坡道资产路径）、
   `UObject/ConstructorHelpers.h`（默认资产加载）、`UMaterialInstanceDynamic`、
   `Engine/Engine.h`。真正的楼体几何生成依赖（`map/room.h`/`map/general_geometry.h`/
   `ProceduralMeshComponent`/`Components/StaticMeshComponent.h`/`Components/

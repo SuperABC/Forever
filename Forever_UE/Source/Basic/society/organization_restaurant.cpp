@@ -52,8 +52,8 @@ void RestaurantOrganization::CollectServices(Container* script, const vector<str
 	if (!script || !post) return;
 
 	for (const string& type : stockTypes) {
-		auto [exist, value] = script->GetValue("stock." + type);
-		if (!exist || ToInt(value) <= 0) continue;
+		const ValueType* value = script->FindValue("stock." + type);
+		if (!value || ToInt(*value) <= 0) continue;
 
 		JsonValue request;
 		request["post"] = "product info";
@@ -71,7 +71,7 @@ void RestaurantOrganization::CollectServices(Container* script, const vector<str
 		offer.type = serviceType;
 		offer.unitPrice = static_cast<int64_t>(info["retail price"].AsDouble()) * 2; // 餐厅单价固定为零售价2倍
 		offer.quality = 0.5f; // 餐厅服务质量固定0.5，不看商品自身的质量
-		offer.capacity = ToInt(value); // 能卖的份数就是库存
+		offer.capacity = ToInt(*value); // 能卖的份数就是库存
 		services.push_back(offer);
 	}
 }
@@ -79,7 +79,7 @@ void RestaurantOrganization::CollectServices(Container* script, const vector<str
 void RestaurantOrganization::ApplyServiceUsage(const string& name, int count, Container* script) {
 	if (!script || count <= 0) return;
 
-	auto [exist, value] = script->GetValue("stock." + name);
-	if (!exist) return;
-	script->SetValue("stock." + name, ValueType(max(0, ToInt(value) - count)));
+	const ValueType* value = script->FindValue("stock." + name);
+	if (!value) return;
+	script->SetValue("stock." + name, ValueType(max(0, ToInt(*value) - count)));
 }

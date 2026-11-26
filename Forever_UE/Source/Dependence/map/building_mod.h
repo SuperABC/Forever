@@ -67,6 +67,9 @@ struct ParkingSlotSpec {
 	// true=开局由Traffic::InitStockedVehicles在每个切出的车位里预置一辆车(从categories里随机选种类再选车型，不挂资产)，
 	// 用于没有"主人"的载具(机场的飞机、港口的船)；false=车位留给Traffic::AssignVehicles按市民/组织所有权分配。
 	bool stocked = false;
+	// true=这个车位不接公路(船位、机位这类):layout里不给它画车行连接,车位节点不进车行导航图,公路上的车开不进来也开不出去。
+	// false(默认)=普通停车位,必须经layout的车行连接接进车行图。Core只认这个标记,不认识具体载具种类。
+	bool offRoad = false;
 };
 
 // 设计见building_mod.md。
@@ -97,8 +100,6 @@ public:
 	int layers = 1;
 	// 楼层高度(地图单位),自最深地下室到最高层,长度应为basements+layers,不对由Building::Layout()补默认值。
 	std::vector<float> floorHeights;
-	// 远处LOD cube的材质软路径,留空用默认灰色。
-	std::string lodMaterial;
 	// 填充building整块quad与楼体(body)之间空隙的地面材质软路径,空=不填充。空隙是回形环,渲染层用4块cube铺,高度同1楼地面。
 	std::string gapMaterial;
 
@@ -142,10 +143,9 @@ public:
 	// categories见ParkingSlotSpec。同一个房间可以归入多个矩形。
 	void AssignParking(int level, int slot, int parkingIndex, float spacing,
 		const std::vector<std::string>& categories);
-	// 同AssignParking，但切出的每个车位开局就停一辆车(ParkingSlotSpec::stocked)。机场的机位/港口的船位用；
-	// spacing=-1=整个矩形一个车位。
-	void AssignStockedParking(int level, int slot, int parkingIndex, float spacing,
-		const std::vector<std::string>& categories);
+	// 同AssignParking，但直接给完整的ParkingSlotSpec：要指定stocked/offRoad这些标记时用(港口的船位、机场的机位)。
+	// spec.spacing=-1=整个矩形一个车位。
+	void AssignParking(int level, int slot, const ParkingSlotSpec& spec);
 
 	// 声明一台电梯轿厢,同一口井可声明多台(楼层范围不能重叠,重叠的后一条被跳过)。
 	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",

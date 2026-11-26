@@ -71,7 +71,6 @@ void OfficeMiddleBuilding::Layout(int& direction, const Quad& quad,
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);
 	}
-	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
 	// 建筑大门：骨骼动画门(目前所有门共用测试门)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。

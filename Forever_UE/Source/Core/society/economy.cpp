@@ -217,8 +217,8 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 			const vector<DeliveryDestination> empty;
 			auto listIt = deliveries.find(organization);
 			const vector<DeliveryDestination>& list = listIt != deliveries.end() ? listIt->second : empty;
-			auto oldCount = script->GetValue("delivery.count");
-			int previous = oldCount.first && std::holds_alternative<int>(oldCount.second) ? std::get<int>(oldCount.second) : 0;
+			const ValueType* oldCount = script->FindValue("delivery.count");
+			int previous = oldCount && std::holds_alternative<int>(*oldCount) ? std::get<int>(*oldCount) : 0;
 			script->SetValue("delivery.count", ValueType(static_cast<int>(list.size())));
 			for (int i = 0; i < static_cast<int>(list.size()); i++) {
 				script->SetValue("delivery[" + to_string(i) + "].address", ValueType(list[i].address));
@@ -400,9 +400,9 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 	for (Organization* organization : sellers) {
 		vector<Storage*> storages = StoragesOf(organization, industry);
 		for (const string& type : stockTypes) {
-			auto [exist, value] = organization->GetScript()->GetValue("stock." + type);
-			if (!exist) continue;
-			int removed = before[organization][type] - ToInt(value);
+			const ValueType* value = organization->GetScript()->FindValue("stock." + type);
+			if (!value) continue;
+			int removed = before[organization][type] - ToInt(*value);
 			for (Storage* storage : storages) {
 				if (removed <= 0) break;
 				removed -= static_cast<int>(storage->Output(type, static_cast<float>(removed)));

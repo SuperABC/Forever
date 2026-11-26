@@ -142,9 +142,43 @@
 		],
 	}],
 	"pedestrianNavigation": {
-		"nodes": [],
+		"nodes": [
+			{
+				"position": [0.7, 0, 0.45, 0],
+			},
+		],
 		"lines": [],
-		"connections": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "single",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 1,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+		],
 	},
 	"vehicleNavigation": {
 		"nodes": [],

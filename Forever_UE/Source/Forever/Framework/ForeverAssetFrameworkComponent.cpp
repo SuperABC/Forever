@@ -216,8 +216,7 @@ namespace {
 	std::string ResolveTargetAssetName(const std::string& assetExpression, const ScriptContext& context) {
 		if (!assetExpression.empty()) return ToString(EvaluateExpression(assetExpression, context));
 		if (context.self) {
-			auto [found, value] = context.self->GetValue("name");
-			if (found) return ToString(value);
+			if (const ValueType* value = context.self->FindValue("name")) return ToString(*value);
 		}
 		return std::string();
 	}
@@ -235,8 +234,8 @@ void UForeverAssetFrameworkComponent::ApplyPickAsset(const PickAssetChange* chan
 		name = ToString(EvaluateExpression(change->GetAsset(), context));
 	}
 	else if (context.self) {
-		auto [found, value] = context.self->GetValue("name"); // 缺省=执行这个Change的脚本所属的资产
-		if (found) name = ToString(value);
+		// 缺省=执行这个Change的脚本所属的资产
+		if (const ValueType* value = context.self->FindValue("name")) name = ToString(*value);
 	}
 
 	FGroundOrigin origin;

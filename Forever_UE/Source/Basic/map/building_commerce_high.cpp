@@ -53,7 +53,6 @@ void CommerceHighBuilding::Layout(int& direction, const Quad& quad,
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);
 	}
-	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
 	SetSurfaceMaterial("concrete", "/Game/Asset/Building/Material/Concrete.Concrete");
 	// 楼体与建筑范围之间的空隙铺人行道材质。

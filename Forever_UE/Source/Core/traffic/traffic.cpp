@@ -502,7 +502,7 @@ void Traffic::InitRoutes(Map* map) {
 
 void Traffic::InitStockedVehicles(Map* map) {
 	CORE_RANDOM_SCOPE("core.traffic");
-	// 没有"主人"、开局就该停在车位上的载具：建筑mod用AssignStockedParking声明车位，开局每个这样的车位停一辆(不挂资产)。
+	// 没有"主人"、开局就该停在车位上的载具：建筑mod把车位声明成stocked(ParkingSlotSpec::stocked)，开局每个这样的车位停一辆(不挂资产)。
 	// 种类和车型都由车位自己的categories+VehicleFactory决定，这里不认识具体种类；普通停车位的车由AssignVehicles按人分配。
 	int parkedCount = 0;
 	for (auto& [buildingName, building] : map->GetBuildings()) {
@@ -613,7 +613,7 @@ void Traffic::InitTransitVehicles() {
 Vehicle* Traffic::CreateVehicle(const string& modId, const string& name) {
 	auto it = vehicles.find(name);
 	if (it != vehicles.end()) {
-		RemoveVehicleAsset(it->second);
+		DetachVehicle(it->second);
 		delete it->second;
 		vehicles.erase(it);
 	}
@@ -631,11 +631,22 @@ Vehicle* Traffic::CreateVehicle(const string& modId, const string& name) {
 void Traffic::DestroyVehicle(const string& name) {
 	auto it = vehicles.find(name);
 	if (it == vehicles.end()) return;
-	// 车被销毁时它的任务行程也要取消，否则行程里留着悬空的Vehicle*。
-	if (TaskTrip* task = FindTaskByVehicle(it->second)) CancelTask(task);
-	RemoveVehicleAsset(it->second);
+	DetachVehicle(it->second);
 	delete it->second;
 	vehicles.erase(it);
+}
+
+void Traffic::DetachVehicle(Vehicle* vehicle) {
+	// 行程里存着Vehicle*：先取消(CancelTask/CancelTrip会顺带清掉还没出发的车的预订)。
+	while (TaskTrip* task = FindTaskByVehicle(vehicle)) CancelTask(task);
+	for (auto it = trips.begin(); it != trips.end();) {
+		if (it->second.vehicle == vehicle) it = trips.erase(it);
+		else ++it;
+	}
+	// 车位的parkedVehicle/reservedBy指向这辆车：不让出来的话车位永远不空闲，还留着悬空指针。
+	vehicle->ReleaseSlot();
+	vehicle->ClearReservation();
+	RemoveVehicleAsset(vehicle);
 }
 
 void Traffic::RemoveVehicleAsset(const Vehicle* vehicle) {
@@ -665,7 +676,7 @@ const unordered_map<string, Station*>& Traffic::GetStations() const { return sta
 
 const unordered_map<string, Route*>& Traffic::GetRoutes() const { return routes; }
 
-void Traffic::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
+void Traffic::Tick(const Time& currentTime) {
 	if (hasLastTickTime) {
 		double delta = lastTickTime.DifferenceInSeconds(currentTime);
 		if (delta > 0.0) elapsedSeconds += delta;

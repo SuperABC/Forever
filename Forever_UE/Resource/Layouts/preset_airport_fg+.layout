@@ -167,7 +167,7 @@
 				],
 			},
 			{
-				"direction": 2,
+				"direction": 1,
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -178,12 +178,6 @@
 		"rect": [0.4, 0, 0, 0, 0.6, 0, 0.2, 0.2],
 		"direction": 2,
 		"doors": [
-			{
-				"direction": 3,
-				"positions": [
-					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
-				],
-			},
 			{
 				"direction": 2,
 				"positions": [
@@ -218,6 +212,12 @@
 				"direction": 2,
 				"positions": [
 					[0.3, 0, 0, 0.1, 0.7, 0, 1, 0],
+				],
+			},
+			{
+				"direction": 0,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
 			},
 		],
@@ -255,9 +255,222 @@
 		"direction": 3,
 	}],
 	"pedestrianNavigation": {
-		"nodes": [],
+		"nodes": [
+			{
+				"position": [0.3, 0, 0, 0],
+			},
+			{
+				"position": [0.5, 0, 0, 0],
+			},
+			{
+				"position": [0.3, 0, 0.2, 0],
+			},
+			{
+				"position": [0.7, 0, 0.2, 0],
+			},
+			{
+				"position": [0.1, 0, 0.2, 0],
+			},
+			{
+				"position": [0.9, 0, 0.2, 0],
+			},
+			{
+				"position": [0.8, -0.6, 0.45, 0],
+			},
+			{
+				"position": [0.8, -0.6, 0.3, 0.1],
+			},
+		],
 		"lines": [],
-		"connections": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "outside",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "outside",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "single",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "single",
+					"idx": 7,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 5,
+				},
+				"end": {
+					"type": "node",
+					"idx": 2,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "single",
+					"idx": 2,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "single",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 7,
+				},
+				"end": {
+					"type": "single",
+					"idx": 9,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 9,
+				},
+				"end": {
+					"type": "node",
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 8,
+				},
+				"end": {
+					"type": "node",
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 3,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 6,
+				},
+				"end": {
+					"type": "single",
+					"idx": 8,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 8,
+				},
+				"end": {
+					"type": "node",
+					"idx": 7,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "node",
+					"idx": 6,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+		],
 	},
 	"vehicleNavigation": {
 		"nodes": [],

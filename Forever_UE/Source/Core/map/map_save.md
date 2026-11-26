@@ -108,11 +108,11 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 ## 墙样式
 Stair/Elevator/Ramp/Corridor/Single/Row 以及 Room 在原有字段之后各多存 `WallStyle[4]`（每面墙 4 个侧面各 tag+material 两个字符串，`WriteWallStyles/ReadWallStyles`）。没升存档版本号，旧存档读不了。
 
-Building 在 `lodMaterialPath` 之后多存一个字符串 `gapMaterialPath`（楼体空隙填充材质，没升存档版本号）。
+Building 在 `floorHeights` 之后存一个字符串 `gapMaterialPath`（楼体空隙填充材质，没升存档版本号）。原来排在它前面的 `lodMaterialPath` 已经删掉（没有任何读取方），同样没升版本号，旧存档读不了。
 
 - `Road`在`unit`之后多存`sidewalkFreeMesh[0]`、`sidewalkFreeMesh[1]`两个字符串（去掉某侧人行道的开口资产，见`general_geometry.md`），旧存档不兼容（按约定未升版本）。
 
 ## 车位
 
-房间段写车位列表：每个车位存几何(centerX/Y、halfWidth/Depth)、direction、categories、导航节点id；
+房间段写车位列表：每个车位存几何(centerX/Y、halfWidth/Depth)、direction、categories、`offRoad`(`U8`，排在categories之后；加它时没升版本号，旧存档读不了)、导航节点id；
 占用(`reservedBy`/`parkedVehicle`)不存，读档时由`traffic_save`按车辆的`parkState`/`parkingSlotIndex`重建。楼层段有`parkings`矩形列表。

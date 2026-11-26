@@ -1139,7 +1139,6 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		w.I32(building->basements);
 		w.I32(building->layers);
 		WriteFloatVector(building->floorHeights, w);
-		w.Str(building->lodMaterialPath);
 		w.Str(building->gapMaterialPath);
 		WriteDecorations(building->decorations, w);
 		w.U32(static_cast<uint32_t>(building->floorSpecs.size()));
@@ -1221,12 +1220,13 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			w.I64(p.rent);
 			w.U8(p.isManufacture ? 1 : 0);
 			WriteStrings(p.manufactureTypes, w);
-			// 车位：几何+种类+导航节点(都登记在Map的锚点表里，按id引用)；占用状态不存，由车辆的存档反推。
+			// 车位：几何+种类+offRoad+导航节点(都登记在Map的锚点表里，按id引用)；占用状态不存，由车辆的存档反推。
 			w.U32(static_cast<uint32_t>(room->parkingSlots.size()));
 			for (const ParkingSlot* slot : room->parkingSlots) {
 				w.F32(slot->centerX); w.F32(slot->centerY); w.F32(slot->halfWidth); w.F32(slot->halfDepth);
 				w.I32(slot->direction);
 				WriteStrings(slot->categories, w);
+				w.U8(slot->offRoad ? 1 : 0);
 				const Node* slotNode = slot->navigationNode;
 				bool slotRegistered = slotNode && t.anchorsById.count(slotNode->GetId()) && t.anchorsById.at(slotNode->GetId()) == slotNode;
 				w.I32(slotRegistered ? slotNode->GetId() : -1);
@@ -1422,7 +1422,6 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		building->basements = r.I32();
 		building->layers = r.I32();
 		building->floorHeights = ReadFloatVector(r);
-		building->lodMaterialPath = r.Str();
 		building->gapMaterialPath = r.Str();
 		building->decorations = ReadDecorations(r);
 		uint32_t specCount = r.U32();
@@ -1535,6 +1534,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 				slot.centerX = r.F32(); slot.centerY = r.F32(); slot.halfWidth = r.F32(); slot.halfDepth = r.F32();
 				slot.direction = r.I32();
 				slot.categories = ReadStrings(r);
+				slot.offRoad = r.U8() != 0;
 				int nodeId = r.I32();
 				if (nodeId >= 0) slot.navigationNode = t.AnchorAt(nodeId);
 				room->parkingSlots.push_back(new ParkingSlot(slot));

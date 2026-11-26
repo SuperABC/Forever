@@ -137,6 +137,7 @@ namespace {
 		run.Check(loaded != nullptr, "map loads back for the furniture check", error);
 		if (!loaded) return;
 		size_t total = 0, mismatchedRooms = 0, missingBuildings = 0;
+		size_t slotTotal = 0, offRoadSlots = 0, mismatchedSlotRooms = 0;
 		for (const auto& entry : world.map->GetBuildings()) {
 			auto other = loaded->GetBuildings().find(entry.first);
 			if (other == loaded->GetBuildings().end()) { missingBuildings++; continue; }
@@ -153,8 +154,23 @@ namespace {
 						fa[k].yaw == fb[k].yaw && fa[k].scaleX == fb[k].scaleX && fa[k].scaleY == fb[k].scaleY && fa[k].scaleZ == fb[k].scaleZ;
 				}
 				if (!same) mismatchedRooms++;
+				// 车位也不重新Layout：数量、几何、可停种类、offRoad标记必须原样回来。
+				const vector<ParkingSlot*>& sa = a[i]->GetParkingSlots();
+				const vector<ParkingSlot*>& sb = b[i]->GetParkingSlots();
+				slotTotal += sa.size();
+				bool sameSlots = sa.size() == sb.size();
+				for (size_t k = 0; sameSlots && k < sa.size(); k++) {
+					if (sa[k]->offRoad) offRoadSlots++;
+					sameSlots = sa[k]->centerX == sb[k]->centerX && sa[k]->centerY == sb[k]->centerY && sa[k]->halfWidth == sb[k]->halfWidth &&
+						sa[k]->halfDepth == sb[k]->halfDepth && sa[k]->direction == sb[k]->direction && sa[k]->categories == sb[k]->categories &&
+						sa[k]->offRoad == sb[k]->offRoad;
+				}
+				if (!sameSlots) mismatchedSlotRooms++;
 			}
 		}
+		run.Metric("parking slots saved", static_cast<double>(slotTotal), "");
+		run.Metric("off-road parking slots saved", static_cast<double>(offRoadSlots), "");
+		run.Check(mismatchedSlotRooms == 0, "parking slots (geometry/categories/offRoad) survive the save round trip", to_string(mismatchedSlotRooms) + " rooms differ");
 		run.Metric("room furniture pieces", static_cast<double>(total), "");
 		run.Check(missingBuildings == 0, "every building comes back for the furniture check");
 		run.Check(mismatchedRooms == 0, "room furniture survives the save round trip", to_string(mismatchedRooms) + " rooms differ");

@@ -9,7 +9,7 @@
 - **一个本体独占一个mod实例**：和`Zone`一样，`RandomAcreage`/`GetAcreageMin`/`GetAcreageMax`/`GetPower(AREA_TYPE)`/`Assign(lots, emit, context)`是不需要实例的`static`方法，每个具体子类必须实现(基类不声明，不是override)，通过`BuildingFactory::RegisterBuilding`以裸函数指针注册，只有真正落地成功时才`CreateBuilding`一次。`Assign`一次扫完全地图的lot，想显式占位哪块就调一次`emit(context, request)`，`request.lot`必须设成对应lot；不需要显式占位给空实现。`GetPower`返回该类型在某种分区lot上的权重，0=不考虑。放置请求(`LotPlacementRequest`/`PlacementEmitFunc`)机制及"mod不能直接调Core对象非虚成员"的跨DLL原因见`zone_mod.md`。
 - **`GetName()`**：遵循CONVENTIONS §5的`static int count`模式，每个实例独占一个Building，名字在整个进程生命周期内唯一。
 - **`Layout(int& direction, quad, boundaryRoads)`**：真实例的`SetPosition`/`SetBoundaryRoad`都设好后由`Building::Layout()`调用一次(构造函数此时不知道落地上下文，所以这些值不能在构造函数里定)。`direction`是引用参数：显式占位落地时传入`Assign`选中的方向；权重CDF/`FillRemainder`落地时传入-1。此时若mod关心方向，应从`boundaryRoads`里挑一个非空的key随机选一个方向回写，让building最终有一个确定的、有真实边界路的方向——building内部行人导航的`"outside"`端点要靠这个方向找到该连去哪条路(见`Source/Core/map/building.md`)；一条边界路都没有就保持-1。不关心方向的mod不动这个参数即可。`quad`/`boundaryRoads`是纯只读输入，无跨DLL容器所有权问题。
-- **配置字段**：`footprint`(`BuildingFootprintSpec`，全是比例，故意不复用`Quad`以免语义混淆)、`basements`/`layers`、`floorHeights`(长度应为`basements+layers`，长度不对由`Building::Layout()`补默认值)、`lodMaterial`(留空用默认灰色)、`stateOwnedChance`(被政府拥有的概率，`Map::Checkin`读取)、`stationMod`(承载的StationMod id，空=非站点建筑，`Traffic::InitStations()`据此创建Station，见`traffic/station_mod.md`)、`scriptModName`/`milestoneNames`(建筑自己的Script，`milestoneNames`非空才创建，进出事件只发给它自己的Script，见`Source/Core/map/map.md`"实体脚本")。
+- **配置字段**：`footprint`(`BuildingFootprintSpec`，全是比例，故意不复用`Quad`以免语义混淆)、`basements`/`layers`、`floorHeights`(长度应为`basements+layers`，长度不对由`Building::Layout()`补默认值)、`stateOwnedChance`(被政府拥有的概率，`Map::Checkin`读取)、`stationMod`(承载的StationMod id，空=非站点建筑，`Traffic::InitStations()`据此创建Station，见`traffic/station_mod.md`)、`scriptModName`/`milestoneNames`(建筑自己的Script，`milestoneNames`非空才创建，进出事件只发给它自己的Script，见`Source/Core/map/map.md`"实体脚本")。
 - **`FloorAssetSpec`/`FloorLayoutSpec`**：一层楼的资产(墙/地/顶材质、楼梯/坡道网格)，留空由Forever层的组件级默认值兜底。不区分外墙/内墙材质。`.layout`模板本身不携带任何材质/网格信息，楼梯/坡道的3D网格必须由mod在`AssignFloor`里显式指定。`buildShell=false`表示这一层不由框架构造近处墙/地板/天花板(外观已由`AddDecoration`的成品模型提供时用)；只影响渲染，房间/导航/门/楼梯网格/Room碰撞盒与远处LOD方块照常，见`Source/Forever/Element/BuildingElement.md`。
 - **`ArrangeRowEach`**(非虚helper)：同`ArrangeRow`，但切出的每个Room各自独立一个Component(类型由参数`component`指定，不带id)；记进`eachRows`，`Building::Layout()`里逐个房间创建Component。用于"每间房一个组织"的场景(如餐厅)。
 - **`AssignFloor`/`AssignFloors`(x2)/`AssignRoom`/`ArrangeRow`**：把调用记录进`floors`(key=人类直觉层号，0=1楼，负数=地下室，同一层重复调用覆盖)、`singles`/`rows`(key=`(component名字,id)`，`BuildingComponentKeyHash`；同一key下的Room归到同一个Component，哪怕分布在不同楼层)。`AssignFloors`向量版按最深地下室到最高层排列，多出的条目忽略，不够的层不赋值。容器增长全发生在mod自己编译的代码里，`Building::Layout()`只读。
@@ -39,12 +39,15 @@
 ## 停车位映射 `parkings` / `AssignParking`
 
 `std::map<std::pair<int,int>, std::vector<ParkingSlotSpec>> parkings`：(楼层, single room slot) → 这个房间用的停车位矩形列表；
-`ParkingSlotSpec{parkingIndex(layout里parkings的下标), spacing(切分间距，地图单位), categories(可停种类)}`。
+`ParkingSlotSpec{parkingIndex(layout里parkings的下标), spacing(切分间距，地图单位), categories(可停种类), stocked, offRoad}`。
 `AssignParking(level, slot, parkingIndex, spacing, categories)`是**新增的非虚成员**(仿`AssignRoom`)，不改任何现有虚函数/继承。
 车位数=`floor(矩形沿垂直开口方向的边长/spacing)`，实际车位宽度>=spacing；`spacing<0`(约定-1)=整个矩形是一个车位(2026-11-22，只改Core的切分，没动头文件)；`spacing==0`=不生成。Basic里各停车场建筑在`AssignRoom(room_parking)`之后调用，
 间距/种类由各建筑mod在`Layout()`里直接写明。
-`ParkingSlotSpec::stocked`(默认false)：`AssignStockedParking(...)`(同`AssignParking`的另一个新增非虚成员)记录为true，Core切出的每个车位带`ParkingSlot::stocked`，
+`ParkingSlotSpec::stocked`(默认false)：设为true时，Core切出的每个车位带`ParkingSlot::stocked`，
 开局由`Traffic::InitStockedVehicles`预置一辆车(种类从`categories`里随机)，用于没有"主人"的载具——机场的飞机(`{"plane"}`)、港口的船(`{"boat"}`)，Core里不写死种类。
+`ParkingSlotSpec::offRoad`(默认false)：true=这个车位**不接公路**(船位在水里、机位在停机坪上)，layout里不给它画车行连接，车位节点不进车行导航图，公路上的车开不进来也开不出去；Core切出的车位带`ParkingSlot::offRoad`(进存档)。默认的false=普通停车位，必须经layout的车行连接接进车行图。"接不接公路"按车位声明而不是按载具种类推：种类是mod自己起的字符串，Core不认识。
+`AssignParking(level, slot, spec)`是直接给完整`ParkingSlotSpec`的重载(同样是非虚成员)，要指定`stocked`/`offRoad`时用——港口的船位、机场的机位都是`stocked=true, offRoad=true`；五个参数的`AssignParking`只是填好spec(两个标记都是false)再转给它。
+CoreTest的route套件据此检查：`offRoad==false`的车位必须都在车行图里，`offRoad==true`的车位不能在车行图里。
 
 ## --skip 参数(2026-11-21)
 

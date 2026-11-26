@@ -6,7 +6,7 @@
 
 ## 关键设计
 
-- 载具种类`boat`(`GetCategory()`)：港口的船位(`building_port`，`AssignStockedParking(...,{"boat"})`)开局由`Traffic::InitStockedVehicles`各停一艘；普通车位不收`boat`。
+- 载具种类`boat`(`GetCategory()`)：港口的船位(`building_port`，`ParkingSlotSpec`里`categories={"boat"}`、`stocked=true`、`offRoad=true`)开局由`Traffic::InitStockedVehicles`各停一艘；普通车位不收`boat`。
 - `blueprintPath`=`/Game/3rdParty/Trawler/Actor/BP_BoatElement.BP_BoatElement_C`，蓝图继承`ABoatElement`(见`Forever/Element/BoatElement.md`)，由用户在UE里按文档做；蓝图没做好时`SpawnCar`的`LoadClass`失败只打警告，船不生成。
 - 没有`transitMeshPath`/航线：`boardable=false`、`capacity=0`，暂时没有公交船。
 - 脚本：`scriptModName="script_empty"`，`milestoneNames={"vehicle_boat"}`(`Resource/Story/vehicle_boat.script`)，只有"驾驶"选项(进入`enter_vehicle`)。上船/下船走载具通用链路(`ApplyEnterVehicle`/`ExitVehicle`)，下船后船留在水上(`ParkPlayerVehicle`在不在房间里时是空操作)。

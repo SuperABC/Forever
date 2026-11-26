@@ -99,14 +99,12 @@ ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
 	switch (ResolveVariableName(resolvedName, key)) {
 	case VARIABLE_SCOPE_SELF:
 		if (context.self) {
-			auto value = context.self->GetValue(key);
-			if (value.first) return value.second;
+			if (const ValueType* value = context.self->FindValue(key)) return *value;
 		}
 		break;
 	case VARIABLE_SCOPE_SYSTEM:
 		if (context.system) {
-			auto value = context.system->GetValue(key);
-			if (value.first) return value.second;
+			if (const ValueType* value = context.system->FindValue(key)) return *value;
 		}
 		break;
 	case VARIABLE_SCOPE_LOCAL:
@@ -117,8 +115,7 @@ ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
 		break;
 	case VARIABLE_SCOPE_GLOBAL:
 		if (context.global) {
-			auto value = context.global->GetValue(key);
-			if (value.first) return value.second;
+			if (const ValueType* value = context.global->FindValue(key)) return *value;
 		}
 		break;
 	}
