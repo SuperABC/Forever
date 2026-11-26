@@ -41,11 +41,15 @@
 
 ## JSON分发
 
-`Core/story/script.h`的`Script::BuildChanges`识别34种`type`，未识别的`type`直接`THROW_EXCEPTION`（剧情写错应尽早报错）；
-`ApplyChange`链上没人认识的Change则只是不生效（运行时每次匹配后都会走，比解析阶段宽松）。**没有JSON分支的20种**
+`Core/story/script.h`的`Script::BuildChanges`识别35种`type`，未识别的`type`直接`THROW_EXCEPTION`（剧情写错应尽早报错）；
+`ApplyChange`链上没人认识的Change则只是不生效（运行时每次匹配后都会走，比解析阶段宽松）。**没有JSON分支的19种**
 （只能由C++构造，或尚未实现）：`GameEnd`/`RemoveValue`/`DeactivateMilestone`/`RemoveNpc`/`TeleportPlayer`/`PlayVideo`/`PlayBgm`/
 `StopBgm`/`BankTransaction`/`GiveEstate`/`RemoveEstate`/`GiveVehicle`/`RemoveVehicle`/`PlayerInjured`/`PlayerCured`/`PlayerIll`/
-`PlayerRecover`/`PlayerSleep`/`ChangeTime`/`ChangeWanted`。
+`PlayerRecover`/`ChangeTime`/`ChangeWanted`。
+
+`player_sleep`(2026-11-26实现)：玩家操控的市民睡觉，`{ "type": "player_sleep" }`。`hour`(表达式，游戏小时)可选：省略=按瞌睡值算要睡多久
+(`Citizen::SleepHoursFor`；瞌睡值还在80%以上时不困、不睡，只提示一句)，给了就睡那么久。UE层执行：`Citizen::BeginSleep`后跳时间，醒来瞌睡值回满。
+Core在瞌睡值掉到0时自己构造一条`hour=16`的发给UE(`Core/common/world_step.md`)。
 
 ## 字段类型是`std::string`（DSL源码），不是`Expression`
 
@@ -187,11 +191,6 @@
   `dialog.h`（`Option::changes`）、`script_mod.h`（`FindLabel`按`ChangeCast<PlaceHolderChange>`查找）、
   `Forever/Framework/ForeverFrameworkActor.cpp`及各Component（UE层执行）、`Basic/society/job_warehouse_keeper.cpp`（构造`NPCNavigateChange`）、
   `Forever_Mod/Empty/Cpp/Empty/empty_mods.h`（`EmptyScript`持有`ChangeControlChange`）。
-
-## 待办/后续阶段
-
-- 上面"没有JSON分支的20种"Change：被点名实现时需要同时补`Script::BuildChanges`分支和某个域/UE层的执行分支，两者要一起补。
-- 嵌套`Option`里的Change本体没有回收机制，见`dialog.md`。
 
 ## JumpTimeChange(`jump_time`)
 字段`time`、`mode`(均为表达式)，含义同`create_timer`的absolute/relative/next(不支持`real`)；目标不晚于现在静默不执行。

@@ -13,7 +13,3 @@
 
 - 依赖：`Dependence/player/canvas.h`。
 - 被谁依赖：`PhoneWidget.cpp`、`PuzzleWidget.cpp`。
-
-## 待办/后续阶段
-
-- 无。

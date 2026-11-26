@@ -296,10 +296,53 @@ void Citizen::ActivateStats() {
 	if (statsActive) return;
 	statsActive = true;
 	satiety = 0.5f + GetRandom(1001) / 2000.f; // [0.5, 1]
+	sleepiness = 1.f; // 刚被操控时当作刚睡醒(不抽随机数)
+	sleeping = false;
 }
 float Citizen::GetSatiety() const { return std::round(satiety * 100.f) / 100.f; }
 void Citizen::AddSatiety(float delta) { satiety = std::min(1.f, std::max(0.f, satiety + delta)); }
 void Citizen::DecaySatiety(double days) { if (days > 0) satiety *= static_cast<float>(std::pow(0.5, days)); }
+
+double Citizen::SleepinessDrop(const Time& from, double seconds) {
+	if (seconds <= 0.0) return 0.0;
+	// 按一天里的钟点分段走：[0,6)是夜里，[6,24)是白天。
+	double hour = from.GetHour() + from.GetMinute() / 60.0 + from.GetSecond() / 3600.0;
+	double remaining = seconds / 3600.0, drop = 0.0;
+	while (remaining > 1e-9) {
+		const bool night = hour < 6.0;
+		const double span = std::min(remaining, (night ? 6.0 : 24.0) - hour);
+		drop += span * (night ? kSleepDropNight : kSleepDropDay);
+		remaining -= span;
+		hour += span;
+		if (hour >= 24.0 - 1e-9) hour = 0.0;
+	}
+	return drop;
+}
+
+double Citizen::SleepHoursFor(float sleepiness) {
+	// x=离100%差的百分点。20-1/(0.0025x)：x<=20(瞌睡值>=80%)时不到0小时=还不困；x=100时正好16小时。
+	const double x = (1.0 - static_cast<double>(sleepiness)) * 100.0;
+	if (x <= 20.0) return 0.0;
+	return std::min(static_cast<double>(kForcedSleepHours), std::max(0.0, 20.0 - 1.0 / (0.0025 * x)));
+}
+
+float Citizen::GetSleepiness() const { return sleepiness; }
+void Citizen::DropSleepiness(double amount) { if (amount > 0) sleepiness = std::max(0.f, sleepiness - static_cast<float>(amount)); }
+double Citizen::GetSleepHoursNeeded() const { return statsActive ? SleepHoursFor(sleepiness) : 0.0; }
+bool Citizen::IsSleeping() const { return sleeping; }
+const Time& Citizen::GetSleepUntil() const { return sleepUntil; }
+
+void Citizen::BeginSleep(const Time& now, double hours) {
+	if (hours <= 0.0) return;
+	sleeping = true;
+	sleepUntil = now;
+	sleepUntil.AddSeconds(static_cast<int>(std::lround(hours * 3600.0)));
+}
+
+void Citizen::WakeUp() {
+	sleeping = false;
+	sleepiness = 1.f; // 睡醒回满
+}
 
 bool Citizen::IsInEconomy() const { return inEconomy; }
 void Citizen::SetInEconomy(bool value) { inEconomy = value; }

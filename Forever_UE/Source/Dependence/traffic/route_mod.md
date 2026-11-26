@@ -51,10 +51,6 @@ run 两端（停靠位）速度为 0；中间按各段速度上限做前向/后�
 - 依赖：`station_mod.h`（`TrackSegment`/`PortKind`）、`general_geometry.h`。
 - 被谁依赖：`Core/traffic/route.h`；`Basic/traffic/route_*.h` 扩展这个基类。
 
-## 待办/后续阶段
-
-- 暂时没有隧道专用的轨道资产，隧道内复用火车轨道 mesh。
-
 ## 端墙（2026-11-20）
 `AddTunnelHatch`末尾两个可选参数`startWallBottom/endWallBottom`(默认`kNoEndWall`=不加)，同RoadnetMod，见Dependence/map/roadnet_mod.md。火车`hatchRange`只在最靠隧道的那一片的隧道端加(入口侧t2端、出口侧t1端)，墙底=隧道端路面高度+`TUNNEL_ROOF_CLEARANCE`(1)。
 

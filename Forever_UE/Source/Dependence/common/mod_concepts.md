@@ -42,7 +42,3 @@
 - 依赖：`common/random.h`(`RandomHost`)、`common/utility.h`(`DebugSink`)，其余只用标准库。
 - 被谁依赖：`Core/common/loader.h`(转include，`ModLoader`和`Config`沿用原来的名字)、`Core/common/config.cpp`
   (`ConceptKeyToJsonKey`转调`ModConceptJsonKey`，`AddDllPath`用`ProbeModDll`预筛)、`Test/Mod`(ModTest自己的dll加载，同样先预筛)。
-
-## 待办/后续阶段
-
-- 无。

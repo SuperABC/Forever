@@ -138,6 +138,9 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.I32(c->avatarIndex);
 		w.U8(c->statsActive ? 1 : 0);
 		w.F32(c->satiety);
+		w.F32(c->sleepiness);
+		w.U8(c->sleeping ? 1 : 0);
+		SaveRefs::WriteTime(c->sleepUntil, w);
 		w.U8(c->departed ? 1 : 0);
 		// 即时行进状态和"是否已实例化"(追加在记录最后，按项目约定没升段版本)：路径首点是当前位置，
 		// 读档后沿同一条路继续走；wasSpawned让UE侧读档后先把这些市民生成出来，见citizen.md。
@@ -343,6 +346,9 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->avatarIndex = r.I32();
 			c->statsActive = r.U8() != 0;
 			c->satiety = r.F32();
+			c->sleepiness = r.F32();
+			c->sleeping = r.U8() != 0;
+			c->sleepUntil = SaveRefs::ReadTime(r);
 			c->departed = r.U8() != 0;
 			c->wasSpawned = r.U8() != 0;
 			// 行进目的地可能是房间或绿化区(绿化区的在记录最后读到，所以BeginWalk推迟到下面)。

@@ -15,7 +15,3 @@ Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/room_mod.h`(`RoomMod`基类)。
-
-## 待办/后续阶段
-
-- 无。

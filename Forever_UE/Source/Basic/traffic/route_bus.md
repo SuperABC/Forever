@@ -16,7 +16,3 @@
 
 - 依赖：`Dependence/traffic/route_mod.h`。
 - 被谁依赖：`Basic/basic.cpp`；`Core/traffic/route.cpp`、`traffic.cpp`。
-
-## 待办/后续阶段
-
-- 井字路网没有4车道大路，没有公交。**未 PIE**(近处物理/远处运动学交接、`easeSeconds` 手感)。

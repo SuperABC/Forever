@@ -21,7 +21,3 @@
 
 - 依赖：`common/mod_test.h`、`common/mod_state.h`、`map/feature_spec.h`(TreeRequests/DecorationSpec/PointParams)、`map/general_geometry.h`、`map/polygon_util.h`。
 - 被谁依赖：`green_factory.h`、`Core/map/green.h`、`Basic/map/green_park.*`。
-
-## 待办/后续阶段
-
-- 无。

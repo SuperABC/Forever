@@ -20,13 +20,6 @@
 - 依赖：`Core/player/player.h`(`CollectThrowables`/`TakeOneThrowable`/`HasThrowableInHand`)、`AForeverCharacter`(瞄准状态、`GetWeaponComponent`，是它的friend)、`UForeverAssetFrameworkComponent::SpawnThrownAsset`、`AAssetElement::LoadAssetMesh`。
 - 被谁依赖：`AForeverCharacter`(按键转发、`StartAim`/`StartFireWeapon`/`ActivateShoulderWeapon`)、`AForeverHUD`、`UInventoryWidget`(刷新缓存)。
 
-## 待办/后续
-- 列表目前只能鼠标点击选，没有键盘/手柄选择。
-- 烟雾弹落地后的效果还没做(没有脚本)；手雷见下"投掷事件"。
-- 房间外的物品由投掷和背包界面的室外丢弃产生；室外拾取没做(只认房间)。
-- 投掷物的HUD显示还是资产id，没有中文显示名。
-- 在被附身的`ACitizenElement`上需要PIE确认组件Tick正常(该类默认关闭Actor Tick)。
-
 ## 投掷事件（2026-11-17）
 
 `Throw()`在`SpawnThrownAsset`成功后调`UForeverStoryFrameworkComponent::NotifyThrowAsset(thrown)`，给这件资产自己的脚本发`throw_asset`事件(没脚本不发)。手雷的`asset_grenade.script`据此`create_timer`(3现实秒)，到时`spawn_effect`+`destroy_asset`。扔出去的物品不会自动消失这条规则对**没有脚本**的投掷物仍然成立；要消失由脚本里写`destroy_asset`。

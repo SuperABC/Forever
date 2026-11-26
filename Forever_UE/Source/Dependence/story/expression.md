@@ -70,11 +70,6 @@ struct ScriptContext {
   （`Dialog`/`Option`的`condition`、`Section`的四个台词字段）、`Core/story/milestone.h`
   （`Milestone::drop`）、`Core/story/script.cpp`（把json里的字符串原样交给Event/Change/Dialog，执行时由`EvaluateExpression`求值）。
 
-## 待办/后续阶段
-
-- 表达式语法本身（运算符/字面量/隐式拼接）暂不需要扩展，等剧情作者反馈实际编写json时缺什么
-  语法再补。
-
 ## 变量名里的内嵌表达式 `$$(...)`（2026-11-16）
 
 变量名的任意一段可以写成`$$(表达式)`：求值前先对括号内的表达式求值、转成字符串(整数不带小数)再替换回名字，然后按普通变量查。

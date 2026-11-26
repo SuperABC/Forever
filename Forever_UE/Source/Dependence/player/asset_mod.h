@@ -7,7 +7,9 @@
 #include <vector>
 // 设计见asset_mod.md。
 // 四分类(不动产/载具/独立物体/容器内容物)是同一个mobility字段;"是否为容器"用volume>0表达,与mobility正交。
-enum class AssetMobility { Estate, Vehicle, Object, Containee };
+// Fixed=固定物品(没有AssetMod、摆在房间里不能移动、不能进背包，见Core/player/asset.md)，AssetMod不要用它。
+// 新值只能加在末尾：存档里不存这个枚举，但外部mod按数值编译。
+enum class AssetMobility { Estate, Vehicle, Object, Containee, Fixed };
 
 class AssetMod {
 public:

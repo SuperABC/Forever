@@ -15,7 +15,3 @@
 
 - 依赖：UE `UDecalComponent`。
 - 被谁依赖：`Element/LampElement`(`RefreshLampEffects`)。
-
-## 待办/后续阶段
-
-- 无。

@@ -31,7 +31,3 @@
 
 - 依赖：`Dependence/map/general_geometry.h`（`PointParams`/`Road`）。
 - 被谁依赖：`Core/traffic/station.h`、`traffic.cpp`、`route_mod.h`（`TrackSegment`）、`Basic/traffic/station_*.h`。
-
-## 待办/后续阶段
-
-- 目前只有"挂建筑"和"贴路"两种挂载方式。

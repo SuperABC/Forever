@@ -24,8 +24,3 @@
 
 - 依赖：`map/feature_spec.h`(Dependence)、`map/vegetation.h`(`TreeFrame`)、`common/utility.h`(`GetRandom`)。
 - 被谁依赖：`map.h`(`Map::lamps`)、`map_save.cpp`、`Source/Forever/Framework/ForeverLampFrameworkComponent`。
-
-## 待办/后续阶段
-
-- 园区/建筑宿主的`LayoutLamps`。
-- 现在是生成阶段一次性生成全部Actor(近/远只切换真实光源和Decal，见`ForeverLampFrameworkComponent.md`)，灯很多时再按距离流式生成/回收Actor。

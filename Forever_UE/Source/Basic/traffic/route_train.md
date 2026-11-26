@@ -52,13 +52,6 @@
 - 依赖：`Dependence/traffic/route_mod.h`、`station_train.h`(mesh 常量)、`route_common.h`(`MakeBezierSegment`)。
 - 被谁依赖：`Basic/basic.cpp` 注册进 `config.json` 的 `"route_mods"`；`Core/traffic/route.cpp`。
 
-## 待办/后续阶段
-
-- 轨道与轨道、轨道与机场天空线交叉不处理。
-- 无头 harness 验证过(随机地图 4 线路/连续/靠右/导航无悬空/速度表合法)；**未在 PIE 验证**：轨道/桥/拆迁视觉、实际行驶/停靠事件、读档重建、`passSpeed` 穿站路径(默认线路每站都停，没用到 Through 连线)。
-- 隧道内暂无专用轨道资产。
-- 隧道改成按高度判定后，harness 只用假条纹高度场验证过(下沉到-1.5、两山间隙<32合并、阈值点距链端<16爬升、z 无跳变)，**开洞的地形四边形是否正好对准轨道进洞需 PIE 确认**。
-
 ## 手动线路 `--skip`（2026-11-23）
 
 `"route_train --skip"`：`LayoutRoute` 走 `LayoutManual`，`BuildTrack` 走 `BuildManualTrack`；数据与规划见 `route_mod.md`"手动线路"、`route_common.md`。
@@ -71,4 +64,3 @@
 - **掉头节点**（`Hub`+`HubOut`）：节点处到达端/离开端 extern 靠右错开半个轨距，之间一个半圆（和铁轨掉头共用 `addUTurn`），缺口连线分别接到它们上面。
 - 没数据 / `manual` 为空：`LayoutManual` 只警告，不出线路。
 - 自动布局的 `railPairs` 在手动模式下为空，另有 `manualPairs`/`manualGapLinks`。
-- 待 PIE 验证：铁轨观感、桥墩、隧道口、实际行驶与停靠事件。

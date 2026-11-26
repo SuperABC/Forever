@@ -59,7 +59,6 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 - **`MatchEvent`的触发条件检查在`Milestone::MatchTrigger`内部完成**，不是`Script`这一层单独
   维护的循环，见`Core/story/milestone.md`"MatchTrigger"一节。
 
-
 `BuildChanges`的分派(2026-11-25)：先用`FindChangeKind`把JSON的`type`换成`ChangeKind`(名字表在`Dependence/story/change.cpp`，不认识的名字抛`Unknown change type`)，再`switch (kind)`，每种一个`case`。以前是43个分支的`type == "..."`字符串比较链。有类但还没写解析的种类落到`default`，抛`Change type not implemented yet`。
 ## 主线剧情.script的三个顶层字段
 
@@ -106,11 +105,6 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 `Script`的内容有两个来源：`.script`文件里的里程碑(数据)，和`ScriptMod`(一段C++钩子，`WrapScript`在匹配出一批动作之后有机会改写它们)。钩子是可选的：`Script(factory, id)`的`id`为空时不创建mod，`mod`成员是空指针，`GetType()`是空串，`WrapScript`把动作原样放行，存档里这条脚本的类型记成空串、没有mod状态。`id`非空但那个mod没注册/没启用时仍然抛`DataException`——点了名的mod拿不到是配置错误，不会悄悄变成"没有mod"。
 
 所以Core不依赖任何具体的脚本mod：`Forever_Mod/Empty`的`script_empty`可以不启用。这是只对脚本这个concept做的决定——别的concept的mod就是那个东西的定义，必须存在；脚本的mod只是附加逻辑。(Core里另有两种对象也可以没有mod：内置物品`EstateAsset`/`VehicleAsset`、工坊内部的缓存`Storage`。)
-
-## 待办/后续阶段
-
-- 其余尚未实现的event/change类型的JSON分发分支（未知`type`抛`DataException`）。
-- 多剧情共享同一份milestone缓存时的命名冲突机制，等真的需要时再加。
 
 ## 载具/公交相关解析
 `BuildEvent`解析`enter_stop`/`leave_stop`(stop)、`enter_vehicle`/`leave_vehicle`(vehicle/mode)；`BuildChanges`解析`board_vehicle`、`leave_vehicle`、`force_leave`。详见`Dependence/story/event.md`/`change.md`。

@@ -66,7 +66,3 @@ mod）时，要自己加上`CORE_GUARD_BEGIN`/`CORE_GUARD_END`。**
 
 - 依赖：`common/error.h`、`UFadeSubsystem::Dismiss`、`AForeverFrameworkActor`（只用`GetWorld`）。
 - 被谁依赖：上面"现在包了哪些地方"列的所有文件；`UConfigMenuWidget`（显示错误文字）。
-
-## 待办/后续阶段
-
-- 无。(回菜单、文字显示、遮罩撤掉这三步2026-11-26在PIE里用一个会抛异常的mod验证过。)

@@ -179,3 +179,28 @@ struct FurnitureSpec {
 	float yaw = 0.f;                                // 度，0=朝正面(+v)
 	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f; // 资产原尺寸的倍数
 };
+
+// 房间mod在自己房间里放的一件物品(RoomMod::PlaceAsset记录)：由AssetMod生成的普通物品，带物理、能被捡走。
+// 坐标约定和FurnitureSpec完全一样(房间局部米，yaw度、0=朝+v)。z是物品底面离地板的高度。
+// assetType对应的物品mod没启用时Core跳过这一件并打警告。
+struct RoomAssetSpec {
+	std::string assetType; // AssetMod的id
+	int count = 1;         // 这一件的堆叠数量(1个Asset实例)；要N个独立的物品就PlaceAsset N次
+	float u = 0.f, v = 0.f;
+	float z = 0.f;
+	float yaw = 0.f;
+};
+
+// 房间mod在自己房间里放的一件固定物品(RoomMod::PlaceFixture记录)：没有AssetMod，只有一个显示用的网格、
+// 一个弹选项用的检测盒(UE层按网格包围盒外扩)和一组脚本描述；不能移动、不做物理模拟，但像家具一样挡人。
+// 坐标约定和FurnitureSpec完全一样；网格原点在底面中心、+X朝正面。
+struct RoomFixtureSpec {
+	std::string type;      // 这类固定物品叫什么(比如"bed")，脚本里的$$self.type，也用来拼名字
+	std::string meshPath;  // StaticMesh资产软路径
+	float u = 0.f, v = 0.f;
+	float z = 0.f;
+	float yaw = 0.f;
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
+	std::string scriptModName;               // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
+	std::vector<std::string> milestoneNames; // 和scriptModName都空=没有脚本，也就没有选项
+};

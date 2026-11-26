@@ -15,7 +15,3 @@
 
 - 依赖：`StoryPanelWidget`、`ModPanelWidget`、`ResourcePanelWidget`、`ForeverConfigBridgeSubsystem`、`ForeverSaveSubsystem`。
 - 被谁依赖：`Player/ForeverMenuController`(经蓝图类指定)。
-
-## 待办/后续阶段
-
-- 无。

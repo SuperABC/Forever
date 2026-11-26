@@ -14,12 +14,19 @@
 #include "map/room.h"
 #include "map/map_save.h"
 #include "populace/populace.h"
+#include "common/utility.h"
+#include "common/implement.h"
+#include "story/change.h"
+#include "populace/citizen.h"
 #include "populace/populace_save.h"
 #include "society/society.h"
 #include "society/society_save.h"
 #include "player/player.h"
+#include "player/player_save.h"
+#include "player/asset.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -177,6 +184,180 @@ namespace {
 		if (total == 0) run.Note("no furnished rooms in this seed's world (small map without residences?), round trip not exercised");
 	}
 
+	// 地上的物品存读一致：房间里的普通物品和固定物品(Room::assets)、室外的物品(Player::worldAssets)连同地面摆位、
+	// 选项、scriptStarted都要原样回来。读地图段不会重建房间物品(读档不Layout)，物品全靠player段恢复。
+	void CheckGroundAssetRoundTrip(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		// 造一点"用过"的状态：给一件固定物品加选项并标成脚本已启动；往室外放一件物品。检查完再还原。
+		Asset* touched = nullptr;
+		for (const auto& entry : world.map->GetBuildings()) {
+			for (Room* room : entry.second->GetRooms()) {
+				for (const auto& [name, asset] : room->GetAssets()) if (asset->IsFixture() && !touched) touched = asset;
+			}
+		}
+		const bool touchedStarted = touched ? touched->IsScriptStarted() : false;
+		if (touched) { touched->AddOption("coretest option"); touched->SetScriptStarted(true); }
+		Asset* outdoor = world.player->CreateAsset("asset_burger");
+		AssetGround outdoorGround;
+		outdoorGround.x = 12.5f; outdoorGround.y = 34.25f; outdoorGround.z = 0.75f;
+		outdoorGround.pitch = 5.f; outdoorGround.yaw = -120.f; outdoorGround.roll = 15.f;
+		if (outdoor && !world.player->AddWorldAsset(outdoor, outdoorGround)) { world.player->DestroyAsset(outdoor); outdoor = nullptr; }
+
+		SaveArchive archive;
+		MapSaveCodec::Save(*world.map, archive);
+		PlayerSaveCodec::Save(*world.player, *world.map, archive);
+		string error;
+		Map* loaded = MapSaveCodec::Load(archive, error);
+		run.Check(loaded != nullptr, "map loads back for the ground asset check", error);
+		Player* player2 = nullptr;
+		if (loaded) {
+			size_t before = 0;
+			for (const auto& entry : loaded->GetBuildings()) for (Room* room : entry.second->GetRooms()) before += room->GetAssets().size();
+			run.Check(before == 0, "loading the map section alone does not re-create room assets", to_string(before));
+			player2 = PlayerSaveCodec::Load(archive, *loaded, error);
+			run.Check(player2 != nullptr, "player section loads back with the room assets", error);
+		}
+		if (loaded && player2) {
+			auto sameGround = [](const AssetGround& a, const AssetGround& b) {
+				return a.x == b.x && a.y == b.y && a.z == b.z && a.pitch == b.pitch && a.yaw == b.yaw && a.roll == b.roll && a.restOnBottom == b.restOnBottom;
+			};
+			auto sameAsset = [&](const Asset* a, const Asset* b) {
+				if (a->GetName() != b->GetName() || a->GetType() != b->GetType() || a->GetCount() != b->GetCount()) return false;
+				if (a->IsFixture() != b->IsFixture() || a->GetMobility() != b->GetMobility() || a->GetMeshPath() != b->GetMeshPath()) return false;
+				if (!sameGround(a->GetGround(), b->GetGround())) return false;
+				if (a->GetOptions() != b->GetOptions() || a->IsScriptStarted() != b->IsScriptStarted()) return false;
+				if ((a->GetScript() != nullptr) != (b->GetScript() != nullptr)) return false;
+				const AssetFixtureDesc* da = a->GetFixtureDesc();
+				const AssetFixtureDesc* db = b->GetFixtureDesc();
+				if ((da != nullptr) != (db != nullptr)) return false;
+				if (da && (da->type != db->type || da->meshPath != db->meshPath || da->scaleX != db->scaleX || da->scaleY != db->scaleY ||
+					da->scaleZ != db->scaleZ || da->scriptModName != db->scriptModName || da->milestoneNames != db->milestoneNames)) return false;
+				return true;
+			};
+			size_t total = 0, fixtures = 0, differing = 0;
+			string firstBad;
+			for (const auto& entry : world.map->GetBuildings()) {
+				auto other = loaded->GetBuildings().find(entry.first);
+				if (other == loaded->GetBuildings().end() || other->second->GetRooms().size() != entry.second->GetRooms().size()) { differing++; continue; }
+				for (size_t i = 0; i < entry.second->GetRooms().size(); i++) {
+					const auto& a = entry.second->GetRooms()[i]->GetAssets();
+					const auto& b = other->second->GetRooms()[i]->GetAssets();
+					total += a.size();
+					bool same = a.size() == b.size();
+					for (const auto& [name, asset] : a) {
+						if (asset->IsFixture()) fixtures++;
+						auto found = b.find(name);
+						if (found == b.end() || !sameAsset(asset, found->second)) { same = false; if (firstBad.empty()) firstBad = name; }
+					}
+					if (!same) differing++;
+				}
+			}
+			run.Metric("room assets saved", static_cast<double>(total), "");
+			run.Metric("room fixtures saved", static_cast<double>(fixtures), "");
+			run.Check(differing == 0, "room assets (movable and fixtures) survive the save round trip with their ground placement", to_string(differing) + " rooms differ, first: " + firstBad);
+			if (touched) {
+				Asset* back = loaded->FindAssetByName(touched->GetName());
+				run.Check(back && back->IsScriptStarted() && back->GetOptions() == touched->GetOptions(), "a fixture's options and scriptStarted survive the round trip");
+			}
+			if (outdoor) {
+				auto found = player2->GetWorldAssets().find(outdoor->GetName());
+				run.Check(found != player2->GetWorldAssets().end() && sameAsset(outdoor, found->second.asset), "an outdoor asset survives the round trip with its ground placement");
+			}
+			if (total == 0) run.Note("no room assets in this seed's world, round trip not exercised");
+		}
+
+		if (touched) { touched->RemoveOption("coretest option"); touched->SetScriptStarted(touchedStarted); }
+		if (outdoor) world.player->DestroyAsset(world.player->RemoveWorldAsset(outdoor->GetName()));
+	}
+
+	// 瞌睡值(暂定逻辑，只有玩家正在操控的市民扣)：分时段下降、睡眠时长公式、掉到0强制睡16小时、睡着不掉、醒来回满、放手后不扣。
+	// 会把世界往前推几十个小时，放在套件最后跑。
+	void CheckSleepiness(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		auto close = [](double a, double b) { return fabs(a - b) < 1e-6; };
+		run.Check(close(Citizen::SleepinessDrop(Time(2100, 1, 1, 10, 0, 0), 3600.0), 0.02) &&
+			close(Citizen::SleepinessDrop(Time(2100, 1, 1, 2, 0, 0), 3600.0), 0.03),
+			"sleepiness drops 2% per hour by day (6-24) and 3% per hour at night (0-6)");
+		run.Check(close(Citizen::SleepinessDrop(Time(2100, 1, 1, 23, 0, 0), 7200.0), 0.05) &&
+			close(Citizen::SleepinessDrop(Time(2100, 1, 1, 5, 30, 0), 3600.0), 0.025) &&
+			close(Citizen::SleepinessDrop(Time(2100, 1, 1, 0, 0, 0), 86400.0), 0.54),
+			"a span that crosses midnight or 6:00 is split between the two rates",
+			to_string(Citizen::SleepinessDrop(Time(2100, 1, 1, 0, 0, 0), 86400.0)));
+		run.Check(Citizen::SleepHoursFor(1.f) == 0.0 && Citizen::SleepHoursFor(0.9f) == 0.0 && Citizen::SleepHoursFor(0.8f) == 0.0,
+			"above 80% sleepiness nobody can sleep (0 hours)");
+		run.Check(close(Citizen::SleepHoursFor(0.68f), 7.5) && close(Citizen::SleepHoursFor(0.5f), 12.0) && close(Citizen::SleepHoursFor(0.f), 16.0),
+			"sleep hours follow 20-1/(0.0025x): 16 hours awake -> 7.5h, 50% -> 12h, 0% -> 16h",
+			to_string(Citizen::SleepHoursFor(0.68f)) + " / " + to_string(Citizen::SleepHoursFor(0.5f)) + " / " + to_string(Citizen::SleepHoursFor(0.f)));
+
+		Citizen* citizen = nullptr;
+		for (Citizen* candidate : world.populace->GetCitizens()) if (candidate && candidate->IsActive()) { citizen = candidate; break; }
+		if (!citizen) return;
+		run.Check(citizen->GetSleepHoursNeeded() == 0.0, "a citizen without dynamic stats never needs sleep");
+		citizen->ActivateStats();
+		run.Check(close(citizen->GetSleepiness(), 1.0) && !citizen->IsSleeping(), "activating dynamic stats starts fully awake");
+
+		WorldDomains domains;
+		domains.map = world.map; domains.populace = world.populace; domains.society = world.society; domains.industry = world.industry;
+		domains.traffic = world.traffic; domains.story = world.story; domains.player = world.player; domains.polit = world.polit;
+		PostImplement post(world.map, world.populace, world.society, world.story, world.industry, world.traffic, world.player);
+		int forcedForControlled = 0;
+		string forcedHour;
+		WorldStepHooks hooks;
+		hooks.controlledCitizen = citizen;
+		hooks.onCitizenChanges = [&](Citizen* who, const vector<Change*>& changes) {
+			for (Change* change : changes) {
+				if (const PlayerSleepChange* sleep = ChangeCast<PlayerSleepChange>(change)) {
+					if (who == citizen) { forcedForControlled++; forcedHour = sleep->GetHour(); }
+				}
+			}
+		};
+		auto stepOneHour = [&] {
+			Time next = *world.player->GetTime();
+			next.AddHours(1);
+			world.player->SetTime(next);
+			WorldStep::TickPopulace(domains, false, post, hooks);
+		};
+
+		// 醒着：只降不升，降到0被强制睡下，Core给玩家操控的市民发一条带16小时的player_sleep。
+		int hoursAwake = 0;
+		bool monotonic = true;
+		float previous = citizen->GetSleepiness();
+		while (hoursAwake < 80 && !citizen->IsSleeping()) {
+			stepOneHour();
+			hoursAwake++;
+			if (!citizen->IsSleeping() && citizen->GetSleepiness() > previous + 1e-6f) monotonic = false;
+			previous = citizen->GetSleepiness();
+		}
+		run.Metric("hours awake before forced sleep", hoursAwake, "h");
+		run.Check(monotonic, "sleepiness only goes down while awake");
+		// 从100%掉到0：全按白天算要50小时，全按夜里算要34小时。
+		run.Check(citizen->IsSleeping() && hoursAwake >= 34 && hoursAwake <= 50, "sleepiness reaching 0 forces the citizen to sleep", to_string(hoursAwake) + " hours awake");
+		run.Check(forcedForControlled == 1 && forcedHour == to_string(Citizen::kForcedSleepHours), "Core sends the controlled citizen one player_sleep of 16 hours",
+			to_string(forcedForControlled) + " sent, hour=" + forcedHour);
+
+		// 睡着：不掉瞌睡值、不重复强制；睡满16小时醒来回满。
+		bool stayedAsleep = true;
+		for (int hour = 0; hour < 15; hour++) {
+			stepOneHour();
+			if (!citizen->IsSleeping() || citizen->GetSleepiness() > 0.f) stayedAsleep = false;
+		}
+		run.Check(stayedAsleep && forcedForControlled == 1, "a sleeping citizen stays asleep for the whole 16 hours and is not forced again");
+		stepOneHour();
+		stepOneHour();
+		run.Check(!citizen->IsSleeping() && citizen->GetSleepiness() >= 0.96f, "after the sleep ends the citizen wakes up fully rested", to_string(citizen->GetSleepiness()));
+
+		// 没在操控的市民(操控过又放手的)不扣瞌睡值：停在原处，不会被强制睡觉，也不发player_sleep。
+		hooks.controlledCitizen = nullptr;
+		const float released = citizen->GetSleepiness();
+		for (int hour = 0; hour < 60; hour++) stepOneHour();
+		run.Check(citizen->GetSleepiness() == released && !citizen->IsSleeping() && forcedForControlled == 1,
+			"a citizen who is not being controlled keeps their sleepiness and is never forced to sleep", to_string(citizen->GetSleepiness()));
+		// 重新操控之后接着往下掉。
+		hooks.controlledCitizen = citizen;
+		stepOneHour();
+		run.Check(citizen->GetSleepiness() < released, "sleepiness goes down again once the citizen is controlled again");
+	}
+
 	// 房间局部系的约定自洽：局部yaw 0度朝向 = 局部+v方向在世界里的方向(家具"正面朝向+v")。
 	void CheckRoomYawConvention(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -298,9 +479,11 @@ void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckPopulaceRoundTrip(world);
 	CheckPolitRoundTrip(world);
 	CheckFurnitureRoundTrip(world);
+	CheckGroundAssetRoundTrip(world);
 	CheckRoomYawConvention(world);
 	CheckSocietyRoundTrip(world);
 	RecordMemory("save: after round trips"); // 回环重建的域如果没释放会在这里涨
+	CheckSleepiness(world); // 会推进世界时间，放最后
 }
 
 void RunSaveSuite(const TestOptions& options) {

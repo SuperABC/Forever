@@ -106,10 +106,6 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
   `Element/CitizenElement`/`VehicleElement`/`BuildingElement`/`DoorComponent`；`Mod/ForeverSaveSubsystem`；`Player/ForeverPlayerController`。
 - 被`AForeverPlayerGameMode`引用：场景里没有已放置的实例时动态`SpawnActor`一个兜底，见`ForeverPlayerGameMode.md`。各域组件通过`Cast<AForeverFrameworkActor>(GetOwner())`取域指针。
 
-## 待办/后续阶段
-
-- 一旦有人在`World.umap`里手动放置了真实的`AForeverFrameworkActor`，应该移除`ForeverPlayerGameMode`里的动态兜底生成逻辑，不要误以为是正式生成方案。
-
 ## 跳时间(jump_time)
 `ApplyChange`的`JumpTimeChange`分支 → `BeginTimeSkip(target)`。流程：
 1. `Begin`：`populaceFramework->BeginTimeSkip()`(在途行走全部冲刷到目的地，之后`RequestWalk`同步瞬移+`npc_arrive`)、
@@ -139,3 +135,5 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
 - 创建/初始化阶段：`greenFramework`(`UForeverGreenFrameworkComponent`，见其.md)`GenerateGreens(map)`；`InitGreens`阶段在世界生成里放在`InitBuildings`之后、`InitVegetation`之前。
 - `npc_navigate`：目的地先按房间地址找，找不到再`Map::LocateGreen`(没写圆序号=第0个圆)，转发`RequestWalkToGreen`。`visualize_navigation`同样有绿化地址分支(导航线终点取圆内随机点)。
 - `DescribeLocation`：落在绿化多边形内时，在某个活动圆里返回圆地址，否则返回绿化区地址(没连路的绿化区返回绿化名)。
+
+- **`player_sleep`**(2026-11-26)：`ApplyChange`里直接处理。取玩家操控的市民，`hour`留空就用`Citizen::GetSleepHoursNeeded()`(瞌睡值还在80%以上时是0，只在左上角提示"还不困")，给了就睡那么久；然后`Citizen::BeginSleep(现在, 小时数)` + `BeginTimeSkip(现在+小时数)`。跳时间进行中再来的忽略。Core在瞌睡值掉到0时经`hooks.onCitizenChanges`发来的强制睡觉也是这一条(`hour=16`)，见`Core/common/world_step.md`。

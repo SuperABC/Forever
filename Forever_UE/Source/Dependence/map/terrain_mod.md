@@ -49,7 +49,3 @@
   `Forever_Mod/Empty`的`EmptyTerrain`demo mod。
 
 - 带存档钩子(`SaveState`/`LoadState`/`GetStateVersion`/`GetInstanceCounter`/`SetInstanceCounter`)，默认不存任何东西，见`common/mod_state.md`。
-
-## 待办/后续阶段
-
-- 无。

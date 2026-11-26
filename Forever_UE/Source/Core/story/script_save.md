@@ -49,6 +49,5 @@
   - `Forever/Framework/ForeverFrameworkActor.cpp`；
   - `Forever/Mod/ForeverSaveSubsystem.cpp`（`Forever.SaveRoundTrip`）。
 
-## 待办 / 后续
-
+## 补充说明
 - 对话队列进行中、谜题进行中时拒绝保存（P6），因为这些中间状态不存。

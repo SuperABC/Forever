@@ -24,6 +24,7 @@
 #include <vector>
 #include <utility>
 #include <unordered_map>
+#include <unordered_set>
 #include <array>
 #include <tuple>
 #include <memory>
@@ -268,6 +269,9 @@ public:
 	void BuildZoneScript(Zone* zone);
 	void BuildBuildingScripts(Building* building);
 	void BuildAllEntityScripts();
+	// 房间mod在自己房间里放的物品(RoomMod::PlaceAsset/PlaceFixture)：建筑落地、地址确定之后对它的每个房间调
+	// Room::CreatePlacedAssets。只在新开局的三条落地路径里调；读档时物品随player段恢复，不重建。
+	void BuildRoomAssets(Building* building);
 	// 按交互名查电梯，找不到返回nullptr。
 	Cabin* FindCabinByName(const std::string& interactName) const;
 	// 按名字找房间里的资产(含容器内容)，遍历全部房间；找不到返回nullptr。玩家身上/地上的见Player::FindAssetByName。
@@ -478,6 +482,7 @@ private:
 	ComponentFactory& componentFactory;
 	// 门/电梯/实体Script创建用。
 	ScriptFactory& scriptFactory;
+	std::unordered_set<std::string> warnedPlacedAssetMods; // BuildRoomAssets里"物品mod没启用"按id去重
 
 	mutable std::unordered_map<std::string, TerrainAppearance> terrainAppearances;
 	mutable bool terrainAppearancesBuilt = false;

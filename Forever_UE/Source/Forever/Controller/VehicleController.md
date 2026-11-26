@@ -18,6 +18,3 @@
 
 ## 路径规划入口
 `Map::PlanVehicleRouteToNode`(起点是车位置，带车头朝向避免选反向车道)/`PlanVehicleLeg`(节点到节点)；规划成功后车的`Vehicle::SetCurrentRoom(nullptr)`(已离开房间/停车位)。折线先做拐点圆角(`cornerRadius`，转角<8度不处理)，再按`pathSpacing`细分，距离<100uu的点合并，曲率取相邻三点最大值(偏保守)。
-
-## 待办/后续阶段
-- 未在PIE完整验证；重心下移和`maxLateralAccel`需要实测调。

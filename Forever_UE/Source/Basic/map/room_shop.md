@@ -16,7 +16,3 @@ Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(
 
 - 依赖：`Source/Dependence/map/room_mod.h`(`RoomMod`基类)。
 - 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModRooms`注册全部类型)；`building_*.cpp`里各`Layout()`按房间类型调`ArrangeRow`/`AssignRoom`；Society域`ShopSalerJob`依赖`ShopRoom`。
-
-## 待办/后续阶段
-
-- 无。

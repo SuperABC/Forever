@@ -37,8 +37,7 @@
   - `Forever/Framework/ForeverFrameworkActor.cpp`（`EnsureSocietyGenerated`）；
   - `Forever/Mod/ForeverSaveSubsystem.cpp`（`Forever.SaveRoundTrip`）。
 
-## 待办 / 后续
-
+## 补充说明
 - 组织和 Job 的 Script 状态由 `story/script_save` 恢复（键 `org:<i>`、`job:<i>:<k>`）。
 
 ## 岗位相关字段（追加，不升版本）

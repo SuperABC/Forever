@@ -16,7 +16,3 @@
 
 - 依赖：`industry/product_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`manufacture_*.*`的`targets`按id引用；`Core/industry/product.h`消费。
-
-## 待办/后续阶段
-
-- 批大小/用量/价格是占位测试值，按实际存量变化速度调整。

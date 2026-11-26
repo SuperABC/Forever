@@ -87,10 +87,6 @@
   筛选出这一层的Room，渲染墙体/门窗开洞）、`Source/Core/map/map.cpp`（`Map::Checkin()`写
   `owner`/`households`/`occupants`）。
 
-## 待办/后续阶段
-
-- 家具在UE里每件一个包围盒碰撞(见`BuildingElement.md`)，Core不感知碰撞；市民寻路不感知家具(靠布局器保证房间中央/门前留空)；分区之间没有隔墙。
-
 ## 房间局部坐标系
 
 `direction`是layout里指定的房间"正面"(门/临路一侧)，`ReadTemplates`已经按建筑实例朝向烘焙成**建筑局部(未旋转)坐标系下的朝向**(`InverseDirection(direction, face)`)，存档里本来就存。世界朝向 = 这个方向 + `Building::GetRotation()`。
@@ -128,3 +124,18 @@
 - **查询**：`FindFreeSlot(category)`(第一个空闲且允许该种类，没有=-1，寻路据此拒绝)、`HasSlotFor(category)`、
   `FindSlotContaining(x,y,yawDegrees)`(玩家下车判定：车头朝里=朝向与开口朝向点积<-0.8、车中心在矩形内、车位没有已停的车)。
 - **存档**：房间存车位几何+categories+offRoad+导航节点id；占用由车辆反推(`traffic_save.md`)。
+
+## 房间mod放的物品(2026-11-26)
+
+房间mod在`Layout`里除了`AddFurniture`摆纯装饰的家具，还能用`PlaceAsset`/`PlaceFixture`往自己房间里放物品(规格见
+`Dependence/map/feature_spec.md`)。Core这边：
+
+- `Room::CreatePlacedAssets(assetFactory, warned)`只读遍历mod的`placedAssets`/`placedFixtures`两张清单，创建`Asset`实例、
+  算好地面摆位(房间局部米→`LocalToWorld`/`LocalYawToWorld`/`GetFloorWorldZ`，和家具同一条换算；yaw换成度)，放进`assets`。
+  - `PlaceAsset`：`new Asset(&assetFactory, assetType)`，`SetCount(count)`，`restOnBottom=true`(z是底面该落的高度)。
+    物品mod没启用就跳过这一件，按mod id去重只警告一次，房间照常生成。
+  - `PlaceFixture`：没有`AssetMod`的固定物品(`Core/player/asset.md`)，名字`"<房间地址> <type><序号>"`(同一房间同一type从1起编)。
+- 调用时机：`Map::BuildRoomAssets(building)`，紧跟在`BuildBuildingScripts`后面(三条建筑落地路径)，这时房间地址已经确定。
+  **只在新开局调**；读档不调，物品随player段恢复。
+- 这些物品和玩家丢在房间里的物品是同一种东西：归`Room`持有、析构时delete，脚本/选项/存档/`Map::FindAssetByName`都走现成的路。
+  被做成固定物品的东西就不要再`AddFurniture`了，否则UE里会画两遍(住宅的床就是这样从家具列表里拿出来的)。

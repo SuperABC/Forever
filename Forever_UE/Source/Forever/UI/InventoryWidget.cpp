@@ -370,7 +370,8 @@ void UInventoryWidget::RefreshRoom() {
 	if (container) {
 		for (const auto& [name, asset] : container->GetContents()) assets.Add(asset);
 	} else {
-		for (const auto& [name, asset] : room->GetAssets()) assets.Add(asset);
+		// 固定物品(床之类)拿不走，不进列表。
+		for (const auto& [name, asset] : room->GetAssets()) if (asset && !asset->IsFixture()) assets.Add(asset);
 	}
 	SortAssets(assets);
 	FillList(RoomList, roomPool, EInvZone::Room, container, container != nullptr, assets);

@@ -93,11 +93,6 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
   - `Forever/Framework/ForeverFrameworkActor.cpp`（读档时 `BuildMapTerrain` 改走 `MapSaveCodec::Load`，后面几个 `BuildMap*` 阶段跳过对应的 `Init*`）；
   - `Forever/Mod/ForeverSaveSubsystem.cpp`（`Forever.SaveRoundTrip`）。
 
-## 待办 / 后续
-
-- 无。
-- 读档失败时已经建出来的部分对象没有释放（读档失败本来就会退回重新生成世界）。
-
 ## 房间direction语义
 `Room::direction`是"建筑局部坐标系下的房间朝向(正面)"，随 Room 原样存档，`Room::LocalToBuildingLocal`等直接读取。
 

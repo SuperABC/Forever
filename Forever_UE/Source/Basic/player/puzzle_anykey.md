@@ -15,7 +15,3 @@
 
 - 依赖：`player/puzzle_mod.h`(`Canvas`、`PostHandle`)、`common/utility.h`(`GetRandom`)。
 - 被谁依赖：`basic.cpp`注册；`Core/player/puzzle.h`消费，`Source/Forever/UI/PuzzleWidget`驱动。
-
-## 待办/后续阶段
-
-- 无。

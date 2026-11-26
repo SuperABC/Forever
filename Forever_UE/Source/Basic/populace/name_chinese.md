@@ -17,7 +17,3 @@
 
 - 依赖：`populace/name_mod.h`、`common/utility.h`(`GetRandom`)。
 - 被谁依赖：`basic.cpp`注册；`Core/populace/name.h`/`populace.h`消费，详见`Core/populace/populace.md`。
-
-## 待办/后续阶段
-
-- 名字拼接不查重、不重试(一次必成功，仅词库为空时生成失败)；需要去重时再加。

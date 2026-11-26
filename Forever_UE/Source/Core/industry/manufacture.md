@@ -58,8 +58,3 @@ product type→每天批数。
   批量/副产品）；`Storage`（两个内部cache）。
 - 被谁依赖：`Industry`（持有所有权并驱动每日流程）、`IndustrySaveCodec`（友元，存取两个cache库存和
   `pendingProduction`；`targets`/`ingredients`等结构数据由配方重新算出，不存档）。
-
-## 待办/后续阶段
-
-- `StartProduce()`的`overallRatio`按整个工坊统一限制，没有"按target分摊"——多target竞争同一种紧缺原料的场景
-  需要重新设计这一步。

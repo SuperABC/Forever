@@ -21,13 +21,6 @@
 - 依赖：`Player/ForeverCharacter.h`(基类)、`Controller/CitizenController.h`、`Framework/ForeverPopulaceFrameworkComponent.h`(`framework` 弱引用回调)、`Player/ForeverAvatarSubsystem`、`UI/MeetOptionWidget`、`Core/populace/citizen.h`、`map/building.h`/`room.h`。
 - 被谁依赖：`UForeverPopulaceFrameworkComponent`(`SpawnActor`/`Init`/`Destroy`/`FindOrSpawnCitizenByName`)、`UForeverStoryFrameworkComponent::ApplyControlChange`(剧情 `change_control` 占有市民)、`UForeverWeaponComponent`(命中反查)。
 
-## 待办/后续阶段
-
-- 没有 Job/没有调度的市民仍静止，通用的"没事做时到处逛逛"自由游走 AI 还没有。
-- 真实资产替换占位小白人；靠近盒尺寸是经验值，可能需按真实资产微调。
-- Controller 化后的走路未在 PIE 完整验证。
-- `bRunPhysicsWithNoController=true`(构造函数里)可能是 Controller 化前的遗留，未确认是否仍需要；涉及行为风险，暂未改。
-
 ## 绿化区（2026-11-20）
 `WalkToGreen(waypoints, green, circle)`：同`WalkTo`，目的地是绿化区的圆。`TeleportToGreen`：Actor瞬移到圆内随机点(`ComputeGreenLandingSpot`，脚底高度=圆心节点Z)并`SetCurrentGreen`+记脚底位置。
 `GetWalkGreen(outCircle)`：正在去的绿化区(存档用)。`Init`：Citizen记录的位置统一是脚底高度(房间落点和`TeleportToRoom`也写脚底)，Actor位置补半个胶囊高。

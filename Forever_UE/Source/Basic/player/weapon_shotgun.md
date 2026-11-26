@@ -28,7 +28,5 @@
 - 依赖：`player/weapon_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/player/weapon.h`消费；`Source/Forever/Player/ForeverWeaponComponent`读数值。
 
-## 待办/后续阶段
-
+## 补充说明
 - 开火后的表现和伤害在`Resource/Story/weapon_shotgun.script`(`milestoneNames={"weapon_shotgun"}`)：`weapon_fire`事件→命中点`spawn_effect`枪击特效+打中市民`single_damage`(线性衰减，数值和以前的`damage`/`maxRange`一致)。没有飞行弹道(2026-11-17取消)。
-- 后坐力/模型变换数值留给PIE里调。

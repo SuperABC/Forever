@@ -302,8 +302,9 @@ Asset* Player::TakeOneThrowable(const string& type) {
 }
 
 bool Player::AddWorldAsset(Asset* asset, const WorldAssetTransform& transform) {
-	if (!asset || worldAssets.count(asset->GetName())) return false;
-	worldAssets[asset->GetName()] = { asset, transform };
+	if (!asset || asset->IsFixture() || worldAssets.count(asset->GetName())) return false;
+	asset->SetGround(transform);
+	worldAssets[asset->GetName()] = { asset };
 	return true;
 }
 
@@ -317,7 +318,7 @@ Asset* Player::RemoveWorldAsset(const string& name) {
 
 void Player::SetWorldAssetTransform(const string& name, const WorldAssetTransform& transform) {
 	auto it = worldAssets.find(name);
-	if (it != worldAssets.end()) it->second.transform = transform;
+	if (it != worldAssets.end() && it->second.asset) it->second.asset->SetGround(transform);
 }
 
 bool Player::HasThrowableInHand(const string& type) const {
@@ -376,6 +377,7 @@ Asset* Player::FindAssetByName(const string& name) const {
 
 Player::StoreResult Player::StoreAsset(Asset* asset) {
 	if (!asset) return StoreResult::Failed;
+	if (asset->IsFixture()) return StoreResult::Failed; // 固定物品不能进背包、不能上手
 	bool single = asset->GetCount() == 1 && asset->GetMobility() == AssetMobility::Object;
 
 	if (!backPack && single && asset->GetBackpack()) {

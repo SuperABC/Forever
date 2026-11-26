@@ -43,7 +43,3 @@
   （`Script::BuildDialogs`/`MatchEvent`）、`Dependence/story/script_mod.h`（`ScriptAction`
   variant的`const Dialog*`分支）、`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
   （展示对话）。
-
-## 待办/后续阶段
-
-- 无。

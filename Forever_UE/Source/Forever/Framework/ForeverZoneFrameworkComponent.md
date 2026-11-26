@@ -60,9 +60,3 @@
   `Components/BoxComponent.h`、`Kismet/GameplayStatics.h`、`Engine/Engine.h`。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
   （`GenerateZoneMesh()`阶段排在`GenerateRoadnetMesh()`之后，调用一次`GenerateZones`）。
-
-## 待办/后续阶段
-
-- 围墙"贴合不满整数unit时"的退化兜底渲染。
-- Zone内部道路目前不在这个组件渲染范围内——`mesh=""`本来就不画，等以后有园区内道路模型
-  再补。

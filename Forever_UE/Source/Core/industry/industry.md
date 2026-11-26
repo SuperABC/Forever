@@ -58,7 +58,3 @@ B) `Distribute()`物流；C) 全体工坊`StartProduce(产能比例)`按input ca
 - 依赖：`Product`/`Storage`/`Manufacture`、`Room`（Init时读StorageType/ManufactureTypes）。
 - 被谁依赖：`AForeverFrameworkActor::EnsureIndustryGenerated`（Init）、Society（`Settlement`读流水按批发价
   付款收款，`Economy::SyncIndustry`同步派生数据）、`PostImplement`（"product info"）、`IndustrySaveCodec`（友元）。
-
-## 待办/后续阶段
-
-- 工坊每天目标批数（mod里的`targets`）目前是占位值，远小于全城日需求，缺口靠进口补。

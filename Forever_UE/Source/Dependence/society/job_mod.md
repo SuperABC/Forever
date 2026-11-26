@@ -17,7 +17,3 @@
 
 - 依赖：`common/mod_state.h`、`common/utility.h`、`common/handle.h`、`Change`(前向声明)。
 - 被谁依赖：`job_factory.h`创建它；`Core/society/job.h`消费它；`OrganizationMod::DesignJobsForRoom`决定配哪种Job；具体实现在`Source/Basic/society/job_*.h/.cpp`。
-
-## 待办/后续阶段
-
-- 无。

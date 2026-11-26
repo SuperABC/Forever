@@ -20,7 +20,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
   按路径查/建），不是每条Road各自一个ISM——车道配置相同的Road共用同一个资产，
   用到几种资产(不同车道配置、隧道`_T`、无人行道变体)就建几个ISM。
-- **曲线上的节间补缝**：每节是刚性的直段，曲线上相邻两节朝向差`delta`，外侧会张开楔形缝（内侧重叠）。`BuildRoadInstances`把内部接缝处每节的两端各沿自身轴向多伸`e=(W/2)·tan(delta/2)`（`W`=路总宽，`delta`取该节两端切线的水平夹角，`e`不超过节长一半），外侧的角正好碰上；这一段首尾（靠路口/开口）的那一端不伸。直路`delta=0`不变。内侧会有重叠，路面材质按世界坐标取样所以不闪，但没在PIE里确认。**头尾倾斜(2026-11-20)**：每节实例的头抬高、尾压低`ROAD_TILE_TILT`(1e-5地图单位=0.01cm，中心高度不变)，整节微微倾斜，内侧重叠处后一节的头压在前一节的尾上，避免共面z-fighting(开口旁的免人行道单段同样处理)；是权宜办法，要根治得用样条网格(`USplineMeshComponent`，弯路节用、直路仍ISM)或材质WPO形变。ISM是刚性实例，做不到像样条网格那样真正沿曲线弯曲，要彻底消除得改成CPU变形的程序网格。
+- **曲线上的节间补缝**：每节是刚性的直段，曲线上相邻两节朝向差`delta`，外侧会张开楔形缝（内侧重叠）。`BuildRoadInstances`把内部接缝处每节的两端各沿自身轴向多伸`e=(W/2)·tan(delta/2)`（`W`=路总宽，`delta`取该节两端切线的水平夹角，`e`不超过节长一半），外侧的角正好碰上；这一段首尾（靠路口/开口）的那一端不伸。直路`delta=0`不变。内侧会有重叠，路面材质按世界坐标取样所以不闪。**头尾倾斜(2026-11-20)**：每节实例的头抬高、尾压低`ROAD_TILE_TILT`(1e-5地图单位=0.01cm，中心高度不变)，整节微微倾斜，内侧重叠处后一节的头压在前一节的尾上，避免共面z-fighting(开口旁的免人行道单段同样处理)；是权宜办法，要根治得用样条网格(`USplineMeshComponent`，弯路节用、直路仍ISM)或材质WPO形变。ISM是刚性实例，做不到像样条网格那样真正沿曲线弯曲，要彻底消除得改成CPU变形的程序网格。
 - **开口按侧处理**（`BuildRoadInstances`一并完成）：同一条路上重叠的`RoadOpening`先合并成一段
   （同一物理开口的车行/行人两条同t同宽，合并后只处理一次），每段记录落在哪一侧（`RoadOpening.forwardSide`，true=side0）。
   - **开口只在一侧、这侧有人行道、且`Road::GetSidewalkFreeMesh(side)`配了无人行道资产（能加载）**：开口段不画整宽cube，
@@ -120,14 +120,8 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   排在`GenerateTerrainMesh()`之后、全部`BuildMap*`阶段之后，调用
   `roadnetFramework->GenerateRoadnet(map)`）。
 
-## 待办/后续阶段
-
-- 路口mesh的圆角/斜切、开口cube的精细化（只挖开人行道/停车道而不是整条路宽度）——明确的
-  简化范围，不是遗漏。
-- 小路mesh（`BuildPathRoadMeshes`）是按起止点的直线ribbon，高度固定为`ROADNET_HEIGHT_EPSILON`，不跟随地形起伏。
-
+## 补充说明
 - **路面ISM的自定义数据**：`GetOrCreateRoadISM`给每个ISM设`NumCustomDataFloats=2`，`BuildRoadInstances`每加一个实例写入沿路方向的水平单位向量`(cos, sin)`(索引0/1)。材质里用`PerInstanceCustomData`读出来：沿路方向=`(c, s)`，横向=`(-s, c)`，与世界坐标XY点乘得到顺着路的UV(材质的`TransformVector`在ISM上不带实例旋转，不能用)。
-
 - **坡度+转弯时的接缝台阶与扭转系数（2026-11-25）**：路既转弯又有坡时，相邻两节(各自横轴水平的刚性平面)在接缝线上高度差为`s·delta·w`(`s`=坡度，`delta`=两节转角，`w`=离中轴的横向距离)，两侧符号相反，所以一侧前高后低、另一侧前低后高。**绕中轴线整体转一个角(roll)解决不了**：相邻两节转一样的角，高度差原样保留；要的是沿节长的扭转(z偏移 = `s·kappa·x·y`，x沿路、y横向，以节中心为原点，`kappa`=偏航角变化率，右转为正)。`BuildRoadInstances`算出`k = s·delta/弧长(cm)`写进路面ISM的自定义数据2(`NumCustomDataFloats`=3)，材质WPO里把`k · x · y`加到世界Z上即可：x=`dot(世界位置XY-(自定义数据3,4), (c,s))`、y=`dot(世界位置XY-(自定义数据3,4), (-s,c))`(自定义数据3/4是节中心世界XY；不能用Object Position，它在ISM上是组件原点，x、y会变成到原点的距离、偏移大几十米)，(c,s)是自定义数据0/1(沿路水平方向)，单位cm。材质(`Content/Asset/Roadnet/Default/Material`里的Road/Pavement等)没接这一项前行为不变。
 - **扭转改成精确形式（2026-11-25）**：每节两端为补外侧楔形缝会伸出`e`，伸出的端头沿自己的平面延伸，和邻节穿插。点(沿路x，横向y)实际落在中轴线弧长`x/(1-kappa*y)`的截面上，所以WPO的Z偏移取`s*kappa*x*y/(1-kappa*y)`(自定义数据2=`s*kappa`、5=`kappa`，x用世界坐标量因此包含伸出部分)，伸出的端头被拉回真实路面。分母在材质里限幅到不小于0.5。不考虑上下曲率对伸出量的影响(顶棚高度未知，曲率大时伸出量会失控)。
 - **单节拉伸范围放宽到[0.75,1.5]*unit（2026-11-25）**：原来是[0.8,1.2]，unit=5m时6~8m(和小于4m)的一段放不下任何整数节，会退化成灰色`AppendFlatRoadCube`矩形。现在由`ROAD_TILE_SCALE_MIN/MAX`控制(unit=5m时每节3.75~7.5m)，能放下的长度区间从第一节起连续(n节可放长度[3.75n,7.5n]，n>=1时相邻区间首尾相接)，只有小于3.75m的一小段还会退化成平板。Core的`Map::LaneSplitKnots`镜像同一套规则，已同步。

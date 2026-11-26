@@ -149,15 +149,6 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   （Story/Mod/Resource三screen）读取`GetModEnables()`/`GetModDependences()`等展示，
   写入`SetModEnabled()`/`AddStoryScript()`等，最终调`WriteConfig()`落盘。
 
-## 待办/后续阶段
-
-- 全局设置字典（`GetGlobalSettings`一类，不同于`global_settings`脚本顶层字段，见
-  `Core/player/player.md`"时钟行为"一节）尚未实现。
-- 同一个dll在多次`AddDllPath`调用下被扫描到(如`Debug`/`Release`两个目录都存在)时，如果
-  其中声明了同一个mod id，`ModLoader::RegisterConcept`会重复调用
-  `RegisterMod<Concept>`，后一次覆盖前一次——目前未去重，开发时建议只保留一份构建产物在
-  `Forever_Mod/`下。
-
 ## 单选concept(Roadnets/Names)
 必须且只能启用一个：`SetModEnabled`启用其一会取消同concept其它id，对已启用的传`enabled=false`无效(`IsUniqueConcept`)。
 `ValidateAndStartGame`开局前校验这两个concept各恰好一个，否则在menu报错拦截。运行时`Map::InitRoadnet`/`Populace::InitNames`

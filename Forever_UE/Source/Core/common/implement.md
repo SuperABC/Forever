@@ -118,10 +118,3 @@ virtual const JsonValue& GetResult() const override { return result; }
   `Forever_Mod/Empty/Cpp/Empty/empty_mods.h`（间接：`ScriptMod::WrapScript`/
   `JobMod::DailyPlan`/`ExecNode`拿到的`PostHandle*`在运行时实际指向一个
   `PostImplement`，但mod侧代码只认`PostHandle`接口，不直接引用`PostImplement`类型）。
-
-## 待办/后续阶段
-
-- `society`/`story`/`traffic`三个domain指针目前只存不用，等对应域出现需要被查询的数据时再加
-  新的`else if`分支。
-- 请求/响应的JSON字段命名（`post`/`result`/`name`/`date`/`time`/`address`/`msg`）目前
-  没有形成统一约定或校验，查询类型多起来后可能需要梳理一份规范。

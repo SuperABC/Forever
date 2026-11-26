@@ -36,8 +36,7 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
   `Source/Dependence/map/zone_mod.h`（`ZoneGateSpec::door`）、
   `Source/Core/map/door.h`（`ResolveDoorSpec`读取这个struct决定要不要放门）。
 
-### 待办/后续阶段
-
+### 补充说明
 - `scriptModName`/`milestoneNames`只有`name`非空时才会被`Map::CreateDoor`读取，`name`
   为空的纯自动门这两个字段即使填了也不会生效，不是bug。
 
@@ -126,3 +125,13 @@ Core的`Lamps`展开成一盏盏灯(见`Source/Core/map/lamp.md`)，UE层逐盏�
 - `FurnitureSpec{meshPath, u, v, z, yaw, scaleX/Y/Z}`：`u`/`v`是家具原点(地面中心)的位置，`z`=离本层地面的高度(吊柜用)，`yaw`度，`meshPath`为空会被`AddFurniture`丢弃。家具网格约定：原点在底面中心、+X朝前(正面)、+Y朝右、+Z朝上(UE坐标)，单位米。
 - `RoomLayoutInfo{width, depth, height, doors, windows}`：`width`=沿u的墙长、`depth`=沿v的进深、`height`=层高(米)；`doors`/`windows`是`std::vector<RoomOpening>`，布局时必须避开(`room_residence`的做法见其md)。
 - `RoomOpening{wall, a0, a1, z0, z1, tag}`：`wall`是`ROOM_WALL_FRONT/BACK/U_MIN/U_MAX`(v最大的墙/v=0的墙/u=0的墙/u=W的墙)，`a0..a1`是沿这面墙的范围(FRONT/BACK墙上是u，U_MIN/U_MAX墙上是v)，`z0..z1`离地面高度，`tag`是layout里门窗洞的标签。由`Room::BuildLayoutInfo()`从`WallHole`换算。
+
+## 房间mod放的物品：`RoomAssetSpec` / `RoomFixtureSpec`(2026-11-26)
+
+紧挨`FurnitureSpec`，坐标约定和它完全一样(房间局部米、原点在角上、yaw度且0=朝+v)。mod用`RoomMod::PlaceAsset`/`PlaceFixture`写进自己的vector，Core只读。
+
+- `RoomAssetSpec { assetType; count; u, v, z, yaw; }`：由`AssetMod`生成的普通物品。`z`是物品**底面**离地板的高度(网格原点不一定在底面，
+  UE层第一次生成实体时按包围盒抬高)。`count`是这一件的堆叠数量。
+- `RoomFixtureSpec { type; meshPath; u, v, z, yaw; scaleX/Y/Z; scriptModName; milestoneNames; }`：没有`AssetMod`的固定物品。
+  网格约定同家具(原点在底面中心、+X朝正面)。`type`是这类东西叫什么(脚本里的`$$self.type`，也用来拼名字)；脚本描述两项都空就没有脚本。
+  弹选项的检测盒不在规格里：UE层取网格包围盒向外扩一圈。阻挡用的盒子和家具同一套(`Forever/Element/FurnitureCollision`)。

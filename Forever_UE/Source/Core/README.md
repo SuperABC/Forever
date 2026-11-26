@@ -45,10 +45,3 @@ id、类型名或它的业务含义。
 - 被谁依赖：`Source/Forever`(UE模块，`AForeverFrameworkActor`创建并驱动各域，各`UForever*FrameworkComponent`
   把域数据翻译成UE表现)、`Source/Test/Core`(CoreTest，不带UE直接跑Core)、`Tools/ModHost`等工具。
 - Core不依赖`Source/Basic`和任何`Forever_Mod`——它们只在运行时以dll形式被`ModLoader`加载。
-
-## 待办/后续阶段
-
-- Core里还残留一些对具体mod的认识，应逐步改成"由mod声明、Core只读共性数据"的形式。已知位置：
-  - `society/economy.cpp`：市民每日需求的服务类型`"food"`/`"video"`和视频需求的财富阈值是写死的。
-  - `traffic/traffic.cpp`的`AssignVehicles`：市民分`"car"`、组织分`"truck"`两个载具种类写死，成年年龄用自己的
-    常量(`kAdultAge`)而不是`GovernmentPolicy::adultAge`。

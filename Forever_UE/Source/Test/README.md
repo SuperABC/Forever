@@ -66,25 +66,6 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - 发现(changes)：首轮实测 enter_vehicle 102ms(生成并附身载具)、create_timer 约 50ms、remove_timer 约 49ms、global_message 约 42ms，是主线程耗时最长的几个，其余都在 10ms 以内。create_timer/remove_timer 单次 50ms 这么大值得查；`leave_work` 等计时器每次执行 10~17ms 与此一致。
 - 已修：脚本 `start_puzzle` 指向未注册/未启用的 puzzle id 原来会因 `Puzzle::Puzzle` 抛未捕获的异常(现在归为 DataException)崩游戏；现在 `UPuzzleWidget::StartPuzzle` 先创建新的这局并捕获，失败就打 Warning 日志并忽略(正在进行的上一局保留)。changes 套件用未启用的 id 覆盖这条路径(首次约 30ms，是首个 C++ 异常的开销)。
 
-## 2026-11-25～26 这批改动里还没在 UE 里验证的
-这两天的全项目 review 一共改了 25 轮，每轮只做了全量编译 + ModTest + CoreTest，**UE 管线一次没跑，编辑器/PIE 一次没开**。验证过一项就从这里删一项。
-- 先跑 `run_tests.bat quick ue`，它能覆盖其中不需要人看的部分：
-  - changes 套件：`Change` 改成按 `ChangeKind` 分派之后，UE 层 `ApplyChange` 的 37 个 `case` 没有在游戏里执行过。
-  - saveload 套件：读档会销毁并重建世界，走一遍"各域销毁 → 注销并卸载 mod dll → 重新加载"。跑完在 `Forever.log` 里搜 `still alive after the game ended`，出现就说明有对象没跟着一局结束销毁、对应的 dll 没被卸载。
-  - 任意套件的 `Forever.log` 里应该有 `LogForeverCore` 的行，Core 和 mod 里打的日志(比如 Basic 生成地形时的那几条)都在里面。
-- 要进游戏看的：
-  - "进游戏 → 退回菜单 → 再进游戏"多试几轮；在菜单界面替换一个 mod 的 dll 再开局。
-  - 开局装备现在由主线脚本用 `grant_asset` 发(`Forever_Mod/Test/Resource/test.script`)：左肩手枪、右肩步枪、背包里的东西是否和原来一样，读档后不会重复发。
-  - 手机桌面：`showOnDesktop=false` 的应用不出现，其它应用照常。
-  - 线路调试线(颜色改成按站点类型名哈希)能否分得开；轿车旁边"上车"选项的触发范围(触发盒改成按车身包围盒外扩)是否合适。
-  - 没调 `SetMaterial` 的地形用平原那套贴图显示是否正常。
-  - 游戏时钟的速度不随帧率变。
-  - 改了脚本文件后重开 PIE 能生效；连开两局时市民名字从头编；存档覆盖同名存档。
-
-## 待做
-- 车辆流式压测、带画面 GPU 采样。
-- 字段检查(组织/路线/房间/地形/路网等)；已做：车辆、武器、产品、仓储、制造、岗位、建筑、站点、房间、调度、资产、地形(组织/路线/路网/地块/脚本/名字/组件/应用/谜题没有可校验的静态字段，靠 UnitTest 和 world 套件覆盖)。
-
 ## 字段检查(ModTest，`Mod/mod_checks.cpp`)
 车辆(尺寸/载客量/蓝图)、武器(伤害/弹匣/射程，不开火的工具跳过)、产品(价格 retail>import>export>0、原料数量)、仓储(容量/能存能取/需求值)、制造(目标批数)、岗位(脚本 mod 已注册)、建筑(国有概率、脚本/车站 mod 已注册、电梯楼层范围)、站点(类型/端口，公交站贴路无端口)、房间(容量/租金/引用的 mod 已注册)、调度、资产(重量体积/武器类型/引用已注册)、地形(SetupTexture 后声明了材质或地图色)。占位模板按提供它的 dll(`Empty.dll`)识别，个别检查对它放宽。其余 concept 靠 UnitTest 与 world 套件覆盖。
 

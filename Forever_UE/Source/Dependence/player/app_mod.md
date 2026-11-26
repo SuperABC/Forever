@@ -17,7 +17,3 @@
 
 - 依赖：`common/mod_state.h`、`player/canvas.h`、`common/handle.h`(`PostHandle`，向Core发起查询)。
 - 被谁依赖：`app_factory.h`创建它；`Core/player/app.h`/`phone.h`消费它；具体实现在`Source/Basic/player/app_*.h/.cpp`。
-
-## 待办/后续阶段
-
-- 无。

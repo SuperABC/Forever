@@ -14,7 +14,3 @@
 
 ## 依赖关系
 `map/general_geometry.h`（`Connection`、`PierRequest`），读地形高度用 `Map::SampleHeight`（`pier.cpp` 里 include `map/map.h`）。使用方：`traffic/route.cpp`、`map/roadnet.cpp`。
-
-## 待办
-- 先建的 route/路网不会为后建的让位；本次选位之后新增的路/建筑也不再检查。
-- 桥下不判建筑，桥墩可能落在 lot 上。

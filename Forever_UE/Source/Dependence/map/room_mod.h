@@ -32,6 +32,12 @@ public:
 	// 摆一件家具(非虚helper，同BuildingMod::AddDecoration)：meshPath为空忽略。Core只读furniture，不改它(跨DLL分配器)。
 	void AddFurniture(const FurnitureSpec& spec) { if (!spec.meshPath.empty()) furniture.push_back(spec); }
 	std::vector<FurnitureSpec> furniture;
+	// 在Layout里往自己的房间里放物品(非虚helper，同AddFurniture；Core只读这两个vector)，见feature_spec.h和room_mod.md：
+	// PlaceAsset=由AssetMod生成的普通物品(带物理、能捡走)；PlaceFixture=没有AssetMod的固定物品(只有网格+选项+脚本)。
+	void PlaceAsset(const RoomAssetSpec& spec) { if (!spec.assetType.empty() && spec.count > 0) placedAssets.push_back(spec); }
+	void PlaceFixture(const RoomFixtureSpec& spec) { if (!spec.type.empty() && !spec.meshPath.empty()) placedFixtures.push_back(spec); }
+	std::vector<RoomAssetSpec> placedAssets;
+	std::vector<RoomFixtureSpec> placedFixtures;
 
 	// 能力声明,各域按这些字段消费,见room_mod.md。
 	bool isResidence = false;

@@ -38,8 +38,13 @@ public:
 	// 反复Tick同一时刻直到它为false。
 	bool HasDueTimers(const Time& currentTime) const;
 
+	// Tick里瞌睡值掉到0的市民已经被强制睡下(Citizen::kForcedSleepHours小时)，这里取走名单并清空。
+	// 只有玩家正在操控的市民会扣瞌睡值，所以名单里最多就他一个；WorldStep据此发player_sleep(世界跟着跳过这段时间)，见world_step.md。
+	std::vector<Citizen*> ConsumeForcedSleepers();
+	// controlled=玩家正在操控的市民(没有传nullptr)：只有他扣瞌睡值。
 	void Tick(const Time& currentTime, bool crossedDay,
-		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post);
+		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post,
+		const Citizen* controlled = nullptr);
 
 	// 处理add_option/remove_option。返回是不是本域认识的类型(认识就true，找不到目标静默忽略)。
 	bool ApplyChange(const Change* change, const ScriptContext& context);
@@ -104,6 +109,7 @@ private:
 	// 上一次Tick的游戏时间，用来算饱食度衰减的经过时间；不存档。
 	Time lastTickTime;
 	bool hasLastTickTime = false;
+	std::vector<Citizen*> forcedSleepers; // 本次Tick里瞌睡值掉到0、被强制睡下的市民，ConsumeForcedSleepers取走
 
 	// Scheduler独立的一套timer，和jobTimerSet平行。
 	std::set<std::tuple<Time, Citizen*, std::string>> schedulerTimerSet;

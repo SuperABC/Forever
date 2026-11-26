@@ -16,7 +16,3 @@
 
 - 依赖：`society/organization_mod.h`、`organization_common.h`、`common/json.h`。
 - 被谁依赖：`basic.cpp`注册(依赖`component_restaurant`/`room_restaurant`/`job_restaurant_waiter`)；`Core/society/organization.h`/`society.h`消费。
-
-## 待办/后续阶段
-
-- 玩家在餐厅购买food服务(Core API/UI)，玩家家庭按钱选超市汉堡或餐厅服务。

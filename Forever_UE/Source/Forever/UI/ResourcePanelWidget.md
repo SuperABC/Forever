@@ -13,7 +13,3 @@
 
 - 依赖：`PathRowWidget`、`ScrollBoxUtils`、`ForeverConfigBridgeSubsystem`。
 - 被谁依赖：`ConfigMenuWidget.cpp`。
-
-## 待办/后续阶段
-
-- 无。

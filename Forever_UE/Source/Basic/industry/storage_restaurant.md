@@ -15,7 +15,3 @@
 
 - 依赖：`industry/storage_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/industry/storage.h`消费；被`RestaurantRoom`按`storageType`引用。
-
-## 待办/后续阶段
-
-- `capacity=10`是占位测试值，按实际销量调整。

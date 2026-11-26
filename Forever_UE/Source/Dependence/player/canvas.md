@@ -24,7 +24,3 @@
 
 - 依赖：标准库；`canvas.cpp`内部用Windows GDI。
 - 被谁依赖：`puzzle_mod.h`/`app_mod.h`；`Source/Forever/UI/PuzzleWidget`/`PhoneWidget`持有并注入输入、把像素贴成纹理；`Core/player/puzzle.*`/`phone.*`。
-
-## 待办/后续阶段
-
-- 无。

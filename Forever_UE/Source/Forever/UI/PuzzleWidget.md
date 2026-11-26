@@ -22,9 +22,5 @@
 - 依赖：Core `Puzzle`、`Dependence/player/canvas.h`、`CanvasInputTranslation`。
 - 被谁依赖：`Framework/ForeverStoryFrameworkComponent`、`Mod/ForeverSaveSubsystem`、`Player/ForeverPlayerController`。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 时间
 开始谜题时记下当前全局时间缩放并设0，结束时还原成之前的值；重复启动(上一局还没结束)不会覆盖记下的值。

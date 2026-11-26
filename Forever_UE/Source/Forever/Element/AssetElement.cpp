@@ -1,5 +1,6 @@
 #include "Element/AssetElement.h"
 
+#include "Element/FurnitureCollision.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -55,7 +56,38 @@ void AAssetElement::Init(Asset* inAsset) {
 		mesh->SetStaticMesh(customMesh);
 	}
 
+	if (asset->IsFixture()) SetupFixture();
 	BuildProximityBox();
+}
+
+void AAssetElement::SetupFixture() {
+	// 固定物品不动：不模拟物理、不受重力，网格只负责显示(家具网格没有自带的碰撞体)。
+	mesh->SetSimulatePhysics(false);
+	mesh->SetEnableGravity(false);
+	mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mesh->SetGenerateOverlapEvents(false);
+	mesh->SetCastShadow(false); // 和房间家具一致：室内小件不投影
+	mesh->SetMobility(EComponentMobility::Static);
+
+	UStaticMesh* staticMesh = mesh->GetStaticMesh();
+	if (!staticMesh) return;
+	// 阻挡：和房间家具同一套分块盒子(网格局部系)。盒子挂在根下面，根的缩放自动作用到盒子的位置和尺寸上。
+	const FBoxSphereBounds bounds = staticMesh->GetBounds();
+	const FVector boundsMin = bounds.Origin - bounds.BoxExtent, boundsMax = bounds.Origin + bounds.BoxExtent;
+	if ((boundsMax.Z - boundsMin.Z) * GetActorScale3D().Z < FurnitureCollision::kMinBlockingHeight) return; // 薄片不挡路
+	TArray<FBox> boxes;
+	FurnitureCollision::GetBoxes(UTF8_TO_TCHAR(asset->GetMeshPath().c_str()), boundsMin, boundsMax, boxes);
+	for (const FBox& part : boxes) {
+		UBoxComponent* blocker = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+		blocker->SetMobility(EComponentMobility::Static);
+		blocker->SetBoxExtent(part.GetExtent());
+		blocker->SetupAttachment(RootComponent);
+		blocker->SetRelativeLocation(part.GetCenter());
+		blocker->SetGenerateOverlapEvents(false);
+		blocker->SetCanEverAffectNavigation(false);
+		FurnitureCollision::ApplyBlockingResponse(blocker);
+		blocker->RegisterComponent();
+	}
 }
 
 void AAssetElement::BuildProximityBox() {
@@ -68,7 +100,17 @@ void AAssetElement::BuildProximityBox() {
 	scale.Z = FMath::Max(scale.Z, 0.01f);
 
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
-	box->SetBoxExtent(FVector(120.f, 120.f, 80.f) / scale);
+	UStaticMesh* staticMesh = mesh->GetStaticMesh();
+	if (asset->IsFixture() && staticMesh) {
+		// 固定物品(床之类)个头大：触发盒取网格包围盒，世界里水平方向各外扩80cm、上下各外扩20cm。
+		const FBoxSphereBounds bounds = staticMesh->GetBounds();
+		box->SetBoxExtent(bounds.BoxExtent + FVector(80.f, 80.f, 20.f) / scale);
+		box->SetRelativeLocation(bounds.Origin);
+		box->SetMobility(EComponentMobility::Static);
+	}
+	else {
+		box->SetBoxExtent(FVector(120.f, 120.f, 80.f) / scale);
+	}
 	box->SetCollisionProfileName(TEXT("Trigger"));
 	box->SetupAttachment(RootComponent);
 	box->OnComponentBeginOverlap.AddDynamic(this, &AAssetElement::OnOverlapBegin);
@@ -131,6 +173,12 @@ void AAssetElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActo
 	if (!pawn || OtherActor != pawn || !Cast<AForeverCharacter>(OtherActor)) return;
 	bPlayerInBox = false;
 	HideOptions();
+}
+
+void AAssetElement::BeginPlay() {
+	Super::BeginPlay();
+	// 流式生成时玩家可能已经站在触发盒里：主动刷新一次重叠，补发BeginOverlap(否则要走出去再走回来才弹选项)。
+	if (proximityBox) proximityBox->UpdateOverlaps();
 }
 
 void AAssetElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {

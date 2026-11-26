@@ -19,11 +19,6 @@
 - 依赖：`Dependence/traffic/route_mod.h`、`route_common.h`。
 - 被谁依赖：`Basic/basic.cpp`；`Core/traffic/route.cpp`。
 
-## 待办/后续阶段
-
-- 互联线路只用前两条跑道；专用起飞/降落跑道未实现。
-- 天空段间距/高度/滑行速度是估值。harness 验证过线路规划(1 座环线，2 座 3 条线；滑行 run 上限 0.0175、飞行 0.175)，**未 PIE**。
-
 ## 手动线路 `--skip`（2026-11-23）
 
 `"route_air --skip"`：`LayoutRoute` 走 `LayoutManual`；数据与规划见 `route_mod.md`"手动线路"、`route_common.md`。

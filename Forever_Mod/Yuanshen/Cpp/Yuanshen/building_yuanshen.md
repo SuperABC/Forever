@@ -16,6 +16,3 @@
 ## 依赖关系
 - 依赖:`Dependence`的`building_mod`/`building_factory`/`script_mod`/`script_factory`(只链`Dependence.lib`)。
 - 被依赖:`Resource/ys.script`、`config_ys.json`、`Forever_UE/Resource/Config/config.json`的`building_mods`/`script_mods`。
-
-## 待办/后续阶段
-- 楼内模板没有`pedestrianNavigation`/`vehicleNavigation`块,居民走不进楼,见`../../Resource/README.md`。

@@ -16,8 +16,3 @@ Room的进入/离开检测碰撞盒实际生成在每栋building专属的`ABuild
 物理引擎对"同一个Actor根组件下大量Static简单碰撞子组件"做的焊接（weld）开销拖累——和
 building近处LOD组件共用一个owner是同一个根因，完整说明见
 `ForeverBuildingFrameworkComponent.md`"性能排查"一节。
-
-## 待办/后续阶段
-
-- 这个域真正需要的逻辑（和"Room进入/离开检测"无关的部分，那部分已经在`ABuildingElement`
-  里）后续按需求落地时收进来。

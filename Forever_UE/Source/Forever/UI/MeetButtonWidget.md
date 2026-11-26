@@ -16,7 +16,3 @@
 
 - 依赖：`ForeverFrameworkActor`、`ForeverStoryFrameworkComponent`。
 - 被谁依赖：`MeetOptionWidget.cpp`。
-
-## 待办/后续阶段
-
-- 无。

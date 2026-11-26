@@ -90,8 +90,6 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 距离分档全部连续过渡：≥`TerrainTuning1.x..y`米渐变到"平均色"(采样数组最低mip=1x1，只2次采样，不做细节采样；压缩贴图CPU读不出像素所以不预先算平均色)，细节法线`z..w`米淡出，中距离起丢次要地形。材质输出世界空间法线(`tangent_space_normal=False`)。
 所有`SampleGrad`的导数在分支外算好，故可以放进动态分支。
 
-**待PIE确认**(我看不到画面)：斜线边界在高空是否圆滑；山体草/岩过渡；沙滩→湿沙→海底、河岸→河床；距离档切换有无跳变；帧率；法线绿通道/粗糙度是否正常；`tile`米数是否合适。
-
 ## 水面
 
 水面已移到`ForeverWaterFrameworkComponent`（分级细分+波浪+水下后处理，见其.md），本组件不再生成水面mesh，只向它提供LOD pivot。
@@ -104,14 +102,11 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 - 被谁依赖：`AForeverFrameworkActor`（`CreateDefaultSubobject`创建、`GenerateTerrainMesh()`里调用`GenerateTerrain`）、
   `AForeverPlayerGameMode`（`GetMapCenterWorldLocation()`算出生点）、`UForeverTrafficFrameworkComponent`（`IsInsideLodLevel`）。
 
-## 待办/后续阶段
-
-- `clipGridCell`假定每个hatch是矩形（`Quad`+`rotation`），不支持任意多边形；Building场景出现非矩形hatch时再扩展。
+## 补充说明
 - **打包版**：层贴图靠cook后的压缩块拷贝，需要`prepare_terrain_textures.py`先处理(已写进`Forever_UE/pak.bat`和`Forever_Mod/{Test,Yuanshen}/UE/*/pak.bat`；mod把地形层贴图放在自己插件的`TerrainLayers/`目录下，pak.bat会自动处理)。
   编辑器/PIE不经pak.bat：`PrepareTextureInEditor`在加载层贴图时按同样规则在内存里修正属性(不存盘不标脏，打Warning带改前属性，首次重新压缩几秒)；规则和脚本各一份，改一边同步另一边。
   mod工程是它自己的迷你UE工程，没有Forever的C++，所以这一步只用引擎Python设置贴图属性，运行时合并由主程序完成。
 - 构建在游戏线程里同步跑(约3~6秒，HitchWatchdog会报一次)，只发生在加载阶段。层贴图数组是压缩的：8层×3张×1024²含mip约33MB显存，覆盖图约43MB。
-- 没做抗平铺(只有一个低频明暗调制)；大片平地上能看出重复时再加。
 
 ## 隧道口端墙（2026-11-20）
 `BuildTunnelWalls`对`startWall/endWall`为真的端头各造一块端墙板(横向盖满洞宽并比侧壁外侧再多一个厚度，沿长度向洞外厚`TUNNEL_WALL_THICKNESS`)：墙顶=端头线段(含外侧)范围内`SampleHeight`最大值+`TUNNEL_WALL_TOP_MARGIN`(5cm)，墙底=`startWallBottom/endWallBottom`，墙顶不高于墙底则不造。内面朝洞内可碰撞。

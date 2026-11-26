@@ -47,10 +47,6 @@
 
 读档创建线路后调用 `route->SilenceInitialStopEvents()`：读档后第一次 `Route::Update` 只记录各车停靠状态、不发 `enter_stop`（车辆 script 的变量/选项已随存档恢复，再发会重复加选项）。`on_route` 在恢复线路绑定时同步置 1。
 
-## 待办 / 后续
-
-- 玩家驾驶中的车速在 P6 处理，也可能不存。
-
 ## 载具行驶状态与通勤行程(追加在原有字段之后，AtEnd容错，不升版本)
 每辆车追加：`wasSpawned`、预订车位(房间+下标)、行驶快照(目的房间、速度、路径点)；载具资产记录之后追加行程记录(市民下标、车名、finalDest、parkOrigin、parkDest、destSlot、phase)。市民下标读档时等人口恢复后由`ResolveVehicleAssets`解析。
 

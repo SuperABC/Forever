@@ -13,7 +13,3 @@
 
 - 依赖：UMG `UButton`。
 - 被谁依赖：`AssetButtonWidget.h`、`InventoryWidget.h`。
-
-## 待办/后续阶段
-
-- 无。

@@ -16,6 +16,3 @@
 
 ## 依赖关系
 只依赖 Dependence（`map/terrain_mod.h`、`common/utility.h`）。编辑器侧读写见 `Tools/MapEditor/js/io.js`。
-
-## 待办/后续阶段
-- 河岸精细高度（17×17）。

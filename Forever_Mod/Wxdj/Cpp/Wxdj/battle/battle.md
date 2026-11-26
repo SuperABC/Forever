@@ -164,12 +164,6 @@
 - 全部对象由本DLL(Wxdj.dll)自己分配、自己释放，不跨DLL传递，不涉及跨DLL`new`/`delete`问题。
 - 招式文件由调用方(`WxdjPuzzle`)通过post查到路径后传给`Cultivator`构造函数；文件必须是UTF-8(招式名直接显示在Canvas上)。
 
-## 待办/后续阶段
-
-- UE的PvE入口还没接：给玩家/敌人传入特性列表、`SetCritBase`、敌人`SetNoAccumulate(true)`，以及让`ai.cpp`加载PvE权重(`ai_weights_pve.bin`)，需要另行批准。
-- 重训：规则/系数改动后按"从零重训"流程重训PvP模型并重新导出；新增的特征维度旧检查点用`pad_checkpoint.py`补零列(输出不变)。AI目前看不到玩家的五行属性。
-- 火之高兴、安如磐石、天动万象三个家族的第20式强度尚未评估。
-
 ## 2026-11 规则更新(以代码`def.h`/`controller.cpp`/`cultivator.cpp`为准)
 
 - **静止**：跳过、积攒、空炸弹(炸弹能量为0时放炸弹)、被禁锢而被迫跳过，都算静止；对静止的人出静止增伤招会触发增伤。

@@ -91,7 +91,7 @@ UE侧缓存/激活逻辑见`Source/Forever/Player/ForeverThrowableComponent.md`�
 
 ## 房间外的物品：`worldAssets`
 
-不在任何房间、也不在身上/容器里的物品（目前就是被扔出去的投掷物）归 Player 直接持有，key=物品名，带一份位置朝向（UE 世界坐标，厘米/度；Core 只存数不解释）。物品最终落在室内也照样记在这里，不转进 `Room::assets`。位置由 UE 侧在存档前从场景里的 Actor 同步回来（见 `ForeverAssetFrameworkComponent.md`），Core 平时不更新。拆出的新物品是新建的实例，名字由它的 mod 保证全局唯一。
+不在任何房间、也不在身上/容器里的物品（目前就是被扔出去的投掷物）归 Player 直接持有，key=物品名，带一份位置朝向（记在物品自己身上的`AssetGround`，地图单位+度，见`asset.md`"地面摆位"；2026-11-26之前是 UE 世界坐标，厘米/度；Core 只存数不解释）。物品最终落在室内也照样记在这里，不转进 `Room::assets`。位置由 UE 侧在存档前从场景里的 Actor 同步回来（见 `ForeverAssetFrameworkComponent.md`），Core 平时不更新。拆出的新物品是新建的实例，名字由它的 mod 保证全局唯一。
 
 ## 持有方式
 

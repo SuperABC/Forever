@@ -128,9 +128,3 @@
 
 `utility.h`把`debugf`的`LPCSTR`参数改成了`const char*`、不引入`<windows.h>`，避免
 头文件污染(其余均原样移植)。`debugf`后来重做成"带级别+可替换输出函数"，见`common/utility.md`。
-
-## 待办/后续阶段
-
-- `<Concept>Factory`目前只有最小注册表(`registries`+`liveInstances`两个map)，没有
-  "探测阶段"和"正式生效阶段"两段式注册的隔离机制；如果以后发现多个mod并发注册确实需要
-  这层隔离，再按需添加。

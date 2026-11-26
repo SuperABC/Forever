@@ -33,7 +33,3 @@
 
 - 依赖：`map/roadnet_mod.h`(`RoadnetMod`基类)、`common/utility.h`。
 - 被谁依赖：`Source/Basic/basic.cpp`(`GetModRoadnets`/`RegisterModRoadnets` 注册，creator 把 args 传给构造函数)。
-
-## 待办/后续阶段
-
-- 与 `JingRoadnet` 重复的建路/行道树几何逻辑尚未抽成共享代码(Basic 层文件间不互相 include)。

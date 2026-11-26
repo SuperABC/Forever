@@ -22,7 +22,3 @@
 
 - 依赖：`map/zone_mod.h`、`common/utility.h`(`GetRandom`)、`Lot`/`Quad`/`PlacementEmitFunc`(`general_geometry.h`)。
 - 被谁依赖：`basic.cpp`注册(三个园区分别依赖`Residence{High,Middle,Low}Building`)；`Core/map/zone.h`消费；各`config*.json`的`zone_mods`列出这三个id。
-
-## 待办/后续阶段
-
-- `ZONE_*`的网格路径和数值是测试配置，看过效果再调。

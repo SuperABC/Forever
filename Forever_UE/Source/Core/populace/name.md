@@ -36,9 +36,3 @@ concept只需要唯一一个"当前生效"的取名算法给`Populace`用，不�
 - 被谁依赖：`Source/Core/populace/populace.h/.cpp`（`Populace::InitNames()`构造
   `Name*`+调`ReserveName`，`GenerateCitizens()`调`name->GenerateName(...)`/
   `name->GetSurname(...)`）。
-
-## 待办/后续阶段
-
-- `roll`（同一轮生成内部互不撞名）未迁移——姓名生成算法是~200姓氏x最多590个给定名
-  字符的真实词库，组合数量级足够大，几百个citizen之间实际撞名的概率本来就很低，如果
-  以后确实需要严格去重可以再补。

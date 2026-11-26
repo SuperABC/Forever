@@ -15,6 +15,7 @@
 #include "society/immigration.h"
 #include "story/story.h"
 #include "story/change.h"
+#include "story/expression.h"
 #include "story/script.h"
 #include "industry/industry.h"
 #include "traffic/traffic.h"
@@ -265,9 +266,9 @@ void AForeverFrameworkActor::BuildGenerationStages()
 		// 必须在GenerateVehicles之后——上车要用到车辆Actor。
 		if (bScriptsRestored) {
 			if (FForeverPendingLoad* load = FetchActiveLoad()) RestoreControlledPawn(*load);
-			// 房间外的物品(被扔出去的投掷物等)：按存档位置朝向重新生成，从静止开始模拟。
-			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
+		// 地上的物品(房间里的、室外的)：开局和读档都只登记，实体由物品组件的Tick按玩家距离生成/销毁。
+		if (assetFramework) assetFramework->RegisterGroundAssets();
 	});
 	// 停车位车辆蓝图(拖网渔船等大模型)第一次生成要同步加载+建物理，实测卡2-3秒：这里先加载并临时生成销毁一次。
 	add(TEXT("预热车辆"), [this]() {
@@ -653,6 +654,30 @@ void AForeverFrameworkActor::ApplyChangeUnguarded(const Change* change, const Sc
 	case ChangeKind::SingleDamage: {
 		auto* singleDamage = static_cast<const SingleDamageChange*>(change);
 		if (assetFramework) assetFramework->ApplySingleDamage(singleDamage, context);
+		return;
+	}
+	case ChangeKind::PlayerSleep: {
+		// 玩家操控的市民睡觉。hour留空=按瞌睡值算要睡多久(Citizen::GetSleepHoursNeeded；瞌睡值还在80%以上时是0=不困，
+		// 不睡，只提示一句)；给了hour就睡那么久(Core在瞌睡值掉到0时强制睡觉发的就是带hour的这一条，见WorldStep::TickPopulace)。
+		// 睡的方式是跳时间；睡着期间瞌睡值不掉，醒来回满(Citizen::BeginSleep/WakeUp)。
+		auto* playerSleep = static_cast<const PlayerSleepChange*>(change);
+		Citizen* sleeper = GetControlledCitizen();
+		if (!sleeper || !player || bTimeSkipping) return;
+		const double hours = playerSleep->GetHour().empty()
+			? sleeper->GetSleepHoursNeeded()
+			: ToDouble(EvaluateExpression(playerSleep->GetHour(), context));
+		if (hours <= 0.0) {
+			if (GEngine) {
+				GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Yellow, FString::Printf(TEXT("现在还不困(瞌睡值%d%%，降到80%%以下才能睡)"),
+					FMath::RoundToInt(sleeper->GetSleepiness() * 100.f)));
+			}
+			return;
+		}
+		const Time sleepStart = *player->GetTime();
+		sleeper->BeginSleep(sleepStart, hours);
+		Time wakeTime = sleepStart;
+		wakeTime.AddSeconds(FMath::RoundToInt(hours * 3600.0));
+		BeginTimeSkip(wakeTime);
 		return;
 	}
 	case ChangeKind::AddSatiety: {

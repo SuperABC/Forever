@@ -14,7 +14,3 @@
 
 - 依赖：`player/app_mod.h`、`player/app_factory.h`。
 - 被谁依赖：`Core/player/phone.h`；具体App在`Source/Basic/player/app_*.h/.cpp`。
-
-## 待办/后续阶段
-
-- 无。

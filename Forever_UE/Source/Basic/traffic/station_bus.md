@@ -19,10 +19,3 @@
 
 - 依赖：`Dependence/traffic/station_mod.h`、`Dependence/map/general_geometry.h`
   (`FACE_DIRECTION`/`PointParams`/`Road`)。
-
-## 待办/后续阶段
-
-- 火车站楼的新布局(1~3楼、轨道接口落在楼体内)还没进游戏看过效果，见`map/building_*.md`。
-- 只验证了"全图恰好一个火车站+一个机场"的场景——`TrainRoute`/`AirRoute`的`LayoutRoute`
-  假设全图只有一个真实站点(见`route_*.md`)，多个同类型站点同时存在的情况没有验证过，
-  暂不支持。

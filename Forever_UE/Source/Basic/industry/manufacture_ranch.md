@@ -15,7 +15,3 @@
 
 - 依赖：`industry/manufacture_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/industry/manufacture.h`消费。
-
-## 待办/后续阶段
-
-- `targets`的批数是占位测试值，跑通后按实际存量变化速度调整。

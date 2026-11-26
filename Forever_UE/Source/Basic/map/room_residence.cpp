@@ -728,6 +728,18 @@ void ResidenceRoom::Layout(const RoomLayoutInfo& info) {
 		}
 		spec.u *= S; spec.v *= S; spec.z *= S;
 		spec.scaleX *= S; spec.scaleY *= S; spec.scaleZ *= S;
+		if (spec.meshPath.find("/Bed_") != string::npos) {
+			// 床不当纯装饰：放成一件固定物品(没有AssetMod，只有网格+选项+脚本)，玩家走近弹"睡觉"，
+			// 见Resource/Story/fixture_bed.script。位置/朝向/缩放和它作为家具时完全一样。
+			RoomFixtureSpec bed;
+			bed.type = "bed";
+			bed.meshPath = spec.meshPath;
+			bed.u = spec.u; bed.v = spec.v; bed.z = spec.z; bed.yaw = spec.yaw;
+			bed.scaleX = spec.scaleX; bed.scaleY = spec.scaleY; bed.scaleZ = spec.scaleZ;
+			bed.milestoneNames = { "fixture_bed" };
+			PlaceFixture(bed);
+			continue;
+		}
 		AddFurniture(spec);
 	}
 }

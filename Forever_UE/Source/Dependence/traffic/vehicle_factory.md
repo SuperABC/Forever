@@ -18,7 +18,3 @@
 
 - 依赖：`traffic/vehicle_mod.h`。
 - 被谁依赖：`Source/Core/common/registry.h`的`Registry`持有唯一实例，由各域管理类通过引用使用——`Core/traffic/traffic.h`(`Traffic::vehicleFactory`引用)、`Core/traffic/vehicle.h`。
-
-## 待办/后续阶段
-
-- 无。

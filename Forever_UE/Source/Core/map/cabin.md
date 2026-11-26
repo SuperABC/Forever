@@ -57,7 +57,3 @@
   - `Forever/Element/BuildingElement`（摆放、推进行程、触发盒）；
   - `Forever/Framework/ForeverFrameworkActor`（`RefreshInteractOptions`）；
   - `Forever/Framework/ForeverStoryFrameworkComponent`（广播和选项点击）。
-
-## 待办 / 后续
-
-- 轿厢网格的碰撞：玩家要能站在轿厢上跟着移动，需要在 PIE 里确认。

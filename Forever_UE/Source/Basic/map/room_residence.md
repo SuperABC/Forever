@@ -34,6 +34,8 @@ Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(
 
 - 依赖：`Source/Dependence/map/room_mod.h`(`RoomMod`基类)、`room_furniture_catalog.h`(生成的尺寸表)、`common/random.h`。
 
-## 待办/后续阶段
+## 床是固定物品(2026-11-26)
 
-- 无。
+`Layout`输出家具时，网格名带`/Bed_`的不再`AddFurniture`，改成`PlaceFixture`：`type="bed"`、网格/位置/朝向/缩放和它当家具时完全一样、
+`milestoneNames={"fixture_bed"}`、没有脚本mod。所以每张床在Core里是一件没有`AssetMod`的固定物品(`Core/player/asset.md`)，
+玩家走近弹"睡觉"，点了执行`player_sleep`、按瞌睡值决定睡多久(`Resource/Story/fixture_bed.script`)。布局算法本身没动，床仍然参加"不重叠、不挡门窗"的检查(ModTest把固定物品并进家具一起查)。

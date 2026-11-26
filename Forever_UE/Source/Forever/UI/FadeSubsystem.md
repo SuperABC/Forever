@@ -16,10 +16,6 @@
 - 依赖：`FadeWidget`。
 - 被谁依赖：`ForeverConfigBridgeSubsystem`、`ForeverSaveSubsystem`、`Player/ForeverMenuController`、`Player/ForeverPlayerController`、`FadeWidget`。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 保持黑屏
 `BeginHoldBlack()`(返回是否成功显示)/`IsHeldBlack()`/`ReleaseHold()`，给跳时间用，见`FadeWidget.md`。
 

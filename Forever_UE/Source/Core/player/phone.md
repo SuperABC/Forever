@@ -17,7 +17,3 @@
 
 - 依赖：`player/app.h`、`player/canvas.h`、`common/handle.h`。
 - 被谁依赖：`Source/Forever/UI/PhoneWidget`持有并每帧调用。
-
-## 待办/后续阶段
-
-- 无。

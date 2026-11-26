@@ -17,7 +17,3 @@
 
 - 依赖：`map/room_mod.h`。
 - 被谁依赖：`Source/Core/common/registry.h`的`Registry`持有唯一实例，由各域管理类通过引用使用——`Core/map/map.h`(`Map::roomFactory`引用)、`Core/map/room.h`、`Core/map/building.h`(`Layout`里创建房间)。
-
-## 待办/后续阶段
-
-- 无。

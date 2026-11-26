@@ -41,3 +41,13 @@
 
 ## 天气
 段末尾(worldAssets之后)追加：天气类型U8+剩余游戏毫秒F64，更早的存档没有就当晴天+新抽倒计时。没升版本号。见`weather.md`。
+
+## 固定物品和地面摆位(2026-11-26)
+
+- `WriteAsset`第一个字节区分普通物品(0)和固定物品(1)。固定物品没有`AssetMod`，把规格整份写出来(type、名字、网格、三轴缩放、
+  `scriptModName`、里程碑名)，后面跟选项和`scriptStarted`；`ReadAsset`读到1就用`Asset(desc, name)`重建。不这样做的话，
+  读档走`new Asset(&factory, type)`拿不到mod会把它丢掉。脚本变量仍在`world.scripts`段，键`asset:<名字>`。
+- 房间里的物品和室外的物品，每件前面都写地面摆位(6个F32 + 1个U8的`restOnBottom`)，读回来`SetGround`。
+  室内物品以前不存位置，读档后场景里看不到；现在存了，UE层按它流式生成实体。
+- 读地图段不会重建房间物品(读档不调`Layout`，也不调`Map::BuildRoomAssets`)，房间里的物品全靠这一段恢复。
+- 没升版本号、没写迁移，旧存档读不了。

@@ -117,10 +117,6 @@ milestone超时之类）时再补内容。
   还会遍历`Society`下所有`Organization`/`Job`各自的`Script`广播一次game_start，见
   `ForeverStoryFrameworkComponent.md`）。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 主线读取全部 story_scripts
 
 主线 Script 不再固定读 `test.script`：`Story::Init` 对 `Config::GetMainStoryScriptPaths()`（`config.json` 的

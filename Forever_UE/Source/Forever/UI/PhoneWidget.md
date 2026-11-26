@@ -17,7 +17,3 @@
 
 - 依赖：Core `Phone`、`Dependence/player/canvas.h`、`CanvasInputTranslation`。
 - 被谁依赖：`Player/ForeverPlayerController`。
-
-## 待办/后续阶段
-
-- 无。

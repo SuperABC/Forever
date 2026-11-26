@@ -28,11 +28,9 @@
 - 依赖：`player/weapon_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/player/weapon.h`消费；`Source/Forever/Player/ForeverWeaponComponent`读数值。
 
-## 待办/后续阶段
-
+## 补充说明
 - 相机是`FireMode::Custom`，没有武器脚本(不发`weapon_fire`)、没有伤害。
-- 后坐力/模型变换数值留给PIE里调。
 
 ## CameraWeapon(相机)
 
-`weapon_camera`：`fireMode=Custom`、`magazineCapacity=0`(不用弹药)、无伤害/散射/后坐力，模型是`/Game/3rdParty/Digital_Camera_3D_Model_–_Low_Poly_DSLR/StaticMeshes/15_camera`(目录名里是en dash，镜头朝+X)。`modelScale`/`backOffset`等3D变换是估值，待PIE里按模型实际大小调。目前能背在身上、右键瞄准，开火走`OnFire`：向Core发`{"post":"screenshot","name":"photo"}`，截图存到`Saved/Photos/photo_<时间戳>.png`(临时路径)，见`ForeverWeaponComponent.md`和`Core/common/implement.md`。
+`weapon_camera`：`fireMode=Custom`、`magazineCapacity=0`(不用弹药)、无伤害/散射/后坐力，模型是`/Game/3rdParty/Digital_Camera_3D_Model_–_Low_Poly_DSLR/StaticMeshes/15_camera`(目录名里是en dash，镜头朝+X)。`modelScale`/`backOffset`等3D变换按模型实际大小调过。目前能背在身上、右键瞄准，开火走`OnFire`：向Core发`{"post":"screenshot","name":"photo"}`，截图存到`Saved/Photos/photo_<时间戳>.png`(临时路径)，见`ForeverWeaponComponent.md`和`Core/common/implement.md`。

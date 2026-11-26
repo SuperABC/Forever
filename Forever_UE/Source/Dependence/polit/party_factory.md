@@ -15,7 +15,3 @@
 
 - 依赖：`polit/party_mod.h`、`common/random.h`。
 - 被谁依赖：`Core/common/registry.h`持有唯一实例，`Core/polit/polit.h`。
-
-## 待办/后续阶段
-
-- 无。

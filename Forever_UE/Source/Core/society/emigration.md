@@ -14,9 +14,6 @@
 - 市民对象保留（和`isDead`一样用标记），存档下标不变；`departed`随人口段存档。户、`Room::households`里的成员关系也保留，但`Household::GetAdults`会过滤不在场的人，租金、饭钱、补助等经济结算都只看`IsActive`。
 - UE层：`Economy::Daily`把当天离城的市民放进`DailyReport::departed`，`AForeverFrameworkActor`据此调用`UForeverPopulaceFrameworkComponent::HandleCitizenDeath`销毁Actor，之后流式生成都因`!IsActive()`跳过他们。
 
-## 待办
-- 离城后空出的房间/岗位目前不会有新人迁入。
-
 ## 依赖关系
 - 依赖：`Society`（账本、Treasury、Market）、`Organization`、`Room`、`Household`、`Citizen`。
 - 被谁依赖：`Economy`。

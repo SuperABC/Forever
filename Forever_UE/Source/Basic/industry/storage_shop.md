@@ -15,7 +15,3 @@
 
 - 依赖：`industry/storage_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/industry/storage.h`消费；`ShopStorage`被`WarehouseRoom`按`storageType`引用(见`map/room_*.md`)。
-
-## 待办/后续阶段
-
-- `capacity`是占位测试值，按实际存量变化速度调整。

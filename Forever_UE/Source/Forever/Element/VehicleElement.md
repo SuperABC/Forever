@@ -35,7 +35,3 @@
 
 - 依赖：`Core/traffic/vehicle.h`(`Vehicle`，不持有所有权)、`ChaosVehicles` 模块、`VehicleWheelFront/Rear`、`VehicleWheelAnimInstance`、`Input/ForeverKeyBindingSubsystem`(`ExitVehicle`/`Handbrake`/`MeetOption*`)、`Content/Blueprint/Player/Input/{IA_Move,IA_Look,IA_MouseLook,IMC_Default,IMC_MouseLook}`(与 `AForeverCharacter` 共用)。不依赖任何具体车型的骨骼网格资产。
 - 被谁依赖：`VehicleMod::blueprintPath`(指向蓝图子类)、`UForeverTrafficFrameworkComponent`(`LoadClass`+`SpawnActor`+`Init`+上下车)、`AVehicleCommandController`、`APlaneElement`/`ATransitVehicleElement` 的同类逻辑。
-
-## 待办/后续阶段
-
-- 无。

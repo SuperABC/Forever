@@ -65,10 +65,8 @@ Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块
 - 持有`UForeverWeaponComponent`/`UForeverWeaponVisualComponent`/`UForeverThrowableComponent`子对象(见各自的md)。
 - 被`ACitizenElement`继承(玩家可操控的市民走同一套输入/武器/瞄准逻辑)。
 
-## 待办/后续阶段
-- 角色外观(骨骼网格/动画蓝图)改为运行时按所控制的NPC数据动态设置,目前仍是构造函数默认值。
-
-- 第一人称下网格OwnerNoSee，`ToggleCameraView`把`VisibilityBasedAnimTickOption`强制成`AlwaysTickPoseAndRefreshBones`：否则动画被当成"没渲染"而停更，第一人称相机(挂head骨骼)1~2秒后不再随步伐晃，瞄准的武器(挂胶囊体)与镜头就变成相对静止。(2026-11-18，推断的原因，待PIE确认)
+## 补充说明
+- 第一人称下网格OwnerNoSee，`ToggleCameraView`把`VisibilityBasedAnimTickOption`强制成`AlwaysTickPoseAndRefreshBones`：否则动画被当成"没渲染"而停更，第一人称相机(挂head骨骼)1~2秒后不再随步伐晃，瞄准的武器(挂胶囊体)与镜头就变成相对静止。
 - **相机**：第三人称弹簧臂连接点只在游泳/潜水时从胶囊体中心抬到头部(`cameraBoomHeight`默认70cm，`EnterSwimming`加上、`ExitSwimming`恢复到BeginPlay记下的原位置)。第一人称相机每帧在head骨骼上加`firstPersonCameraRaise`(默认15cm，世界向上，转成骨骼局部坐标)。
 - **游泳时缩短胶囊体**：竖直的站立胶囊体下端在水面下约`-swimFloatOffset+半高`(≈156cm)，比出水深度(0.6身高≈115cm)深，会在能出水之前就顶住岸坡。`EnterSwimming`把胶囊体缩成`swimCapsuleHalfHeight`(默认45，半径不变，以中心为基准，网格/相机/浮高不动)；`ExitSwimming`恢复站立尺寸并同时上移半高差值，保持下端位置不变，免得嵌进岸坡(出水时会有一点上移)。入水/出水阈值用BeginPlay缓存的站立身高，不读当前胶囊体。
 - **入水阻力**：引擎Flying模式摩擦很小，冲刺入水(速度可达几千厘米/秒)会滑很久。游泳状态下水平速度超过`MaxFlySpeed`的部分按`swimOverspeedDecay`(默认8/秒，指数衰减)快速衰减，约半秒回到游泳速度。

@@ -12,6 +12,3 @@
 ## 依赖关系
 - 依赖`AForeverPlayerController`/`AForeverPlayerState`/`AForeverHUD`/`AForeverFrameworkActor`、引擎`ADefaultPawn`。
 - 是`Content/Blueprint/Player/BP_ForeverPlayerGameMode`的父类,`World.umap`的World Settings用这个蓝图作GameMode(菜单关卡用`BP_ForeverMenuGameMode`,即`DefaultEngine.ini`的`GlobalDefaultGameMode`)。
-
-## 待办/后续阶段
-- 一旦`World.umap`里手动放置了真实的`AForeverFrameworkActor`,删除`EnsureFrameworkActorExists`的动态兜底生成逻辑。

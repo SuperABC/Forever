@@ -72,6 +72,5 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   `Source/Core/common/registry.cpp`(持有全部23个concept唯一的`ModLoader`实例，`RegisterMods`里
   经`ForEachConcept`对每个concept各调一次`RegisterConcept`，导出函数名从`mod_concepts`表里查，见`registry.md`)。
 
-## 待办/后续阶段
-
+## 补充说明
 - `Unload(dllPath)`(2026-11-25)：卸载单个dll。调用前必须已经把它的注册项从各Factory注销，由`Registry::UnloadMods`统一做，见`registry.md`"卸载"。

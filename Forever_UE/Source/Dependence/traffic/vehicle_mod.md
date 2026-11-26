@@ -22,7 +22,3 @@
 
 - 依赖：`common/mod_state.h`。
 - 被谁依赖：`vehicle_factory.h`创建它；`Core/traffic/vehicle.h`消费它；`Source/Forever/Element/VehicleElement`/`TransitVehicleElement`渲染它；具体实现在`Source/Basic/traffic/vehicle_*.h/.cpp`。
-
-## 待办/后续阶段
-
-- 无。

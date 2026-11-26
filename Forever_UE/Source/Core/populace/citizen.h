@@ -287,12 +287,31 @@ public:
 	bool WasSpawned() const;
 	void SetWasSpawned(bool value);
 
-	// 动态属性(目前只有饱食度)：只有statsActive的市民参与Populace::Tick的衰减，见citizen.md。
+	// 动态属性(饱食度、瞌睡值)：只有statsActive的市民参与Populace::Tick的衰减，见citizen.md。
 	bool IsStatsActive() const;
 	void ActivateStats(); // 已实例化则什么也不做
 	float GetSatiety() const; // 对外保留两位小数(内部存精确值，否则每帧衰减量小于0.005时永远降不下去)
 	void AddSatiety(float delta); // 截断到[0,1]，超出不惩罚
 	void DecaySatiety(double days); // 衰减：乘0.5^days(days=经过的游戏天数)，一天减半
+
+	// 瞌睡值(暂定逻辑，和饱食度一样只有statsActive的市民有)：1=完全清醒，醒着的时候随时间往下掉，掉到0强制睡觉。
+	// 下降速度分时段(每游戏小时的量，实际每个Tick按经过的时间扣)：6点到24点kSleepDropDay，0点到6点kSleepDropNight。
+	static constexpr double kSleepDropDay = 0.02;
+	static constexpr double kSleepDropNight = 0.03;
+	static constexpr int kForcedSleepHours = 16; // 瞌睡值掉到0时强制睡这么久
+	// 从from起经过seconds游戏秒，瞌睡值一共该掉多少(跨过0点/6点时按各时段的速度分段累加)。
+	static double SleepinessDrop(const Time& from, double seconds);
+	// 瞌睡值为sleepiness时去睡要睡多久(游戏小时)：x=离100%差的百分点，20-1/(0.0025x)，夹在[0,16]。
+	// 瞌睡值在80%及以上时是0=还不困，不能睡；清醒16小时(68%)约睡7.5小时；0%睡16小时。
+	static double SleepHoursFor(float sleepiness);
+	float GetSleepiness() const;              // 精确值[0,1]
+	void DropSleepiness(double amount);       // 往下扣，截断到0
+	double GetSleepHoursNeeded() const;       // = SleepHoursFor(当前瞌睡值)；没实例化动态属性返回0
+	// 睡觉：到GetSleepUntil()之前不掉瞌睡值，到点由Populace::Tick调WakeUp()回满。谁来"跳过"这段时间不归这里管。
+	bool IsSleeping() const;
+	const Time& GetSleepUntil() const;
+	void BeginSleep(const Time& now, double hours);
+	void WakeUp();
 
 	// 是否接入经济系统，见citizen.md。不存档。
 	bool IsInEconomy() const;
@@ -364,6 +383,9 @@ private:
 
 	bool statsActive = false;
 	float satiety = 0.f;
+	float sleepiness = 1.f; // 1=完全清醒；ActivateStats时从1开始
+	bool sleeping = false;
+	Time sleepUntil;
 	bool inEconomy = true;
 
 	bool wasSpawned = false;

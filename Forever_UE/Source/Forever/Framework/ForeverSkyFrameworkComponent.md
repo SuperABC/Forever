@@ -50,8 +50,3 @@
 
 - 依赖：`common/utility.h`(`Time`，只读不持有)。
 - 被谁依赖：`AForeverFrameworkActor`(`skyFramework`，`Tick()`里`UpdateSky(*player->GetTime())`)；`UForeverWeatherFrameworkComponent`(`SetWeatherScales`)；`ForeverIdentifyComponent`(曝光EV)。
-
-## 待办/后续阶段
-
-- 强度/散射基准/雾浓度区间等常数都是占位值，没针对地形和建筑规模调过，偏暗/偏亮/雾浓时优先调常数，不需要改公式结构。
-- 没有月光和星空；以后加月光时夜间`ambientLight`强度可让给月光那盏灯。

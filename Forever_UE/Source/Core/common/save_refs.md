@@ -16,7 +16,3 @@
 
 - 依赖：`save_archive.h`(`ByteWriter`/`ByteReader`)、`save.h`、`json.h`、`utility.h`(`Time`)、`map/map.h`/`building.h`/`room.h`/`component.h`。
 - 被谁依赖：`populace`/`society`/`traffic`/`industry`/`player`各域的存档读写代码。
-
-## 待办/后续阶段
-
-- 无。

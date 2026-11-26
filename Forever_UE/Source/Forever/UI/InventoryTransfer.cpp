@@ -78,7 +78,7 @@ namespace {
 		if (asset->IsContainer() || InventoryTransfer::IsSlot(dest.zone)) return nullptr;
 
 		auto matches = [&](Asset* candidate) {
-			return candidate && candidate != asset && !candidate->IsContainer() && candidate->GetType() == asset->GetType();
+			return candidate && candidate != asset && !candidate->IsContainer() && !candidate->IsFixture() && candidate->GetType() == asset->GetType();
 		};
 		if (dest.container) {
 			for (const auto& [name, content] : dest.container->GetContents()) if (matches(content)) return content;
@@ -93,10 +93,11 @@ namespace {
 	}
 
 	Player::WorldAssetTransform MakeTransform(FVector location) {
+		// Core里的地面摆位是地图单位(1=1000 UE单位)。之后SpawnWorldAsset还会按实际生成点再写一次。
 		Player::WorldAssetTransform transform;
-		transform.x = location.X;
-		transform.y = location.Y;
-		transform.z = location.Z;
+		transform.x = static_cast<float>(location.X / 1000.0);
+		transform.y = static_cast<float>(location.Y / 1000.0);
+		transform.z = static_cast<float>(location.Z / 1000.0);
 		return transform;
 	}
 
@@ -145,7 +146,7 @@ namespace {
 		} else if (source.zone == EInvZone::Room) {
 			if (Room* room = player->GetCurrentRoom()) room->AddAsset(asset);
 		} else if (source.zone == EInvZone::Nearby) {
-			player->AddWorldAsset(asset, nearbyEntry.transform);
+			player->AddWorldAsset(asset, asset->GetGround()); // 摆位一直记在物品自己身上
 		}
 	}
 
@@ -251,6 +252,7 @@ namespace InventoryTransfer {
 		OutError.Empty();
 		Asset* asset = source.asset;
 		if (!player || !asset) return false;
+		if (asset->IsFixture()) { OutError = TEXT("这件东西是固定的，拿不走"); return false; }
 
 		// 同一区域内拖拽视为无操作(同一个槽位、同一个列表/容器视图)。
 		if (source.zone == dest.zone && (IsSlot(source.zone) || source.parent == dest.container)) return false;

@@ -20,4 +20,7 @@ void BurgerAsset::SetProperty() {
 	// 脚本：使用(use_asset)时加饱食度，见Resource/Story/asset_burger.script；使用一次count-1，到0销毁由UE层处理。
 	milestoneNames = { "asset_burger" };
 	productType = "product_burger"; // 商店按这个Product的零售价卖；使用一次count-1，到0销毁
+	// 掉在地上/摆在房间里时显示的网格。先按模型原始尺寸，PIE里看大小再调meshScale。
+	meshPath = "/Game/3rdParty/BURGER_lowpoly/StaticMeshes/burger_lowpoly.burger_lowpoly";
+	meshScale = 1.f;
 }

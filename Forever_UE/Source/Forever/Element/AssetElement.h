@@ -13,7 +13,9 @@ class UPrimitiveComponent;
 struct FHitResult;
 class Asset;
 
-// 物品/资产在世界里的可视化表示(物理体，Cube占位或AssetMod指定的网格)，不持有Asset的所有权，见AssetElement.md。
+// 物品/资产在世界里的可视化表示，不持有Asset的所有权，见AssetElement.md。两种形态：
+//   普通物品(有AssetMod)：物理体(Cube占位或mod指定的网格)，能被推动、捡走。
+//   固定物品(Asset::IsFixture()，没有AssetMod)：静止不动、不模拟物理，网格本身不碰撞，阻挡用和家具同一套的分块盒子。
 UCLASS()
 class FOREVER_API AAssetElement : public AActor
 {
@@ -40,10 +42,15 @@ public:
 	// 调用)：重新烘焙快照；玩家站在触发盒里时同步换掉屏幕上的选项。没有触发盒(资产没有脚本)时空操作。
 	void RefreshOptions();
 
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	// 资产带脚本(asset->GetScript()非空)才建：比网格大一圈的只overlap触发盒，玩家的AForeverCharacter进入时
+	// 固定物品：关掉物理和网格碰撞，按FurnitureCollision::GetBoxes建若干阻挡盒(挡人/物理物体/射线/相机)。
+	void SetupFixture();
+
+	// 资产带脚本(asset->GetScript()非空)才建：只overlap的触发盒(普通物品是原点周围120x120x80cm；固定物品是网格包围盒
+	// 向外扩一圈)，玩家的AForeverCharacter进入时
 	// 把asset->GetOptions()推给MeetOption，照抄AVehicleElement::BuildProximityBox。
 	void BuildProximityBox();
 

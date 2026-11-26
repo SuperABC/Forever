@@ -28,8 +28,3 @@
 
 - 依赖：`Element/LampElement`、Core `Map`/`Lamps`、`Time`。
 - 被谁依赖：`Framework/ForeverFrameworkActor`(生成阶段`生成路灯模型`、`Tick`里`UpdateLamps`)。
-
-## 待办/后续阶段
-
-- 灯很多时按距离流式生成/回收Actor；遍历全部灯做距离判断可改成空间网格。
-- 昼夜亮度渐变、天气(阴雨提前开灯)联动。

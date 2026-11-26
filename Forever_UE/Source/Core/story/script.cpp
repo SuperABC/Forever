@@ -691,6 +691,11 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				obj["weapon"].AsString(), obj["part"].AsString());
 			break;
 		}
+		case ChangeKind::PlayerSleep: {
+			// hour可选：省略=按玩家操控的市民的瞌睡值算要睡多久(还不困就不睡)；给了就睡那么多游戏小时(表达式)。
+			change = new PlayerSleepChange(obj["hour"].AsString());
+			break;
+		}
 		case ChangeKind::AddSatiety: {
 			// target省略=玩家当前操控的市民。
 			change = new AddSatietyChange(obj["target"].AsString(), obj["amount"].AsString());

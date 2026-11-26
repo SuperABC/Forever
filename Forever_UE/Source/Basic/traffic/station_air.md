@@ -19,7 +19,3 @@
   (`stationMod`字段分别指向`"station_train"`/`"station_air"`，依赖表里是站点依赖楼：没有楼就不会生成站点)；
   `TrainRoute::LayoutRoute`/`AirRoute::LayoutRoute`依赖"轨道/跑道 t 的端口下标=t"；`Basic/basic.cpp`注册这三个类型进
   `config.json`的`"station_mods"`。
-
-## 待办/后续阶段
-
-- 多机场只做过无头线路规划验证(见`route_air.md`)，**未 PIE**。

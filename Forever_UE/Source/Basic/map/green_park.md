@@ -15,7 +15,3 @@
 
 - 依赖：`Source/Dependence/map/green_mod.h`(`GreenMod`基类、`FindLargestCircle`/`AddCircle`/`AddTreeArea`)。
 - 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModGreens`)；`Resource/Config/config.json`的`green_mods`要有`"green_park"`才启用。
-
-## 待办/后续阶段
-
-- 装饰物(长椅/路灯等)还没放，`AddDecoration`接口已就绪(位置按包围盒比例，Core丢掉多边形外的)。

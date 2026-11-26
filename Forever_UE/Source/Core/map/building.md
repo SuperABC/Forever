@@ -181,13 +181,6 @@
   `Source/Forever/Framework/ForeverBuildingFrameworkComponent.h`/`.cpp`(近处LOD楼层几何渲染，
   见该文件md)、`Source/Forever/Element/DoorComponent.h`(读`Door`几何/外观生成门组件)。
 
-## 待办/后续阶段
-
-- 电梯：开关门动画、载客的NPC调度还没做；呼叫/选层/行程/Script已经做了，见`cabin.md`。
-- 门/窗的实际mesh——门本来就没有；窗户资产本身有问题，已删掉窗户显示逻辑，现在门/窗都只是
-  纯几何缺口，等以后有能用的窗户资产再加回来。
-- 外墙/内墙材质区分——目前统一用一份`wallMaterial`，以后再按需要区分。
-
 ## 房间朝向
 `Room::direction`在`AssignRoom`/`ArrangeRow`里取自烘焙过的single/row朝向(`InverseDirection(direction, face)`)，即建筑局部坐标系下的房间正面方向；房间局部坐标系和换算见`room.md`。
 

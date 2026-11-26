@@ -12,6 +12,3 @@
 ## 依赖关系
 - 依赖：无。被21个`<concept>_mod.h`包含，被Basic/外部mod的类体使用。
 - 测试管线：`Source/Test/Mod`(ModTest，见`ModTest.md`)。
-
-## 待办/后续阶段
-- 逐concept写深度测试(地形/路网/园区/建筑/房间/组织/岗位/脚本/puzzle/app/武器等)，替换通用宏。

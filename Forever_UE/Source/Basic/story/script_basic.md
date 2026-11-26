@@ -14,7 +14,3 @@
 
 - 依赖：`story/script_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/story/script.h`创建`Script`时通过`ScriptFactory`使用。
-
-## 待办/后续阶段
-
-- 无。

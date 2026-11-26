@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 
@@ -124,6 +125,10 @@ public:
 	// 房间局部矩形(米)、层高和门窗洞(换算到房间局部系的墙)，见feature_spec.h的RoomLayoutInfo。
 	RoomLayoutInfo BuildLayoutInfo() const;
 	const std::vector<DecorationInstance>& GetFurniture() const;
+	// 房间mod在Layout里用PlaceAsset/PlaceFixture放的物品：按mod的两张清单创建Asset实例，算好地面摆位(同家具的换算)，
+	// 放进assets。新开局时Map::BuildRoomAssets在房间地址确定之后调一次；读档不调(物品随player段恢复)。
+	// 物品mod没启用的那一件跳过，warned按mod id去重只警告一次。固定物品的名字是"<房间地址> <type><序号>"。
+	void CreatePlacedAssets(AssetFactory& assetFactory, std::unordered_set<std::string>& warned);
 
 	const std::vector<ParkingSlot*>& GetParkingSlots() const;
 	ParkingSlot* AddParkingSlot(const ParkingSlot& slot);

@@ -11,12 +11,9 @@
 - **字段**：`weight`/`size`/`volume`；`productType`(对应的Industry `Product`类型，商店据此查零售价，空=不能在商店买；与Asset自己的id没有代码关联)；`backpack`(能否放进"后背"槽)；`weapon`+`weaponType`(能否放进左肩/右肩，以及在肩膀上激活时装备的`WeaponMod` id)；`usable`(int，每件资产能被"使用"的次数：0=不能使用，N=用N次后这一件用完(`count`-1，到0销毁，汉堡=1)，-1=无限次永不消耗；效果由资产自己的脚本响应`use_asset`事件，如`add_satiety`)；`throwable`(投掷物，按3键激活、瞄准后扔出，和`weapon`正交)；`meshPath`+`meshScale`(世界里掉落物/投掷预览的静态网格，空=Forever层默认Cube占位)。
 - **脚本**：`scriptModName`+`milestoneNames`，和Vehicle/Job同一套机制；两者都空(默认)=这件资产没有脚本、也不挂弹选项的触发盒。`$$self.name`=资产实例名，`$$self.type`=mod id。
 - 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
+- `AssetMobility::Fixed`不是给`AssetMod`用的：它是Core里"没有AssetMod的固定物品"的分类(`Core/player/asset.md`)，mod里不要填它。新的枚举值只能加在末尾(外部mod按数值编译)。
 
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`。
 - 被谁依赖：`asset_factory.h`创建它；`Core/player/asset.h`/`player.h`消费它；具体实现在`Source/Basic/player/asset_*.h/.cpp`。
-
-## 待办/后续阶段
-
-- 无。

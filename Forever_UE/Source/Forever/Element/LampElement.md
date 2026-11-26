@@ -36,8 +36,3 @@
 
 - 依赖：`Element/LampDecalComponent`、UE `UPointLightComponent`/`USpotLightComponent`。
 - 被谁依赖：`Framework/ForeverLampFrameworkComponent`。
-
-## 待办/后续阶段
-
-- 亮度改为连续值(黄昏渐变)时只需框架组件改推送的值，`RefreshLampEffects`按`brightness>0`判断，光源强度可再乘亮度。
-- 近处真实光源数量目前只受`nearDistance`限制，灯很密时可加数量上限(取最近的N盏)。

@@ -30,7 +30,3 @@
 
 - 依赖：`map/map.h`（`GetJunctions`/导航图，仅 `BuildFromMap`）、`map/roadnet.h`（`RoadJunction`）、`map/general_geometry.h`（`Connection`/`Node`）。
 - 被谁依赖：UE 层 `UForeverTrafficFrameworkComponent`（持有）、`AVehicleCommandController`、`ACitizenController`；测试 `Tools/JunctionTest`。
-
-## 待办/后续阶段
-
-- `BuildFromMap` 还没有用真实地图验证过（单测用手摆的十字路口），第一次 PIE 看 `UForeverTrafficFrameworkComponent: junction traffic built (N connections)` 日志里的连线数是否合理。

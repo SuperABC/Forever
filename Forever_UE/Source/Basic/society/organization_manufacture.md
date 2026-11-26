@@ -18,10 +18,6 @@
 - 依赖：`society/organization_mod.h`、`common/json.h`。
 - 被谁依赖：`basic.cpp`注册(商店依赖`job_shop_saler`/`job_warehouse_keeper`，工厂依赖`job_factory_worker`)；`Core/society/organization.h`/`society.h`消费。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 送货脚本（2026-11-16）
 
 构造里不指定`scriptModName`(脚本没有ScriptMod)，只设`milestoneNames={"organization_manufacture"}`，脚本`Resource/Story/organization_manufacture.script`：

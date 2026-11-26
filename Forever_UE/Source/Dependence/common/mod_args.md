@@ -23,8 +23,8 @@
 ## 依赖关系
 只依赖标准库。使用方：`Basic`里的`roadnet_jing/checkboard/file`、`terrain_file/mountain/ocean/river`，`Core/common/registry.cpp`(经`RandomRegistry::ExtractSeed`)。
 
-## 待办/后续阶段
-- 无。新mod要加参数，直接在构造函数里用`ModArgs`读，并在mod自己的`.md`里写参数表。
+## 补充说明
+- 新mod要加参数，直接在构造函数里用`ModArgs`读，并在mod自己的`.md`里写参数表。
 
 ## 保留参数
 

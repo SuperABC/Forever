@@ -24,7 +24,3 @@
 
 - 依赖：`map/green_mod.h`、`map/green_factory.h`、`map/polygon_util.h`、`map/general_geometry.h`。
 - 被谁依赖：`map/map.h/.cpp`(`greens`、`InitGreens`、`LocateGreen`、`PlanPedestrianRouteToGreen/FromGreen`、植被展开)、`map_save.cpp`、`populace/citizen.*`(`currentGreen`)、UE层`ForeverGreenFrameworkComponent`/`ForeverTrafficFrameworkComponent`。
-
-## 待办/后续阶段
-
-- 绿化地面不单独铺材质(沿用地形)，也没有地形压平。

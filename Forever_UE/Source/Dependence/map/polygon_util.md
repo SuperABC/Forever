@@ -16,7 +16,3 @@
 
 - 无外部依赖(只用`<vector>`/`<cmath>`)。
 - 被谁依赖：`green_mod.cpp`(FindLargestCircle/RandomPoint)、`Core/map/green.cpp`(圆/装饰物过滤)、`Core/map/map.cpp`(InitGreens、LocateGreen)。
-
-## 待办/后续阶段
-
-- 无。

@@ -175,9 +175,7 @@
 - 依赖：`terrain.h`/`terrain_factory.h`、`roadnet.h`/`roadnet_factory.h`、`zone.h`/`zone_factory.h`、`building.h`/`building_factory.h`、`door.h`、`vegetation.h`、`lamp.h`、`map/room.h`（`Checkin`/容量统计用`IsResidence()`/`ResidenceCapacity()`/`IsWorkspace()`等）、`populace/populace.h`/`populace/citizen.h`（`Checkin`参数类型，单向依赖，Populace/Citizen不反过来include map域头文件）、`general_geometry.h`（`Quad`/`Node`/`Road`/`Lot`等）、`story/change.h`/`script.h`/`script_factory.h`（`ApplyChange`与实体脚本）、`player/asset.h`（`FindAssetByName`）、`common/config.h`、`common/registry.h`、`common/utility.h`（`debugf`/`GetRandom`）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor`（持有`Map*`，`BuildMapTerrain`/`BuildMapRoadnet`/`BuildMapZones`/`BuildMapBuildings`/`BuildMapVegetation`/`BuildMapLamps`这几个阶段依次调用`InitTerrains`/`InitRoadnet`/`InitZones`/`InitBuildings`/`InitVegetation`/`InitLamps`；`ComputeAccommodationTarget`+`Checkin`在`EnsurePopulaceGenerated`里）、`ForeverTerrainFrameworkComponent`（读格子数据建mesh）、`ForeverRoadnetFrameworkComponent`（`GetRoads()`/`GetJunctions()`/`GetLots()`/`GetPathRoads()`/`GetPathRoadMaterial()`/导航图）、`ForeverZoneFrameworkComponent`（`GetZones()`）、`ForeverBuildingFrameworkComponent`（`GetBuildings()`）、`ForeverPopulaceFrameworkComponent`（寻路）、`ForeverStoryFrameworkComponent`（`GetAllDoors()`/`FindDoorByName`/`FindDoorById`）、`Traffic`（`FindVehiclePath`/`PlanVehicle*`/辅助节点）。
 
-## 待办/后续阶段
-
-- `InitTerrains()`假定调用方（`AForeverFrameworkActor::BeginPlay`）之前已经跑过`Config::ReadConfig`（由`ForeverModSubsystem`在game instance启动时做，早于任何关卡的`BeginPlay`）——这个顺序依赖只是约定，没有代码层面强制。
+## 补充说明
 - `Map::Tick`没有每帧逻辑，只做一件事：把游戏时钟(`routeClock`，秒)推进到`currentTime`，并每游戏小时清一次行人路线缓存里超过25游戏小时没命中的条目(见"行人路线缓存")。
 
 ## 导航线相关：外部连接点与到任意点的车行规划
@@ -214,3 +212,5 @@
 ## 预设→建筑（2026-11-23，线路环用）
 
 `PlacedPreset::outputIndex`（预设在 `.roadnet output.presets` 里的原下标）；`InitBuildings` 里 `CreateBuildingAt(..., Building** created)` 建好后记 `presetOfBuilding[created]=outputIndex`（不存档）；`GetPresetIndexOfBuilding(const Building*)` 无记录返回 -1。`Map::GetTransit()` 返回 `Roadnet::GetTransit()` 的独立线路数据。
+
+- **房间mod放的物品**(2026-11-26)：`BuildRoomAssets(building)`在每条建筑落地路径里紧跟`BuildBuildingScripts`，对每个房间调`Room::CreatePlacedAssets`(见`room.md`"房间mod放的物品")；"物品mod没启用"的警告按mod id去重(`warnedPlacedAssetMods`)。读档不调。

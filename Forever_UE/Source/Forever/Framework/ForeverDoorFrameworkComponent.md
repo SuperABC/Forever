@@ -20,7 +20,7 @@
   按距离从近到远排序后生成。门数量只在几格范围内，每帧全量比较不需要像市民那样分批轮询。
 - **每帧限量**：`maxSpawnsPerFrame`(4)、`maxDespawnsPerFrame`(8)，均为`EditDefaultsOnly`。一扇门要建骨骼网格+动画实例+挡板+触发盒
   （4~6次`RegisterComponent`），传送、读档、切换控制权时一次进入范围的门可以有成百上千，不限量会一帧卡死；最近的先建，玩家身边的门最先就位。
-  销毁同样要反注册组件，所以也限量（比生成宽松）。**这两个数是估计值，没有在PIE里量过**，按卡顿情况调。
+  销毁同样要反注册组件，所以也限量（比生成宽松）。卡顿时调这两个数。
 - **销毁流程**：`ClearDoor()`（Tick/Overlap回调判空）→`RemoveInstanceComponent`→`DestroyComponent`，与原来建筑清理近景LOD门完全一致。
   销毁时门的开合状态和`passers`丢失，重新生成是全关状态。
 - **等世界生成完**：和建筑一样，`IsInitialGenerationDone()`之前不流式（此时玩家只是过渡用的DefaultPawn）。
@@ -29,8 +29,3 @@
 
 - 依赖：`Source/Core/map/map.h`/`door.h`、`Element/DoorComponent.h`、`ForeverPopulaceFrameworkComponent`（距离数值和度量）、`ForeverFrameworkActor`（`IsInitialGenerationDone`、取人口组件）。
 - 被谁依赖：`AForeverFrameworkActor`创建并在"生成门"一步调用`GenerateDoors`。
-
-## 待办/后续阶段
-
-- 门的总数没有上限（只限每帧速度）：极端密集处同时在范围内的门可能很多，如需再加`maxActiveDoors`等PIE测完再说。
-- 车辆的门（园区车行门）按玩家距离加载，不按车辆的流式距离；车辆在范围外撞门时门可能还没生成。

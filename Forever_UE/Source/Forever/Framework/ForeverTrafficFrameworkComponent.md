@@ -14,7 +14,6 @@
 
 ### 生成与流式
 
-
 - `GenerateVehicles`按`vehicle->GetRoute()`是否为空分两条路径：
   - 非空（公共交通）：`SpawnActor`在原点占位（`blueprintPath`加载出来不是`ATransitVehicleElement`子类——公交带的是停车场驾驶用的BP——就忽略，仍用`ATransitVehicleElement`），
     `Init`后存进`activeTransitVehicles`；之后`Tick`直接读`vehicle->GetTransform()`驱动，第一帧就跳到`Route`算出的位置。
@@ -67,7 +66,6 @@
   线路车被点过后`bDetached`（退出时刻表，`physicsDriven`锁定，之后由Controller持有，LOD外靠Controller自带的运动学模式）。停着的车第一次被驱动时`FindOrAddLineVehicleState`登记状态（没有时刻表、没有运动学表示）。控制器一律按这辆车蓝图的`lineControllerClass`生成(`SpawnLineController`)，蓝图没指定的车`run`会被拒绝并打警告；停靠时长问控制器(`GetStopDwellSeconds`)。
 - 下车后Controller下一帧自动收回；读档`controlledVehicle`是线路车走`ApplyBoardVehicle`（物理车不在就强制切换）。
 - 不保存：测试运行状态不进存档，读档后车回到停车位/默认状态（脚本变量`running`会随脚本存档，读档后可能与实际不一致）。
-- 未在PIE验证。
 
 ### 导航测试折线
 
@@ -110,11 +108,6 @@
   `UForeverStoryFrameworkComponent`调用`ApplyEnterVehicle`/`ApplyBoardVehicle`/`ApplyLeaveVehicle`；`AForeverFrameworkActor`调用`StartVehicleLineRun`/`StopVehicleLineRun`（以及读档恢复时的`ApplyBoardVehicle`）；
   `AVehicleElement::ExitVehicle`调用`ExitVehicle`；`AForeverFrameworkActor`的`visualize_navigation`和`AForeverPlayerController`（`TestNavigate`/`OnPossess`）调用`StartGuide`/`RefreshGuide`；`ABusController`调用`FireStopEvent`。
 
-## 待办/后续阶段
-
-- 公共交通运动学车辆本身不支持驾驶，见`TransitVehicleElement.md`"待办"一节。
-- 暂无隧道专用轨道资产，隧道段目前用普通轨道mesh（改`TrainRoute::BuildTrack`里隧道段的`mesh`即可）。
-
 ## 跳时间后的线路车
 `ResyncLineVehiclesAfterTimeSkip()`：线路车的物理车(实车位置)已跟时刻表脱节，全部`HandoffToKinematic(state, false)`(不对齐实车进度)，
 靠近玩家的之后由`UpdatePhysicsHandoff`按时刻表位置重新切物理。玩家在开/搭乘的不动。
@@ -151,7 +144,7 @@
 
 ## 导航请求按毫秒预算(2026-11-16)
 
-`ProcessPendingNavigations`不再按`maxVehicleSpawnsPerFrame`个数限制，改为每帧至少处理1个、之后用满8ms预算(最多64个)；超过30ms会打Warning。`StartVehicleNavigation`里单次路线规划超过20ms也会打Warning，用来在PIE里确认瓶颈。
+`ProcessPendingNavigations`不再按`maxVehicleSpawnsPerFrame`个数限制，改为每帧至少处理1个、之后用满8ms预算(最多64个)；超过30ms会打Warning。`StartVehicleNavigation`里单次路线规划超过20ms也会打Warning，用来定位瓶颈。
 
 ## 脱困(2026-11-16)
 

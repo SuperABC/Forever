@@ -2,7 +2,32 @@
 	// 汉堡：背包里"使用"时(use_asset事件，由背包界面发给这件资产自己的脚本)给使用者加饱食度。
 	//   - $$local.user是使用者市民姓名；add_satiety的amount加到饱食度上，结果截断到[0,1]，超出不惩罚；
 	//   - 数量扣减/用完销毁不在脚本里，由UE层在事件处理完之后做(AssetMod::usable)。
+	// 汉堡在地上时(丢出去的、房间里摆着的)玩家走近弹"捡起"：pick_asset把自己捡进身上(背包->手)。
 	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "category": "asset", "name": "$$self.name", "option": "捡起" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "pick",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "捡起" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "pick_asset" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
 		{
 			"milestone": "eat",
 			"triggers": [ { "type": "use_asset" } ],

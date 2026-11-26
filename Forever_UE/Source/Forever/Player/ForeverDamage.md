@@ -21,9 +21,6 @@
 - 依赖：`Element/CitizenElement`、`Framework/ForeverFrameworkActor`/`ForeverStoryFrameworkComponent`/`ForeverPopulaceFrameworkComponent`、`story/event.h`、`populace/*`。
 - 被谁依赖：`UForeverAssetFrameworkComponent::ApplySingleDamage/ApplyAreaDamage/ApplySpawnEffect`、`UForeverWeaponComponent`(`ClassifyPart`)。
 
-## 待办/后续阶段
-
-- 受伤事件已做(2026-11-19)：`DamageCitizen`里`TakeDamage`之后，没死就发`citizen_injured`(attacker=source、weapon、part、damage、health)，
-  致死的那一击只发`citizen_decease`；单体/范围伤害都走这里不区分。攻击者那边仍没有"造成伤害"事件。
-- 载具受到伤害(`DamageVehicle`、`single_damage`的`target`支持载具)。
-- `area_damage`的遮挡只测中心到中心一条线，不做部分遮挡比例；没有`ignore`字段(手雷会炸到自己)。
+## 补充说明
+- 受伤事件：`DamageCitizen`里`TakeDamage`之后，没死就发`citizen_injured`(attacker=source、weapon、part、damage、health)，
+  致死的那一击只发`citizen_decease`；单体/范围伤害都走这里不区分。

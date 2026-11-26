@@ -13,9 +13,6 @@
 - `AForeverPlayerGameMode`的`HUDClass = AForeverHUD::StaticClass()`。
 - 依赖`AForeverCharacter::IsAiming()`/`IsAimingThrow()`。
 
-## 待办/后续阶段
-- 换成真正的准心贴图资产,并根据武器`baseSpread`动态改变张开程度(目前是固定尺寸的"+")。
-
 ## 生命值显示（2026-11-17，测试用）
 
 `DrawHUD`在左上角常驻画玩家操控的市民的`生命值: 当前/最大`(`Citizen::GetHealth/GetMaxHealth`)。Pawn被销毁(`HandleCitizenDeath`直接`Destroy`)后变红并标注"已死亡"；坐载具时Pawn是载具，保持最后一次的血量。玩家死亡后的处理(重生/结束)还没做。

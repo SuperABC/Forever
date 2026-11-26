@@ -8,6 +8,3 @@
 
 ## 依赖关系
 - 被`AForeverPlayerGameMode`的`PlayerStateClass`引用。
-
-## 待办/后续阶段
-- 加入与NPC共用的数据结构字段,支撑"任意NPC可被玩家操控"。

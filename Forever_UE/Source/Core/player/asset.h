@@ -9,6 +9,25 @@
 
 class Script;
 
+// 物品"放在地上"时的摆位(房间里Room::assets、室外Player::worldAssets的物品都有)。位置是地图单位(1=10米，UE侧乘除1000)，
+// 旋转是度。UE层在实体被销毁/存档前把场景里的实际位置写回来，之后按它重新生成实体(速度不存，从静止开始模拟)。
+struct AssetGround {
+	float x = 0.f, y = 0.f, z = 0.f;
+	float pitch = 0.f, yaw = 0.f, roll = 0.f;
+	// true=z是"网格底面该落的高度"(房间mod布局时给的)，UE层生成实体时按网格包围盒把原点抬到合适的位置；
+	// 实体第一次把实际位置写回来之后变成false，之后x/y/z就是实体原点的位置。
+	bool restOnBottom = false;
+};
+
+// 固定物品的规格(没有AssetMod的物品)：显示网格、三轴缩放、脚本描述。见asset.md"固定物品"。
+struct AssetFixtureDesc {
+	std::string type;
+	std::string meshPath;
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
+	std::string scriptModName;
+	std::vector<std::string> milestoneNames;
+};
+
 
 // Asset：物品/资产的实例——照抄Storage的"factory+mod+自己的可变状态"模式，不是照抄老工程
 // "类型定义和某个背包里的一份库存混一起"的Asset。AssetMod是类型定义(照抄一份到自己的字段
@@ -26,6 +45,9 @@ public:
 	// 名字取mod->GetName()(mod保证全局唯一)，不再由调用方传入；读档时PlayerSaveCodec
 	// 用友元把name覆写回存档里的名字。
 	Asset(AssetFactory* factory, const std::string& id);
+	// 固定物品：没有AssetMod(mod为空)，mobility=Fixed，IsValid()恒为true。uniqueName由调用方保证全局唯一且读档后稳定
+	// (房间布局生成的用"<房间地址> <type><序号>")。desc里的脚本描述两项都空就没有脚本。
+	Asset(const AssetFixtureDesc& desc, const std::string& uniqueName);
 	virtual ~Asset(); // 递归delete contents，delete script；虚析构：EstateAsset/VehicleAsset按Asset*释放
 
 	bool IsValid() const;
@@ -48,6 +70,16 @@ public:
 	const std::string& GetMeshPath() const; // 空=沿用Cube占位
 	float GetMeshScale() const;
 	bool IsContainer() const; // volume > 0
+	// 固定物品(没有AssetMod)：不能移动、不能进背包/上手/进容器。
+	bool IsFixture() const;
+	// 场景实体用的三轴缩放：固定物品是规格里的三个值；普通物品三轴都是meshScale。
+	void GetMeshScale3(float& outX, float& outY, float& outZ) const;
+	// 固定物品的规格(存档和测试用)，普通物品返回nullptr。
+	const AssetFixtureDesc* GetFixtureDesc() const;
+
+	// 放在地上时的摆位，见AssetGround。不在地上(在身上/容器里)时这个值没有意义。
+	const AssetGround& GetGround() const;
+	void SetGround(const AssetGround& value);
 
 	// 脚本：mod的scriptModName/milestoneNames都空则为nullptr(见MakeScript)。选项(add_option/remove_option
 	// 加的交互选项)照抄Vehicle::AddOption/RemoveOption。scriptStarted=这个脚本是否已经收到过game_start
@@ -96,6 +128,8 @@ private:
 	// 递归消耗up to amount份type，返回实际消耗掉的数量(可能小于amount，调用方
 	// (ConsumeByType)已经用CountByType提前确认过整体够不够，正常情况下总能凑够amount)。
 	int ConsumeUpTo(const std::string& type, int amount);
+	// 两个构造共用：按脚本描述建Script并填owner/稳定key/name/type变量；两项都空则没有脚本。
+	void InitScript(const std::string& scriptModName, const std::vector<std::string>& milestoneNames);
 
 	AssetFactory* factory;
 	AssetMod* mod;
@@ -116,6 +150,8 @@ private:
 	bool throwableFlag = false;
 	std::string meshPath;
 	float meshScale = 1.f;
+	AssetFixtureDesc* fixture = nullptr; // 固定物品才有，独占持有
+	AssetGround ground;
 
 	int count = 1;
 	int magazineAmmo = -1; // 见GetMagazineAmmo

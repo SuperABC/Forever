@@ -18,7 +18,3 @@ Mod）共用的JSON实现；`Core/common/config`、存档的JSON段、`PostHandl
 
 - 依赖：`error.h`、标准库。
 - 被谁依赖：`handle.h`（前置声明）、`Core/common/config.*`、`Core/common/save.*`、各domain里读写JSON的代码。
-
-## 待办/后续阶段
-
-- 无。

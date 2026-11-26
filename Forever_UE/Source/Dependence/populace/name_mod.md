@@ -15,7 +15,3 @@
 
 - 依赖：`common/mod_state.h`、`<functional>`。
 - 被谁依赖：`name_factory.h`创建它；`Core/populace/name.h`/`populace.h`消费它；具体实现在`Source/Basic/populace/name_chinese.*`。
-
-## 待办/后续阶段
-
-- 无。

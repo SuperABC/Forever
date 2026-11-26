@@ -11,7 +11,7 @@
 
 ## 四分类：一个枚举字段，不是四个子类
 
-`AssetMobility`(`Estate`/`Vehicle`/`Object`/`Containee`)是`mobility`一个字段，`Object`/`Containee`用
+`AssetMobility`(`Estate`/`Vehicle`/`Object`/`Containee`，另有只给固定物品用的`Fixed`，见下面"固定物品")是`mobility`一个字段，`Object`/`Containee`用
 `Asset`本身（带`AssetMod`）。`Estate`/`Vehicle`是`Asset`的Core内置子类`EstateAsset`/`VehicleAsset`（没有`AssetMod`，
 `Asset`的无mod保护构造+虚析构为此而加），只存在于`Citizen`/`Organization`/`Society`的资产列表里，不进玩家背包，
 见`estate_asset.md`/`vehicle_asset.md`。"是否为容器"是独立的正交属性：`volume > 0`即为容器，和`mobility`无关——
@@ -72,3 +72,26 @@ N>0=这一件剩余次数-1，降到0才用完一件(`count--`，下一件剩余
 
 ## productType
 `GetProductType()`(对应Industry里的产品，购买定价用)，由AssetMod的同名字段拷贝。使用资产的效果不在Asset里：背包使用时发`use_asset`事件给资产自己的脚本，见`Forever/UI/InventoryWidget.md`。
+
+## 固定物品：没有`AssetMod`的物品(2026-11-26)
+
+房间里的床、柜子这类摆设如果每样都做一个`AssetMod`，mod就太多了。所以物品可以没有mod：
+`Asset(const AssetFixtureDesc& desc, const std::string& uniqueName)`构造的就是固定物品，`mod`和`factory`为空、
+`mobility = AssetMobility::Fixed`、`IsValid()`恒为true、`IsFixture()`为true。它只有三样东西：
+
+- 一个显示用的网格(`meshPath`)和三轴缩放(`GetMeshScale3`；普通物品三轴都是`meshScale`)；
+- 一组脚本描述(`scriptModName`/`milestoneNames`，和普通物品一样经`MakeScript`建脚本；两项都空就没有脚本、也就没有选项)；
+- 一个类型名(`type`，脚本里的`$$self.type`)。弹选项的检测盒由UE层按网格包围盒外扩，不在规格里。
+
+固定物品挪不走：`Player::StoreAsset`、`Player::AddWorldAsset`、`Asset::AddContent`都拒绝它，手/背槽位本来就要求`Object`。
+名字由创建方保证全局唯一且读档后稳定(房间布局生成的是`"<房间地址> <type><序号>"`)，脚本存档的键`asset:<名字>`靠它对上。
+规格整份存在`Asset`上(`GetFixtureDesc()`)，存档时原样写出、读档按它重建，见`player_save.md`。
+目前唯一的来源是房间mod的`PlaceFixture`(`Core/map/room.md`"房间mod放的物品")。
+
+## 地面摆位`AssetGround`(2026-11-26)
+
+物品"放在地上"时的位置朝向记在物品自己身上(`GetGround()/SetGround()`)：`x/y/z`是**地图单位**(1=10米，和Core里别的位置一致，
+UE侧乘除1000)，`pitch/yaw/roll`是度。房间里的(`Room::assets`)和室外的(`Player::worldAssets`)用同一套，随物品存档。
+UE层在实体被流式销毁、以及存档之前把场景里的实际位置写回来，之后按它重新生成实体(速度不存，从静止开始模拟)。
+`restOnBottom=true`表示`z`是"网格底面该落的高度"——房间mod布局时给的就是这个；UE层第一次生成实体时按网格包围盒把
+原点抬到合适的位置并把实际位置写回，同时把它清成false。不在地上(在身上/容器里)时这个值没有意义。

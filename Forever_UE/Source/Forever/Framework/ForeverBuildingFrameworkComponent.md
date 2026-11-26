@@ -285,11 +285,3 @@ UE对"同一个Actor根组件下挂大量Static简单碰撞子组件"会做"焊�
   `TryConsumeLodOpBudget`/`TryConsumeShellBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`；
   `Source/Forever/Framework/ForeverStoryFrameworkComponent.cpp`（`ApplyControlChange`
   切换玩家控制权后调`RequestFreezeUntilLodSettled`）。
-
-## 待办/后续阶段
-
-- 按mod自定义LOD切换距离/每帧队列上限——目前是组件级`UPROPERTY`固定值（40/80/1），不是per-mod可配置。
-- 3D(含高度)距离判定——目前用水平距离。
-- 外墙/内墙材质区分——目前统一用一份`wallMaterial`。
-- 窗户的实际mesh——窗户目前只是纯几何缺口（门的开合由`UForeverDoorComponent`负责），有能用的窗户资产后再考虑加回`SpawnMesh`调用（`
-  ComputeDirectionalMeshTransform`这类朝向/尺寸换算可以直接复用楼梯/坡道那一套）。

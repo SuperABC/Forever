@@ -13,6 +13,3 @@
 ## 依赖关系
 - 被`AForeverMenuGameMode`的`PlayerControllerClass`引用。
 - 依赖`UMG`模块、`UFadeSubsystem`/`UFadeWidget`(`UI/`)、`ForeverMemoryReport`。
-
-## 待办/后续阶段
-- 无。

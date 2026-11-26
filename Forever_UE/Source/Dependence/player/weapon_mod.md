@@ -21,9 +21,5 @@
 - 依赖：`common/mod_state.h`。
 - 被谁依赖：`weapon_factory.h`创建它；`Core/player/weapon.h`消费它；`Source/Forever/Player/ForeverWeaponComponent`、`ForeverWeaponVisualComponent`读它的字段；具体实现在`Source/Basic/player/weapon_*.*`。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 开火方式 `FireMode`
 `fireMode`(`Hitscan`默认 / `Custom`)只是数据标签，决定Forever层`UForeverWeaponComponent::Fire()`走哪条结算路径：`Hitscan`=摄像机射线瞬间判定，**每颗弹丸(`pelletCount`，各自在`baseSpread`圆锥内散射)各向武器脚本发一次`weapon_fire`事件**，特效和伤害由脚本完成(2026-11-17取消了飞行弹道：`Ballistic`、初速、重力倍率、曳光线都已删，狙击枪没有下坠和飞行时间；带发射物的武器(火箭筒`weapon_rpg`，2026-11-18)用`FireMode::Hitscan`只拿`weapon_fire`的枪口/朝向/瞄准点，脚本里`spawn_actor`放出蓝图弹射物Actor，见`Forever/Player/ForeverRocketProjectile.md`、`ForeverProjectileBridgeComponent.md`)，`Custom`=开火后调`WeaponMod::OnFire(PostHandle*)`，由mod自己通过`post`向Core发请求(相机发`"screenshot"`截屏；不耗弹药、无伤害、无脚本)。`OnFire`默认空实现，`post`只在这次调用期间有效。`magazineCapacity=0`表示不用弹药(不扣子弹、不换弹、不显示弹药数)。

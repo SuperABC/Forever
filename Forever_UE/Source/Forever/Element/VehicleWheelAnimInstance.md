@@ -16,7 +16,3 @@
 
 - 依赖：`UChaosWheeledVehicleMovementComponent`、`AVehicleElement`(`GetSpinningBone`)。
 - 被谁依赖：`AVehicleElement`/`APlaneElement`的`CarMesh`。
-
-## 待办/后续阶段
-
-- 无。

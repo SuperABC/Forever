@@ -21,6 +21,3 @@
 - 依赖`Input/ForeverKeyBindingSubsystem`(动态Action)、`UFadeSubsystem`、`UForeverIdentifyComponent`。
 - 依赖`UI/`下各常驻Widget(`MeetOptionWidget`/`SectionSpeakingWidget`/`BackgroundSpeakingWidget`/`SectionOptionWidget`/`PuzzleWidget`/`ShopWidget`/`PhoneWidget`/`InventoryWidget`/`MapWidget`/`PausePanelWidget`/`ThrowListWidget`/`FadeWidget`)。
 - 被`AForeverCharacter::MeetOptionFocusUp/Down/Select`(取`GetMeetOptionWidget()`)、`UForeverStoryFrameworkComponent`(取各对话/谜题/商店Widget)等依赖。
-
-## 待办/后续阶段
-- 无。

@@ -17,7 +17,3 @@
 
 - 依赖：`player/asset_mod.h`。
 - 被谁依赖：`Source/Core/common/registry.h`的`Registry`持有唯一实例，由各域管理类通过引用使用——`Core/player/player.h`(`Player::assetFactory`引用)、`Core/player/asset.h`。
-
-## 待办/后续阶段
-
-- 无。

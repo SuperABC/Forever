@@ -14,7 +14,3 @@
 
 - 依赖：`UCameraShakePattern`/`UCameraShakeBase`。
 - 被谁依赖：`Player/ForeverExplosionEffect.cpp`(爆炸特效播放时调`PlayWorldCameraShake`)。
-
-## 待办/后续阶段
-
-- 无。

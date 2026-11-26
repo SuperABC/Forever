@@ -34,9 +34,40 @@ namespace {
 		for (const string& name : names) assets.push_back(m.at(name));
 		return assets;
 	}
+
+	// 物品的地面摆位(房间里的和室外的都写)：6个浮点+restOnBottom。
+	void WriteGround(const AssetGround& ground, ByteWriter& w) {
+		w.F32(ground.x); w.F32(ground.y); w.F32(ground.z);
+		w.F32(ground.pitch); w.F32(ground.yaw); w.F32(ground.roll);
+		w.U8(ground.restOnBottom ? 1 : 0);
+	}
+
+	AssetGround ReadGround(ByteReader& r) {
+		AssetGround ground;
+		ground.x = r.F32(); ground.y = r.F32(); ground.z = r.F32();
+		ground.pitch = r.F32(); ground.yaw = r.F32(); ground.roll = r.F32();
+		ground.restOnBottom = r.U8() != 0;
+		return ground;
+	}
 }
 
 void PlayerSaveCodec::WriteAsset(const Asset* asset, ByteWriter& w) {
+	// 第一个字节区分普通物品(0)和固定物品(1)。固定物品没有AssetMod，把规格整份写出来，读档时按规格重建。
+	w.U8(asset->fixture ? 1 : 0);
+	if (asset->fixture) {
+		const AssetFixtureDesc& desc = *asset->fixture;
+		w.Str(desc.type);
+		w.Str(asset->name);
+		w.Str(desc.meshPath);
+		w.F32(desc.scaleX); w.F32(desc.scaleY); w.F32(desc.scaleZ);
+		w.Str(desc.scriptModName);
+		w.U32(static_cast<uint32_t>(desc.milestoneNames.size()));
+		for (const string& milestone : desc.milestoneNames) w.Str(milestone);
+		w.U32(static_cast<uint32_t>(asset->options.size()));
+		for (const string& option : asset->options) w.Str(option);
+		w.U8(asset->scriptStarted ? 1 : 0);
+		return;
+	}
 	w.Str(asset->type);
 	w.Str(asset->name);
 	w.I32(asset->count);
@@ -52,6 +83,26 @@ void PlayerSaveCodec::WriteAsset(const Asset* asset, ByteWriter& w) {
 }
 
 Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
+	if (r.U8() != 0) {
+		// 固定物品：按存档里的规格重建(脚本的name/type变量构造时就是存档里的名字)。
+		AssetFixtureDesc desc;
+		desc.type = r.Str();
+		string fixtureName = r.Str();
+		desc.meshPath = r.Str();
+		desc.scaleX = r.F32(); desc.scaleY = r.F32(); desc.scaleZ = r.F32();
+		desc.scriptModName = r.Str();
+		uint32_t milestoneCount = r.U32();
+		for (uint32_t i = 0; i < milestoneCount && !r.Failed(); i++) desc.milestoneNames.push_back(r.Str());
+		vector<string> savedOptions;
+		uint32_t savedOptionCount = r.U32();
+		for (uint32_t i = 0; i < savedOptionCount && !r.Failed(); i++) savedOptions.push_back(r.Str());
+		bool started = r.U8() != 0;
+		if (r.Failed()) return nullptr;
+		Asset* fixtureAsset = new Asset(desc, fixtureName);
+		fixtureAsset->options = std::move(savedOptions);
+		fixtureAsset->scriptStarted = started;
+		return fixtureAsset;
+	}
 	string type = r.Str();
 	string name = r.Str();
 	int count = r.I32();
@@ -117,7 +168,10 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 		SaveRefs::WriteRoom(room, w);
 		vector<const Asset*> assets = SortedAssets(room->GetAssets());
 		w.U32(static_cast<uint32_t>(assets.size()));
-		for (const Asset* asset : assets) WriteAsset(asset, w);
+		for (const Asset* asset : assets) {
+			WriteGround(asset->GetGround(), w);
+			WriteAsset(asset, w);
+		}
 	}
 
 	// 房间外的物品(被扔出去的投掷物等)：位置朝向+整棵Asset树，不存速度，读档后从静止开始模拟。
@@ -127,12 +181,7 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 	w.U32(static_cast<uint32_t>(worldNames.size()));
 	for (const string& name : worldNames) {
 		const Player::WorldAsset& entry = player.worldAssets.at(name);
-		w.F32(entry.transform.x);
-		w.F32(entry.transform.y);
-		w.F32(entry.transform.z);
-		w.F32(entry.transform.pitch);
-		w.F32(entry.transform.yaw);
-		w.F32(entry.transform.roll);
+		WriteGround(entry.asset->GetGround(), w);
 		WriteAsset(entry.asset, w);
 	}
 
@@ -171,7 +220,9 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 			Room* room = SaveRefs::ReadRoom(map, r);
 			uint32_t assetCount = r.U32();
 			for (uint32_t k = 0; k < assetCount && !r.Failed(); k++) {
+				AssetGround ground = ReadGround(r);
 				Asset* asset = ReadAsset(player->assetFactory, r);
+				if (asset) asset->SetGround(ground);
 				// 没有房间、或者房间里已经有同名物品(存档被改过)：这件没处放，丢掉。
 				if (!(asset && room && room->AddAsset(asset))) delete asset;
 			}
@@ -181,13 +232,7 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 		if (!r.AtEnd()) {
 			uint32_t worldCount = r.U32();
 			for (uint32_t i = 0; i < worldCount && !r.Failed(); i++) {
-				Player::WorldAssetTransform transform;
-				transform.x = r.F32();
-				transform.y = r.F32();
-				transform.z = r.F32();
-				transform.pitch = r.F32();
-				transform.yaw = r.F32();
-				transform.roll = r.F32();
+				Player::WorldAssetTransform transform = ReadGround(r);
 				Asset* asset = ReadAsset(player->assetFactory, r);
 				if (asset && !player->AddWorldAsset(asset, transform)) delete asset;
 			}

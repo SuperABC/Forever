@@ -14,7 +14,3 @@
 
 - 依赖：`player/app_mod.h`、`player/canvas.h`、`common/utility.h`(`GetRandom`)。
 - 被谁依赖：`basic.cpp`注册；`Core/player/phone.h`通过`AppFactory`枚举桌面图标。
-
-## 待办/后续阶段
-
-- 无。

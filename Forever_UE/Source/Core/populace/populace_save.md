@@ -56,8 +56,7 @@
   - `Forever/Framework/ForeverFrameworkActor.cpp`（`EnsurePopulaceGenerated`）；
   - `Forever/Mod/ForeverSaveSubsystem.cpp`（`Forever.SaveRoundTrip`）。
 
-## 待办 / 后续
-
+## 补充说明
 - 房间里的物品（`Room::assets`）存在玩家段，见 `Source/Core/player/player_save.md`。
 
 ## 动态属性

@@ -21,17 +21,33 @@ class AreaDamageChange;
 class AddSatietyChange;
 struct ScriptContext;
 
-// 世界掉落物的生成/销毁登记。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
-// Source/Forever/UI/InventoryWidget.h。这个组件不持有Asset的所有权(真正所有权在
-// Room::assets或容器的contents里)，只登记"哪个Asset对应世界里哪个Actor"，方便Pick时
-// 反查到Actor销毁。
+// 地上的物品(房间里Room::assets的、室外Player::worldAssets的)在场景里的实体：登记、按玩家距离流式生成/销毁，
+// 以及物品相关Change的执行。不持有Asset的所有权(真正所有权在Room/Player)，设计见ForeverAssetFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverAssetFrameworkComponent : public UForeverFrameworkComponent
 {
 	GENERATED_BODY()
 
 public:
-	// SpawnActor+Init+登记进worldAssetActors。location是Drop那一刻玩家的世界位置。
+	UForeverAssetFrameworkComponent();
+	virtual void TickComponent(float deltaTime, ELevelTick tickType, FActorComponentTickFunction* thisTickFunction) override;
+
+	// 开局和读档各调一次(世界里的物品都建好/恢复好之后)：把所有房间里的物品和室外的物品登记成"在地上"，只登记不生成，
+	// 实体由TickComponent按距离生成。
+	void RegisterGroundAssets();
+
+	// 流式距离(地图单位，1=10米)：玩家到物品的水平距离小于assetSpawnDistance就生成实体，大于assetDespawnDistance就把位置
+	// 写回Core再销毁实体。和建筑近处细节(家具等)的加载距离是同一组数。没有数量上限和每帧生成上限。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
+	float assetSpawnDistance = 16.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
+	float assetDespawnDistance = 32.f;
+	// 实体生成后至少存在这么久(秒)才允许流式销毁：Chaos物理代理没建好就销毁会出问题，不是性能限制。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
+	float minAssetLifetime = 2.f;
+
+	// 把物品放到地上：登记成"在地上"、把位置朝向写进Core(Asset的地面摆位)、立刻生成实体。调用方已经把Asset放进了
+	// Room::assets或Player::worldAssets(丢弃/投掷/背包面板拖出来)，这些都发生在玩家身边。location是UE世界坐标。
 	AAssetElement* SpawnWorldAsset(Asset* asset, FVector location, FRotator rotation = FRotator::ZeroRotator);
 
 	// 投掷：把一个已经从背包取出的Asset(count=1)当作物理掉落物扔出去——和SpawnWorldAsset
@@ -40,21 +56,19 @@ public:
 	// 会随存档保存；扔出去之后不会自动消失。失败(同名物品已存在)返回nullptr，Asset仍归调用方。
 	AAssetElement* SpawnThrownAsset(Asset* asset, FVector location, FVector velocity, AActor* thrower);
 
-	// 存档前调用：把场景里房间外物品Actor的实际位置朝向写回Player::worldAssets。
+	// 存档前调用：把所有有实体的物品(室内室外都算)的实际位置朝向写回Core。没有实体的保留上一次写回的位置。
 	void SyncWorldAssetsToCore();
-
-	// 读档后调用：按Player::worldAssets里记的位置朝向重新生成Actor，速度为0，从静止开始模拟。
-	void RestoreWorldAssets();
 
 	// 收集center周围radiusCm厘米内、归Player::worldAssets持有的物品(背包"附近"列表)，按距离从近到远。
 	// 用球形重叠查询走引擎物理宽相位(代价和附近的数量成正比，不随worldAssets总量增长)，
 	// 位置取Actor实时位置而不是只在存档前才同步的worldAssets transform。
 	void CollectNearby(FVector center, float radiusCm, TArray<Asset*>& out) const;
 
-	// 查表Destroy()+从表里移除——不delete Asset本身，调用方/Room负责Asset的生命周期。
+	// 物品离开地面(被捡走/要销毁)：取消登记并销毁实体(没有实体就只取消登记)——不delete Asset本身，调用方负责它的生命周期。
+	// 任何会delete一件"在地上"的Asset的地方都必须先调它，否则登记表里留着悬空指针。
 	void DestroyWorldAsset(Asset* asset);
 
-	// 按资产名字找场景里的Actor(只有房间里/地上的资产有)，找不到返回nullptr。
+	// 按资产名字找场景里的实体(在地上、并且当前在流式范围内已经生成的才有)，找不到返回nullptr。
 	AAssetElement* FindElementByName(const FString& name) const;
 
 	// pick_asset/grant_asset/deduct_asset/drop_asset四个Change的执行，由AForeverFrameworkActor::ApplyChange转发。
@@ -82,10 +96,27 @@ public:
 	void QueueDelete(Asset* asset);
 
 private:
-	// 不能标UPROPERTY——Asset*是Core层的普通C++类型，不是UObject/USTRUCT，UHT反射不认。
-	// 生命周期不受影响：SpawnActor出来的Actor由World自己的Actor列表持有，不依赖这张表的
-	// 引用来防止GC，和ForeverWeaponComponent::currentWeapon(WeaponMod*)同一个道理。
-	TMap<Asset*, AAssetElement*> worldAssetActors;
+	// 一件"在地上"的物品。不能标UPROPERTY——Asset*是Core层的普通C++类型，UHT反射不认；实体用弱引用，
+	// 被引擎销毁(掉出世界等)后自动失效，下次进入范围会按最后已知位置重新生成。
+	struct FGroundEntry {
+		Asset* asset = nullptr;
+		FString name;                              // 登记时拷一份，取消登记时不用再碰asset
+		FVector location = FVector::ZeroVector;     // 最后已知位置(UE单位)，没有实体时按它算距离
+		FRotator rotation = FRotator::ZeroRotator;
+		TWeakObjectPtr<AAssetElement> element;
+		double spawnedAt = 0.0;
+	};
+	TArray<FGroundEntry> groundEntries;
+	TMap<Asset*, int32> entryIndexByAsset;
+	TMap<FString, Asset*> assetByName;
+	bool bGroundRegistered = false;
+
+	int32 AddGroundEntry(Asset* asset);   // 已登记的返回原下标
+	void RemoveGroundEntry(Asset* asset);
+	// 生成实体(先补发脚本的game_start)；脚本把这件物品弄走了就返回nullptr。会改动groundEntries，调用后别再用旧的引用。
+	AAssetElement* SpawnElementFor(Asset* asset);
+	// 实体的当前位置朝向 -> 登记项和Core。固定物品不动，不写。
+	void WriteBackToCore(FGroundEntry& entry);
 
 	// 位置表达式/资产解析成世界坐标：positionExpression非空按"(x, y, z)"解析，否则取asset(缺省=脚本所属资产)的Actor位置。
 	bool ResolvePosition(const std::string& positionExpression, const std::string& assetExpression,

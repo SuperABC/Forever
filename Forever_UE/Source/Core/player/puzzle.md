@@ -15,7 +15,3 @@
 
 - 依赖：`player/puzzle_mod.h`、`player/puzzle_factory.h`。
 - 被谁依赖：`Source/Forever/UI/PuzzleWidget`；具体小游戏在`Source/Basic/player/puzzle_*.h/.cpp`和`Forever_Mod/Wxdj`等外部mod。
-
-## 待办/后续阶段
-
-- 无。

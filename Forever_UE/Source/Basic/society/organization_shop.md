@@ -18,7 +18,3 @@
 
 - 依赖：`society/organization_mod.h`、`common/json.h`。
 - 被谁依赖：`basic.cpp`注册(商店依赖`job_shop_saler`/`job_warehouse_keeper`，工厂依赖`job_factory_worker`)；`Core/society/organization.h`/`society.h`消费。
-
-## 待办/后续阶段
-
-- 无。

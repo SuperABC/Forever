@@ -70,6 +70,7 @@ ModTest --config Resource\Config\config.json --out Saved\TestReports\<时间>\mo
 - `UnitTest`期间没有漏包随机(没有在任何`RandomScope`之外调`GetRandom`)。
 - 连建两个实例，`GetName()`不同(名字全局唯一的约定见`CONVENTIONS.md`第5节)。`Empty.dll`里的占位模板名字固定，不查这条。
 - **按concept的字段检查**(`mod_checks.cpp`的`ValidateConcept`)：
+  - 房间放的物品(`PlaceAsset`/`PlaceFixture`)：锚点在房间内；`assetType`和固定物品的`scriptModName`算作引用(只查有dll提供，不要求声明依赖)；固定物品用了尺寸表里的网格时，和家具一起查占地(不出房间、不重叠、不挡门窗)。
   - 车辆：声明了种类(`static GetCategory()`非空)、尺寸为正、载客量不为负、能搭乘的车载客量不为0、可驾驶的车要有蓝图或网格路径。
   - 产品：价格满足 零售 > 进口 > 出口 > 0、批量为正、原料/副产品有类型和正数量。
   - 建筑：国有概率在[0,1]、电梯楼层范围不颠倒。园区：内部建筑要有类型。
@@ -129,10 +130,6 @@ ModTest --config Resource\Config\config.json --out Saved\TestReports\<时间>\mo
 - `mod_checks.h/.cpp`：`ModTestHost`(23个Factory和每个concept的操作表)、各concept的字段检查和引用收集、引用核对、
   房间家具布局检查、`RunMod`。
 
-## 待办/后续阶段
-
+## 补充说明
 - 新增concept时：`AllFactories`加一个成员、`ModTestHost`构造函数里加一行(启动时会核对和`mod_concepts`的表有没有对上)，
   需要字段检查就加一个`ValidateConcept`重载。新增引用别的mod的字段时：在对应的`ValidateConcept`里加一行`Refer`。
-- 打包给mod作者的SDK(Dependence头文件+`Dependence.lib`+`ModTest.exe`+`Basic.dll`/`Empty.dll`)还没有脚本，目前要手工拷。
-- 引用检查只覆盖"字段里写出来的id"。写在mod代码判断条件里的id(组织的`if (roomType == "room_shop")`)查不到。
-- 不检查依赖声明是否完整(2026-11-25试过"引用了就必须声明依赖"，因为引用方向不等于依赖方向而撤掉)。

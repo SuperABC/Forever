@@ -15,7 +15,3 @@
 
 - 依赖：`populace/scheduler_mod.h`。
 - 被谁依赖：`basic.cpp`注册；`Core/populace/scheduler.h`消费。
-
-## 待办/后续阶段
-
-- 没有真正的下班行为，等有具体设计时从占位升级。

@@ -63,6 +63,7 @@ class Vehicle;
 
 class Player;
 class Asset;
+class AssetFactory;
 class EstateAsset;
 class VehicleAsset;
 

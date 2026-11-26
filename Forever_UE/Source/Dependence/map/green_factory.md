@@ -15,7 +15,3 @@
 
 - 依赖：`map/green_mod.h`。
 - 被谁依赖：`Core/common/registry.h`持有唯一实例，`Core/map/map.h`(`Map::greenFactory`引用)、`Core/map/green.h`。
-
-## 待办/后续阶段
-
-- 无。

@@ -29,7 +29,3 @@
 - 依赖：`Source/Dependence/map/component_mod.h`（`ComponentMod`）、`component_factory.h`。
 - 被谁依赖：`Source/Core/map/building.h`/`.cpp`（`Building::Layout()`按`(component,id)`
   去重创建，`~Building()`销毁）、`Source/Core/map/room.h`（`Room::parentComponent`）、`Source/Core/society/organization.h`。
-
-## 待办/后续阶段
-
-- 无。

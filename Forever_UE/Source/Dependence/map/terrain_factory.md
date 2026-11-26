@@ -13,7 +13,3 @@
 
 - 依赖：`map/terrain_mod.h`。
 - 被谁依赖：`Source/Core/common/registry.h`(`Registry`持有唯一实例)、`Source/Core/map/map.h`(`Map::terrainFactory`引用成员)、`Core/map/terrain.h`。
-
-## 待办/后续阶段
-
-- 无。

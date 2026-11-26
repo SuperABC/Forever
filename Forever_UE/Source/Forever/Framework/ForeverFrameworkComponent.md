@@ -40,7 +40,3 @@ Core域(或一类表现)翻译成UE里的网格/Actor/效果：
 
 - 依赖：无(基类不依赖Dependence/Core)。
 - 被谁依赖：`AForeverFrameworkActor`(创建并持有全部子类)。
-
-## 待办/后续阶段
-
-- 无。

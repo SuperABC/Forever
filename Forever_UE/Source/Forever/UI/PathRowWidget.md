@@ -13,7 +13,3 @@
 
 - 依赖：UMG。
 - 被谁依赖：`ModPanelWidget.cpp`、`ResourcePanelWidget.cpp`、`StoryPanelWidget.cpp`。
-
-## 待办/后续阶段
-
-- 无。

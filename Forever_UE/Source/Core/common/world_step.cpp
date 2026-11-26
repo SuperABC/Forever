@@ -7,6 +7,8 @@
 #include "map/building.h"
 #include "map/room.h"
 #include "populace/populace.h"
+#include "story/change.h"
+#include "populace/citizen.h"
 #include "society/society.h"
 #include "society/immigration.h"
 #include "industry/industry.h"
@@ -23,7 +25,15 @@ void WorldStep::TickPopulace(const WorldDomains& domains, bool crossedDay, PostI
 	ErrorScope stepScope(kErrorScopeStep, "tick.populace");
 	const auto noop = [](Citizen*, const vector<Change*>&) {};
 	domains.populace->Tick(*domains.player->GetTime(), crossedDay,
-		hooks.onCitizenChanges ? hooks.onCitizenChanges : function<void(Citizen*, const vector<Change*>&)>(noop), &post);
+		hooks.onCitizenChanges ? hooks.onCitizenChanges : function<void(Citizen*, const vector<Change*>&)>(noop), &post, hooks.controlledCitizen);
+
+	// 瞌睡值掉到0的市民已经被Populace强制睡下(只有玩家正在操控的市民会扣瞌睡值，所以最多就他一个)。
+	// 世界要跟着跳过这段时间：交给调用方执行一条player_sleep(UE层据此跳时间)。
+	for (Citizen* sleeper : domains.populace->ConsumeForcedSleepers()) {
+		if (sleeper != hooks.controlledCitizen || !hooks.onCitizenChanges) continue;
+		PlayerSleepChange forced(std::to_string(Citizen::kForcedSleepHours));
+		hooks.onCitizenChanges(sleeper, { &forced });
+	}
 }
 
 void WorldStep::TickSociety(const WorldDomains& domains, bool crossedDay, PostImplement& post, const WorldStepHooks& hooks) {

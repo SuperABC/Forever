@@ -16,7 +16,3 @@
 
 - 依赖：`InventoryWidget`、`InventoryButtonStyle.h`、Core `Asset`。
 - 被谁依赖：`UI/InventoryWidget.cpp`(整体拖拽流程见`InventoryWidget.md`)。
-
-## 待办/后续阶段
-
-- 无。

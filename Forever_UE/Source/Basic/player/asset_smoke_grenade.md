@@ -17,7 +17,3 @@
 
 - 依赖：`player/asset_mod.h`。
 - 被谁依赖：`basic.cpp`注册(依赖表里武器资产->武器->备弹资产)；`Core/player/asset.h`消费。
-
-## 待办/后续阶段
-
-- 烟雾效果没做；以后给它写脚本即可(`throw_asset`事件+`spawn_effect`/`destroy_asset`，见`asset_grenade.md`)。

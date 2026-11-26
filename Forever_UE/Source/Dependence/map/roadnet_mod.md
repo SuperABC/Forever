@@ -29,10 +29,6 @@
 - 依赖：`map/general_geometry.h`(`Node`/`Intersection`/`Road`/`Lot`/`TerrainHatch`/`TerrainFitRequest`)、`map/feature_spec.h`、`common/mod_state.h`。
 - 被谁依赖：`Source/Core/map/roadnet.h`(`Roadnet`包装类持有`RoadnetMod*`)、`Source/Basic/map/roadnet_jing.h`(`JingRoadnet`)、`Forever_Mod/Empty`的`EmptyRoadnet`、`Source/Core/map/zone.md`/`building.md`(读取lot的边界`Road`映射)。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 端墙（2026-11-20）
 `AddTunnelHatch(connection,t1,t2,width, startWallBottom=kNoEndWall, endWallBottom=kNoEndWall)`：给洞的t1端/t2端各自加端墙，墙底是传入的绝对高度(地图单位，1=10m)，默认不加。`TerrainHatch`新增`startWall/startWallBottom/endWall/endWallBottom`(随地图存档)。UE层`BuildTunnelWalls`在端头造一块矩形板：墙顶取该端头线段范围内地形最高处(可略突出地面、不留缺口)，墙底=传入高度，用来封住隧道资产房顶和地形之间的空洞。Basic各mod传"隧道端路面高度+宏`TUNNEL_ROOF_CLEARANCE`(1=10m，隧道资产房顶)"，即房顶以下留洞口，宏可调。
 

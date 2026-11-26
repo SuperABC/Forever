@@ -21,7 +21,3 @@
 
 - 依赖：`common/mod_test.h`、`common/mod_state.h`、`common/utility.h`(`Time`)、`common/handle.h`(`PostHandle`)。
 - 被谁依赖：`party_factory.h`；`Core/polit/*`消费；具体实现在`Source/Basic/polit/party_*.h`。
-
-## 待办/后续阶段
-
-- 无。

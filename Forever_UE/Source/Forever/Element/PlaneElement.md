@@ -44,8 +44,3 @@
 
 - 依赖：`VehicleElement`(基类)、`PlaneWheel`、`VehicleWheelAnimInstance`(螺旋桨)、`ForeverKeyBindingSubsystem`(ThrottleUp/Down/FreeLook/ExitVehicle/Handbrake)。
 - 被谁依赖：`PlaneVehicle::blueprintPath`指向的蓝图以它为父类。
-
-## 待办/后续阶段
-
-- 飞行系数(`maxThrustAccel`/`topSpeed`/`stallSpeed`/力矩/阻尼)是估值，需要试飞后调手感；起飞/降落/特技都没在游戏里验证过。
-- 轮子没有刷权重时不会随转动画；起落架收放、襟翼、油量、碰撞损毁都没做。

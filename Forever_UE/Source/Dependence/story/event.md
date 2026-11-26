@@ -89,10 +89,6 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
   `Core/story/story.cpp`及`Forever/Framework/ForeverStoryFrameworkComponent`（构造并广播事件）、`expression.cpp`
   （`VariableExpression::Evaluate`调`Event::GetLocalValue`）。
 
-## 待办/后续阶段
-
-- 上面"没有字段逻辑的13种"事件：`Match`字段级逻辑、`GetLocalValue`、`BuildEvent`的JSON分支，被点名实现时一起补。
-
 ## execute_task（2026-11-16）
 
 员工接到组织的任务(assign_task成功发起)后只发给该员工的Job脚本。字段`task`/`destination`都可省略(留空=不限)；

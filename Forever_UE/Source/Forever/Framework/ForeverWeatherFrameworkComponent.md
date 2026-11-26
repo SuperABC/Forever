@@ -66,9 +66,3 @@
 
 - 依赖：`player/player.h`+`player/weather.h`(Core)、`ForeverSkyFrameworkComponent`、`ForeverVegetationFrameworkComponent`、Niagara、`AVolumetricCloud`。
 - 被谁依赖：`AForeverFrameworkActor`(`weatherFramework`成员，`Tick`里调用)。
-
-## 待办/后续阶段
-
-- 雨雪的音效、闪电、雷声都没做。
-- 云量映射、阳光衰减系数、湿润/积雪速度都是粗估，要PIE里调。
-- `NS_Rain`/`NS_Snow`/`M_WeatherGround`三个资产还要在编辑器里手工制作。

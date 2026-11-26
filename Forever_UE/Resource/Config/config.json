@@ -42,7 +42,8 @@
    "dll_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Tutorial"
    ],
    "green_mods" : [ "green_park" ],
    "job_mods" : [
@@ -70,9 +71,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story"
    ],
-   "roadnet_mods" : [
-      "roadnet_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/small.roadnet"
-   ],
+   "roadnet_mods" : [ "roadnet_small" ],
    "room_mods" : [
       "room_empty",
       "room_parking",
@@ -102,7 +101,7 @@
       "terrain_beach",
       "terrain_river --skip",
       "terrain_empty",
-      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/small.terrain"
+      "terrain_small"
    ],
    "vehicle_mods" : [
       "vehicle_plane",

@@ -76,11 +76,8 @@ MeetOption交互选项。
   `Source/Forever/UI/MeetOptionWidget.h`（交互选项UI）。
 - 被谁依赖：`Source/Forever/Framework/ForeverDoorFrameworkComponent.h`/`.cpp`（全部门的流式生成/销毁）。
 
-## 待办/后续阶段
-
-- 骨骼组件+动画实例比静态网格贵；每帧生成/销毁数量由`ForeverDoorFrameworkComponent`的`maxSpawnsPerFrame`(4)/`maxDespawnsPerFrame`(8)限流，PIE看卡顿再调。
-- 门的骨骼网格/动画蓝图路径由各建筑/园区mod在`Layout()`里按门标签填进`doorSpecs`(如`doorSpecs["entrance"]`)，Basic里目前大多数建筑共用同一对测试门资产；之后按尺寸/用途分资产。
-- NPC寻路不按门的开合/门禁绕路；挡板关着时NPC靠触发盒开门通过。
+## 补充说明
+- 门的骨骼网格/动画蓝图路径由各建筑/园区mod在`Layout()`里按门标签填进`doorSpecs`(如`doorSpecs["entrance"]`)，Basic里目前大多数建筑共用同一对测试门资产。
 
 ## 包围盒
 

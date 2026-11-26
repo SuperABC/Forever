@@ -26,10 +26,6 @@
 - 依赖：`map/feature_spec.h`(`DoorSpec`/`DecorationSpec`/`TreeRequests`)、`map/general_geometry.h`(`Quad`/`Road`/`AREA_TYPE`/`PlacementEmitFunc`)、`common/mod_state.h`。
 - 被谁依赖：`building_factory.h`、`Source/Core/map/building.h`/`.cpp`(`Building::Layout()`读取`floors`/`singles`/`rows`/`cabins`/`doorSpecs`/`decorations`/`stationMod`)、各具体`XxxBuilding`子类(`Source/Basic/map/`)与外部Mod。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 墙面标签
 `SetSurfaceMaterial(tag, path)` 的标签表同时服务地板/天花板和墙的四个侧面（`.layout` 里 `wallTags`），标签命名空间共用。没有标签或没登记就不指定该侧面材质。
 

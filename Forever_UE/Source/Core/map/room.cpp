@@ -205,6 +205,56 @@ void Room::LayoutFurniture() {
 
 const vector<DecorationInstance>& Room::GetFurniture() const { return furniture; }
 
+void Room::CreatePlacedAssets(AssetFactory& assetFactory, unordered_set<string>& warned) {
+	if (!mod || !parentBuilding) return;
+	if (mod->placedAssets.empty() && mod->placedFixtures.empty()) return;
+	const float baseZ = parentBuilding->GetFloorWorldZ(layer);
+	// 房间局部米 -> 地面摆位(地图单位、度)，和LayoutFurniture里家具的换算是同一条。
+	auto groundOf = [&](float u, float v, float z, float yawDegrees, bool restOnBottom) {
+		AssetGround ground;
+		pair<float, float> world = LocalToWorld(u / kMetersPerUnit, v / kMetersPerUnit);
+		ground.x = world.first;
+		ground.y = world.second;
+		ground.z = baseZ + z / kMetersPerUnit;
+		ground.yaw = LocalYawToWorld(yawDegrees) * 180.f / 3.14159265358979f;
+		ground.restOnBottom = restOnBottom;
+		return ground;
+	};
+
+	// 只读遍历mod的两个vector，字符串在Core这一侧拷贝(跨DLL分配器)。
+	for (const RoomAssetSpec& spec : mod->placedAssets) {
+		const string assetType = spec.assetType;
+		Asset* asset = new Asset(&assetFactory, assetType);
+		if (!asset->IsValid()) {
+			delete asset;
+			if (warned.insert(assetType).second) {
+				debugf(DebugLevel::Warning, "Asset mod %s is not available, rooms that place it stay without it (first seen in room %s).\n",
+					assetType.c_str(), GetAddress().c_str());
+			}
+			continue;
+		}
+		asset->SetCount(spec.count);
+		asset->SetGround(groundOf(spec.u, spec.v, spec.z, spec.yaw, true)); // z是底面该落的高度
+		if (!AddAsset(asset)) delete asset;
+	}
+
+	const string address = GetAddress();
+	const string base = address.empty() ? GetName() : address;
+	unordered_map<string, int> serials;
+	for (const RoomFixtureSpec& spec : mod->placedFixtures) {
+		AssetFixtureDesc desc;
+		desc.type = spec.type;
+		desc.meshPath = spec.meshPath;
+		desc.scaleX = spec.scaleX; desc.scaleY = spec.scaleY; desc.scaleZ = spec.scaleZ;
+		desc.scriptModName = spec.scriptModName;
+		desc.milestoneNames.assign(spec.milestoneNames.begin(), spec.milestoneNames.end());
+		const string fixtureName = base + " " + desc.type + to_string(++serials[desc.type]);
+		Asset* asset = new Asset(desc, fixtureName);
+		asset->SetGround(groundOf(spec.u, spec.v, spec.z, spec.yaw, false)); // 固定物品的网格原点在底面，按给定位置原样摆
+		if (!AddAsset(asset)) delete asset;
+	}
+}
+
 Building* Room::GetParentBuilding() const { return parentBuilding; }
 Component* Room::GetParentComponent() const { return parentComponent; }
 const WallHole& Room::GetDoors() const { return doors; }

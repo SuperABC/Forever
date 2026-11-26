@@ -65,11 +65,6 @@ mod 在 `BuildTrack` 里用 `AddPier(mesh, chains, defaultSpacing, minSpacing, r
 - 依赖：`Core/map/map.h`、`Core/traffic/station.h`、`Core/traffic/vehicle.h`、`traffic/route_mod.h`/`route_factory.h`。
 - 被谁依赖：`Core/traffic/traffic.cpp`（`InitRoutes`/`InitTransitVehicles`/`Tick`）、`traffic_save.cpp`、`Forever/Framework/ForeverTrafficFrameworkComponent.cpp`（调试线/铺轨/公交物理接管）、`Forever/UI/MapWidget.cpp`。
 
-## 待办/后续阶段
-
-- "穿站不停"（`EDGE_THROUGH` 降到 `passSpeed`）目前内置线路都没用到（所有途经站都停），只在逻辑层实现，没有实测。
-- 寻路图保留着但没有动态加线路的入口；路网线路不支持路网动态变化。
-
 ## 手动线路（2026-11-23）
 
 `Route::Build` 在 `LayoutRoute` 之前把 `map->GetTransit()` 通过 `RouteMod::SetManualTransit` 交给 mod（只读指针），`BuildTrack` 之后清空；每个 `RouteStationInfo` 带 `presetIndex`（`Map::GetPresetIndexOfBuilding(station->GetBuilding())`，非预设建筑=-1）。mod 带 `--skip` 时据此从线路环找站，规划见 `route_mod.md`"手动线路"。Core 自己的规划/寻路没有新逻辑：extern 途经点、停靠、站穿过不停（`EDGE_THROUGH`）原本就支持，`transit` 套件（CoreTest）覆盖了火车的这条路径。

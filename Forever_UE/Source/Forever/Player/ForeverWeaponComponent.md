@@ -73,14 +73,5 @@
 - 依赖:`Source/Core/player/weapon.h`(`Weapon`,封装`Source/Dependence/player/weapon_mod.h`/`weapon_factory.h`的`WeaponMod`/`WeaponFactory`,见`weapon.md`)、`Source/Core/common/registry.h`(`Registry::Get().GetWeaponFactory()`)、`Source/Core/populace/citizen.h`(`TakeDamage`/`IsDead`)、`Source/Core/player/player.h`(`ConsumeByType`换弹扣备弹)、`Source/Forever/Player/ForeverCharacter.h`(摄像机取值/`IsFirstPerson()`/`IsAiming()`)、`Source/Forever/Element/CitizenElement.h`(`GetCitizen()`反查命中目标)、`Source/Forever/Framework/ForeverFrameworkActor.h`/`ForeverStoryFrameworkComponent.h`/`ForeverPopulaceFrameworkComponent.h`(死亡时广播Event+清理Actor)。
 - 被谁依赖:`AForeverCharacter`(`CreateDefaultSubobject`+`StartFireWeapon`/`StopFireWeapon`/`ReloadWeapon`/`ActivateShoulderWeapon`转发)。
 
-## 待办/后续阶段
-- 通缉值(`ChangeWantedChange`)/警察`JobMod`/反抗小游戏(`StartPuzzleChange`可复用现成的`PuzzleMod`/`Canvas`/`PuzzleWidget`机制)——需要先补"任意Event广播给剧情脚本"的通用机制。
-- `Player::TakeDamage`没有调用方(`area_damage`/`single_damage`只处理市民),等有会反击的NPC/敌人再接上。
-- 武器状态不按角色持久化(每次被占有都重置成默认肩挂装备)。
-- 具体弹道/后坐力/散射数值需在PIE里调优(机制已实现,当前数值为随手定的测试值)。
-- 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。随机散射机制在(`baseSpread`半角圆锥)，Basic里手枪/步枪的`baseSpread`目前都设成0(没有散射)。
-- 武器模型的朝向/枪口位置/背枪位置都是大概值，在`UForeverWeaponVisualComponent`的属性里调，见该文档。
-
-
-### 开火方式分派(`FireMode`)与不用弹药的武器
+## 开火方式分派(`FireMode`)与不用弹药的武器
 `Fire()`只做公共闸门(有武器/没在换弹/正在瞄准/冷却)，之后若`Weapon::UsesAmmo()`才检查并扣`currentAmmo`，然后按`Weapon::GetFireMode()`分派：`Hitscan`→`FireHitscan()`(原有的摄像机射线+伤害+爆炸特效+击杀事件+后坐力)，`Custom`→`FireCustom()`(现场构造`PostImplement`并注入截屏handler，调`Weapon::FireCustom(&post)`→`WeaponMod::OnFire`，mod自己通过`post`向Core发请求；相机发`"screenshot"`，用`FScreenshotRequest`存到`Saved/Photos/`，路径是临时的)。截屏卡顿优化：引擎默认在游戏线程同步压PNG(约250ms，第一次约800ms)，所以`FireCustom`订阅一次性的`UGameViewportClient::OnScreenshotCaptured`接管——引擎只做GPU回读，拿到像素后PNG压缩+写盘丢到线程池；装备相机时(`EquipWeapon`)用1x1图预热ImageWrapper；第一次GPU回读的初始化(约0.5s)由`WarmUpScreenshot`趁加载界面预热掉(`AForeverFrameworkActor`的"预热截屏"阶段)，拍照实测每张约50ms。截图读的是视口渲染结果，UMG(Slate)本来就不在里面；AHUD的准星是画在渲染目标上的，所以截屏这一帧临时`bShowHUD=false`，`OnScreenshotRequestProcessed`时恢复。火箭弹、颜料球等抛射物武器再加`FireMode`值和各自的`FireXxx()`，不复用射线。`!UsesAmmo()`的武器`Reload()`直接返回，`TickComponent`不显示"弹药: X/Y"。

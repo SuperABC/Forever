@@ -183,18 +183,14 @@ public:
 
 	// ---- 房间外的物品(室外) ----
 	// 不在任何房间、也不在身上/容器里的物品(比如被扔出去的投掷物)归Player直接持有，key=
-	// Asset::GetName()。transform是UE世界坐标(厘米)+旋转(度)，Core只存数不解释：UE侧存档前
-	// 把场景里对应Actor的实际位置写回来，读档后按它重新生成Actor(速度不存，从静止开始模拟)。
+	// Asset::GetName()。摆位记在物品自己身上(Asset::GetGround()，地图单位+度，见asset.h的AssetGround)，
+	// 和房间里的物品是同一套：UE侧在实体销毁/存档前把场景里的实际位置写回来，之后按它重新生成实体。
 	// 物品落点即使最终在室内也照样记在这里，不转进Room::assets。
-	struct WorldAssetTransform {
-		float x = 0.f, y = 0.f, z = 0.f;
-		float pitch = 0.f, yaw = 0.f, roll = 0.f;
-	};
+	using WorldAssetTransform = AssetGround;
 	struct WorldAsset {
 		Asset* asset = nullptr;
-		WorldAssetTransform transform;
 	};
-	// 成功后Player独占持有asset；同名已存在返回false(调用方仍持有asset)。
+	// 成功后Player独占持有asset，transform写进asset的地面摆位；同名已存在返回false(调用方仍持有asset)。固定物品拒绝。
 	bool AddWorldAsset(Asset* asset, const WorldAssetTransform& transform);
 	// 摘除不delete，调用方接手所有权。
 	Asset* RemoveWorldAsset(const std::string& name);

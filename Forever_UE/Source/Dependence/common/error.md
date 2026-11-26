@@ -80,7 +80,3 @@
 - 依赖：只有标准库。
 - 被谁依赖：Dependence/Core里所有抛异常的地方；Core里调mod的地方（`MOD_CALL`）；各`*_factory.cpp`（`MOD_ID_CALL`）；
   `Source/Forever/Framework/CoreGuard.h`；`Source/Test/Core/suite_fault.cpp`逐条验证上面的规则。
-
-## 待办/后续阶段
-
-- 无。

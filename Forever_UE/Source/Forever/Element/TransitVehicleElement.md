@@ -20,7 +20,3 @@
 
 - 依赖：`Core/traffic/vehicle.h`(`GetTransform`/`GetPitch`/`GetSize`/`GetTransitMeshPath`/`GetMeshScale`/`GetMeshYawOffsetDegrees`/`IsBoardable`)、`UMeetOptionWidget`、`Input/ForeverKeyBindingSubsystem`(`MeetOptionUp/Down/Select`)、`IA_Look`/`IA_MouseLook`/`IMC_MouseLook`。
 - 被谁依赖：`ForeverTrafficFrameworkComponent` 的 `GenerateVehicles`(对 `vehicle->GetRoute()` 非空的车辆生成)、`ApplyBoardVehicle`/`ExitVehicle`。
-
-## 待办/后续阶段
-
-- 不支持操控(`VehicleMod::drivable` 预留)；路线车改成 AI Controller 物理驾驶后，事件/Change/script/触发盒可复用。

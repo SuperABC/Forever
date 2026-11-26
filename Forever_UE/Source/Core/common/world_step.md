@@ -8,10 +8,10 @@
 - 调用方负责先把`Player`时钟推进到本步时间并算好`crossedDay`；`Step`自己同步人口的当前年份。
 - 经济链只在`crossedDay`且产业/社会/地图/人口都在时才跑。账本总和校验留给调用方(UE打日志，测试做断言)。
 - `TickPopulace/TickSociety`单独暴露，跳时间"同一时刻反复Tick排空到期计时器"要用。
+- **强制睡觉**(2026-11-26)：`TickPopulace`在`Populace::Tick`之后取`ConsumeForcedSleepers()`(瞌睡值掉到0、已经被强制睡下的市民)。
+  只有玩家正在操控的市民扣瞌睡值(`Populace::Tick`收`hooks.controlledCitizen`)，所以名单里最多就他一个，世界要跟着跳过这16小时：Core现场构造一条`PlayerSleepChange("16")`交给`hooks.onCitizenChanges`，
+  UE层执行它时跳时间。这条逻辑不经过任何脚本。
 
 ## 依赖关系
 - 依赖：Map/Populace/Society/Polit/Industry/Traffic/Story/Player各域、Economy、Immigration、PostImplement。
 - 被谁用：`Source/Forever/Framework/ForeverFrameworkActor.cpp`、`Source/Test/Core`。
-
-## 待办/后续阶段
-- 跳时间"按小时步进+午夜对齐"的步进器目前仍在UE层(`RunTimeSkipBudget`)，测试里有一份等价实现(suite_econ.cpp)，两处要保持一致。

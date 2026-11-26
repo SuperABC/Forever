@@ -17,7 +17,3 @@
 ## 依赖关系
 - 依赖：`UForeverPopulaceFrameworkComponent::ForEachActiveCitizen`、`ACitizenElement::GetCitizen`、`UIdentifyTagWidget`、`APlayerCameraManager`。
 - 被谁依赖：`AForeverPlayerController`(创建并转发热键)。
-
-## 待办/后续
-- 更多信息行(年龄、职业等)。
-- 白天曝光材质(如果需要)。

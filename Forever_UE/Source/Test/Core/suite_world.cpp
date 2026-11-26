@@ -2,6 +2,7 @@
 
 #include "test_framework.h"
 
+#include "common/registry.h"
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
@@ -520,6 +521,75 @@ namespace {
 		delete room->RemoveAsset(name);     // 第一件拿回来销毁，不留在世界里
 	}
 
+	// 房间mod在自己房间里放的物品(RoomMod::PlaceAsset/PlaceFixture)：新开局时Core按清单建好、放进Room::assets、带地面摆位。
+	//   - 固定物品(没有AssetMod)：有脚本、名字全局唯一且以房间地址开头、不能进背包/进容器/记成室外物品。
+	//   - 仓库里的汉堡：每个仓库10个各自独立的(物品mod启用时)。
+	//   - 床改成固定物品之后不再出现在家具列表里(不会画两遍)。
+	void CheckPlacedAssets(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		const bool burgerEnabled = Registry::Get().GetAssetFactory().CheckRegistered("asset_burger");
+		size_t fixtures = 0, beds = 0, placed = 0, warehouses = 0;
+		size_t badFixtures = 0, badNames = 0, badWarehouses = 0, bedsAsFurniture = 0, withoutGround = 0;
+		unordered_set<string> names;
+		Asset* sampleFixture = nullptr;
+		string firstBad;
+		for (const auto& [buildingName, building] : world.map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				if (!room) continue;
+				size_t burgersHere = 0;
+				bool bedHere = false;
+				for (const auto& [assetName, asset] : room->GetAssets()) {
+					if (!names.insert(assetName).second) { badNames++; if (firstBad.empty()) firstBad = "duplicate name " + assetName; }
+					const AssetGround& ground = asset->GetGround();
+					if (ground.x == 0.f && ground.y == 0.f) withoutGround++;
+					if (asset->IsFixture()) {
+						fixtures++;
+						if (asset->GetType() == "bed") { beds++; bedHere = true; }
+						if (!sampleFixture) sampleFixture = asset;
+						const bool ok = asset->IsValid() && asset->GetMobility() == AssetMobility::Fixed && asset->GetFixtureDesc() &&
+							!asset->GetMeshPath().empty() && asset->GetScript() != nullptr && !ground.restOnBottom &&
+							assetName.rfind(room->GetAddress(), 0) == 0;
+						if (!ok) { badFixtures++; if (firstBad.empty()) firstBad = "fixture " + assetName; }
+					}
+					else {
+						placed++;
+						if (asset->GetType() == "asset_burger" && asset->GetCount() == 1 && ground.restOnBottom) burgersHere++;
+					}
+				}
+				if (bedHere) {
+					for (const DecorationInstance& item : room->GetFurniture()) {
+						if (item.meshPath.find("/Bed_") != string::npos) bedsAsFurniture++;
+					}
+				}
+				if (room->GetType() == "room_warehouse") {
+					warehouses++;
+					if (burgersHere != (burgerEnabled ? 10u : 0u)) { badWarehouses++; if (firstBad.empty()) firstBad = "warehouse " + room->GetAddress() + " has " + to_string(burgersHere) + " burgers"; }
+				}
+			}
+		}
+		run.Metric("room fixtures", static_cast<double>(fixtures), "");
+		run.Metric("room fixtures of type bed", static_cast<double>(beds), "");
+		run.Metric("room placed assets", static_cast<double>(placed), "");
+		run.Metric("warehouse rooms", static_cast<double>(warehouses), "");
+		run.Check(badNames == 0, "every asset placed in a room has a globally unique name", firstBad);
+		run.Check(badFixtures == 0, "room fixtures are valid mod-less assets with a mesh, a script and a name that starts with the room address", firstBad);
+		run.Check(withoutGround == 0, "every asset placed in a room has a ground placement", to_string(withoutGround));
+		run.Check(badWarehouses == 0, burgerEnabled ? "every warehouse room holds 10 separate burgers" : "warehouses hold no burgers when the burger mod is disabled", firstBad);
+		run.Check(bedsAsFurniture == 0, "a bed placed as a fixture is not also listed as furniture", to_string(bedsAsFurniture));
+		if (beds == 0) run.Note("no bed fixture in this seed's world (small map without residences?), fixture rules only partly exercised");
+		if (!sampleFixture) return;
+
+		// 固定物品挪不走：进不了背包/手、装不进容器、不能记成室外物品。
+		run.Check(world.player->StoreAsset(sampleFixture) == Player::StoreResult::Failed, "a fixture cannot be stored on the player");
+		run.Check(!world.player->AddByPath("left", sampleFixture) && !world.player->AddByPath("back", sampleFixture), "a fixture cannot be put in a hand or on the back");
+		run.Check(!world.player->AddWorldAsset(sampleFixture, AssetGround()), "a fixture cannot be registered as an outdoor asset");
+		if (Asset* container = world.player->CreateAsset("asset_container")) {
+			run.Check(!container->AddContent(sampleFixture), "a fixture cannot be put inside a container");
+			world.player->DestroyAsset(container);
+		}
+	}
+
 	// 销毁线路上的车(公交/火车/飞机)：线路不再认识它，之后交通照常能走一步(线路里不留它的指针)。必须在最后跑。
 	void CheckDestroyLineVehicle(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -563,6 +633,7 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckPedestrianConnectivity(world);
 	CheckPopulaceAndSociety(world);
 	CheckRoomAssetDuplicate(world);
+	CheckPlacedAssets(world);
 	CheckClockRemainder(world);
 	CheckDestroyVehicle(world); // 会销毁一辆车，必须最后跑
 	CheckDestroyLineVehicle(world);

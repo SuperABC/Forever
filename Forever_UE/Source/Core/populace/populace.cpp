@@ -398,15 +398,38 @@ bool Populace::HasDueTimers(const Time& currentTime) const {
 		|| (!schedulerTimerSet.empty() && std::get<0>(*schedulerTimerSet.begin()) <= currentTime);
 }
 
+vector<Citizen*> Populace::ConsumeForcedSleepers() {
+	vector<Citizen*> out;
+	out.swap(forcedSleepers);
+	return out;
+}
+
 void Populace::Tick(const Time& currentTime, bool crossedDay,
-	const function<void(Citizen*, const vector<Change*>&)>& onActions, PostHandle* post) {
-	// 动态属性：只有实例化了的市民每个Tick按经过的游戏时间衰减饱食度，每天减半即0.5^天数
-	// (目前没有任何后续影响)。lastTickTime不存档，读档后第一帧只记时间不衰减。
+	const function<void(Citizen*, const vector<Change*>&)>& onActions, PostHandle* post,
+	const Citizen* controlled) {
+	// 动态属性：只有实例化了的市民每个Tick按经过的游戏时间算。lastTickTime不存档，读档后第一帧只记时间不算。
+	//   饱食度：每天减半即0.5^天数(目前没有任何后续影响)。
+	//   瞌睡值：**只有玩家正在操控的那个市民(controlled)扣**——醒着时按时段的速度往下掉(Citizen::SleepinessDrop)，
+	//   掉到0就地强制睡下并记进forcedSleepers。没在操控的市民(包括操控过又放手的)瞌睡值停在原处。
+	//   睡着的不掉，到点醒来回满(不管现在是不是被操控)。
 	if (hasLastTickTime) {
-		double days = lastTickTime.DifferenceInSeconds(currentTime) / 86400.0;
+		const double seconds = lastTickTime.DifferenceInSeconds(currentTime);
+		const double days = seconds / 86400.0;
 		if (days > 0) {
+			const double sleepDrop = Citizen::SleepinessDrop(lastTickTime, seconds);
 			for (Citizen* citizen : citizens) {
-				if (citizen->IsStatsActive()) citizen->DecaySatiety(days);
+				if (!citizen->IsStatsActive()) continue;
+				citizen->DecaySatiety(days);
+				if (citizen->IsSleeping()) {
+					if (currentTime >= citizen->GetSleepUntil()) citizen->WakeUp();
+					continue;
+				}
+				if (citizen != controlled) continue; // 没被操控的市民不扣瞌睡值
+				citizen->DropSleepiness(sleepDrop);
+				if (citizen->GetSleepiness() <= 0.f) {
+					citizen->BeginSleep(currentTime, Citizen::kForcedSleepHours);
+					forcedSleepers.push_back(citizen);
+				}
 			}
 		}
 	}

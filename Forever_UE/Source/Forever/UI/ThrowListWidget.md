@@ -28,7 +28,3 @@
 ## 依赖关系
 - 依赖：`UForeverThrowableComponent`(`ActivateByType`，列表数据`FThrowListItem`)、`UForeverKeyBindingSubsystem`、`UThrowListButtonWidget`。
 - 被谁依赖：`AForeverPlayerController`(创建并常驻，ZOrder 5)、`AForeverCharacter`(长按时`Open`、松开/换人时`Close`)。
-
-## 待办/后续
-- 键盘/手柄选择(目前只能鼠标点击)。
-- 中文显示名。

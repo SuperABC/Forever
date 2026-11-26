@@ -38,11 +38,6 @@
 - 依赖：`TCommandQueue`、`AVehicleElement`、`UForeverTrafficFrameworkComponent`、`Core/map/map.h`(导航图)。
 - 被谁依赖：`ABusController`继承它；`UForeverTrafficFrameworkComponent`创建和驱动。
 
-## 待办/后续阶段
-
-- 目前只有公交用；横向加速度/重心(`AVehicleElement::centerOfMassOffset`，蓝图按车型填)等参数需PIE实测调。
-- 起步朝向与首段路径差很大时靠方向盘打满宽转弯，可能蹭墙；不处理倒车掉头；不做避障(公交撞前车会被缓慢推着走)。
-
 ## 倒车出库与FollowPath
 
 - `PlanAndFollow`起点车停在车位里(`Vehicle::GetParkingSlot()`)时用`PlanVehicleRouteFromSlot`，规划成功`ReleaseSlot`；`plan.reverseFirstSegment`为真时`FollowPoints`进入**倒车阶段**

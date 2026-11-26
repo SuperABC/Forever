@@ -162,10 +162,12 @@ Factory一样不可见、创建不出来。`Populace`的析构函数`delete name
   `Source/Forever/Framework/ForeverPopulaceFrameworkComponent.h/.cpp`
   （`GenerateCitizens(Map*, Populace*)`缓存`GetCitizens()`列表）。
 
-## Tick：饱食度衰减 + 驱动Job/Scheduler的调度
+## Tick：动态属性 + 驱动Job/Scheduler的调度
 
-每次`Tick`先做饱食度衰减：对`IsStatsActive()`的市民调`DecaySatiety(经过的游戏天数)`；`lastTickTime`不存档，
-读档后第一帧只记时间不衰减。随后是两套调度。
+每次`Tick`先算动态属性，只对`IsStatsActive()`的市民：饱食度`DecaySatiety(经过的游戏天数)`；瞌睡值——睡着的到点`WakeUp()`、不掉，
+醒着的**只有玩家正在操控的那个**(`Tick`的`controlled`参数)按`Citizen::SleepinessDrop(上次Tick的时刻, 经过的秒数)`往下扣，掉到0就地`BeginSleep(now, 16)`并记进`forcedSleepers`
+(`ConsumeForcedSleepers()`取走，`WorldStep`据此发`player_sleep`)；别的市民瞌睡值不动。细节见`citizen.md`"瞌睡值"。
+`lastTickTime`不存档，读档后第一帧只记时间不算。随后是两套调度。
 
 `Populace::Tick(currentTime, crossedDay, onActions, post)`——`Job`的timer放在
 这里（不是`Society`），因为`Job`由`Citizen`直接持有引用，`Populace`本来就要遍历
@@ -298,21 +300,6 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
 反过来用change自带的occupant姓名（`NPCNavigateChange::GetName()`）反查
 `Citizen*`——和`UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName`
 是同一个思路，一个在Core层纯查数据，一个在UE层顺带生成/复用`ACitizenElement`。
-
-## 待办/后续阶段
-
-- 老工程`Name`包装类的`roll`去重——见`name.md`"待办"一节。
-- 除中文（`ChineseName`）外的其它取名算法（比如英文名）——`NameMod`接口已经是
-  通用的，以后要加别的语言/风格直接新增一个具体实现+在`Populace::InitNames()`里
-  按需切换`CreateName`的id即可。
-- `Citizen`的父母/兄弟姐妹"是谁"这份原始数据本身不持久化（反推出来的兄弟姐妹
-  关系结果已经保留）、资产——见`citizen.md`。
-- `Citizen`通用的自由游走AI（没有工作驱动之外的自主移动）——有Job的市民已经能按
-  调度走动，见上"Tick"一节、`Source/Forever/Element/CitizenElement.md`。
-- 老工程`Map::Checkin`房产归属分配时顺带创建`Asset`对象登记进
-  `adults[index]->AddAsset(asset)`——不迁移，`Asset`/`Player::assetFactory`所在
-  的Player/Asset域还没进这个项目，`Citizen`也没有资产列表字段。归属本身
-  （`owner`/`stated`）完整迁移了，只是不再额外生成一份"资产"记录。
 
 ## 已知风险
 

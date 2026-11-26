@@ -118,7 +118,6 @@
 - 依赖：`Dependence/common/{save_archive,mod_state,json}.h`、`common/config.h`、`common/registry.h`、各域的 `*_save.h`。
 - 被谁依赖：`Source/Forever/Mod/ForeverSaveSubsystem`、`Source/Forever/Framework/ForeverFrameworkActor`。
 
-
 ## 随机流状态(`world.random`)
 
 `BuildArchive`最后追加`world.random`段(`SAVE_SECTION_RANDOM`)：每条流 `key("mod:<id>"/"domain:<name>")、seed、state[4]`(`RandomRegistry::Snapshot`)。**这一段是可选的**——`ValidateArchive`不要求它存在，旧档没有就按config重新播种；不升版本号。读档在所有阶段之后(`ForeverFrameworkActor`的最后一个阶段)调`SaveGame::RestoreRandom`覆盖流状态——重建过程中构造Citizen等会抽随机，最后覆盖才能让随机序列停在存档那一刻。manifest里mod的`args`保留`--seed N`原样，读档`ReloadModArgs`会重新登记同样的mod种子。

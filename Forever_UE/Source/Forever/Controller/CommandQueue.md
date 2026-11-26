@@ -14,7 +14,3 @@
 
 - 依赖：UE `TArray`。
 - 被谁依赖：`AVehicleCommandController`(`FVehicleCommand`)、`ACitizenController`。
-
-## 待办/后续阶段
-
-- 无。

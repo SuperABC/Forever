@@ -30,6 +30,7 @@
 #include "player/weapon_factory.h"
 #include "../../Basic/map/room_furniture_catalog.h"
 
+#include <set>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -256,7 +257,8 @@ namespace {
 		return result;
 	}
 
-	void CheckRoomLayouts(RoomFactory& factory, const string& id, vector<string>& problems) {
+	void CheckRoomLayouts(RoomFactory& factory, const string& id, ModOutcome& outcome) {
+		vector<string>& problems = outcome.problems;
 		struct Sample { float w, d; int doorWall; float doorA; bool windows; };
 		const vector<Sample> samples = {
 			{ 4, 3, ROOM_WALL_FRONT, 1.0f, false }, { 6, 5, ROOM_WALL_FRONT, 1.5f, true }, { 8, 7, ROOM_WALL_FRONT, 3.0f, true },
@@ -272,6 +274,8 @@ namespace {
 		int knownTotal = 0;
 		vector<string> sparse;        // "大房间里家具太少"：只对用了尺寸表里家具的mod才算问题
 		vector<string> unknownMeshes; // 尺寸表里没有的家具
+		set<string> placedAssetTypes;                 // PlaceAsset点名过的物品mod id
+		set<pair<string, bool>> fixtureScripts;       // PlaceFixture用过的(scriptModName, 有没有里程碑)
 		for (int round = 0; round < 8; round++) {
 			for (size_t si = 0; si < samples.size(); si++) {
 				const Sample& sm = samples[si];
@@ -300,7 +304,23 @@ namespace {
 				vector<string> names;
 				string items;
 				int knownHere = 0;
-				for (const FurnitureSpec& spec : mod->furniture) {
+				// 房间mod放的物品(PlaceAsset)：锚点要在房间里；点名的物品mod算一次引用。
+				for (const RoomAssetSpec& placed : mod->placedAssets) {
+					if (placed.u < -0.03f || placed.u > sm.w + 0.03f || placed.v < -0.03f || placed.v > sm.d + 0.03f)
+						problems.push_back(label + ": placed asset " + placed.assetType + " is outside the room");
+					placedAssetTypes.insert(placed.assetType);
+				}
+				// 固定物品(PlaceFixture)和家具一样占地方：并进同一张表查占地(不出房间、不重叠、不挡门窗)。
+				vector<FurnitureSpec> pieces(mod->furniture.begin(), mod->furniture.end());
+				for (const RoomFixtureSpec& fixture : mod->placedFixtures) {
+					FurnitureSpec piece;
+					piece.meshPath = fixture.meshPath;
+					piece.u = fixture.u; piece.v = fixture.v; piece.z = fixture.z; piece.yaw = fixture.yaw;
+					piece.scaleX = fixture.scaleX; piece.scaleY = fixture.scaleY; piece.scaleZ = fixture.scaleZ;
+					pieces.push_back(piece);
+					fixtureScripts.insert({ fixture.scriptModName, !fixture.milestoneNames.empty() });
+				}
+				for (const FurnitureSpec& spec : pieces) {
 					const RoomFurnitureDims* dims = nullptr;
 					string base = spec.meshPath.substr(spec.meshPath.rfind('/') + 1);
 					base = base.substr(0, base.find('.'));
@@ -359,8 +379,8 @@ namespace {
 						",\"d\":" + to_string(dims->depth) + ",\"w\":" + to_string(dims->width) + ",\"h\":" + to_string(dims->height) + "}";
 				}
 				knownTotal += knownHere;
-				if (residence && min(sm.w, sm.d) >= 5.f && sm.w * sm.d >= 40.f && mod->furniture.size() < 5)
-					sparse.push_back(label + ": only " + to_string(mod->furniture.size()) + " furniture in a " + to_string(sm.w * sm.d) + " m2 home");
+				if (residence && min(sm.w, sm.d) >= 5.f && sm.w * sm.d >= 40.f && pieces.size() < 5)
+					sparse.push_back(label + ": only " + to_string(pieces.size()) + " furniture in a " + to_string(sm.w * sm.d) + " m2 home");
 				if (dumping) {
 					auto openings = [](const vector<RoomOpening>& v) {
 						string r = "[";
@@ -378,6 +398,9 @@ namespace {
 			FILE* file = nullptr;
 			if (fopen_s(&file, dumpFile.c_str(), "wb") == 0 && file) { fwrite(dump.data(), 1, dump.size(), file); fclose(file); }
 		}
+		// 房间里放的物品点名了别的mod：物品mod、固定物品脚本的ScriptMod。和别的字段一样只查"有dll提供"，不要求声明依赖。
+		for (const string& assetType : placedAssetTypes) Refer(outcome, "room placed asset", assetType);
+		for (const auto& [scriptModName, created] : fixtureScripts) ReferScript(outcome, "room fixture scriptModName", scriptModName, created);
 		// 用了尺寸表里的家具=按内置家具集摆的住宅，大房间里摆不出几件算问题；完全不摆家具/全用自带模型的mod不查这一条。
 		if (knownTotal > 0) problems.insert(problems.end(), sparse.begin(), sparse.end());
 		if (!unknownMeshes.empty()) {
@@ -403,7 +426,7 @@ namespace {
 		}
 		ReferScript(outcome, "room scriptModName", mod->scriptModName, !mod->milestoneNames.empty());
 		for (const auto& [tag, door] : mod->doorSpecs) ReferDoor(outcome, "room door '" + tag + "'", door);
-		CheckRoomLayouts(all.room, context.modId, problems);
+		CheckRoomLayouts(all.room, context.modId, outcome);
 	}
 
 	void ValidateConcept(AllFactories&, SchedulerMod* mod, const ModCheckContext&, ModOutcome& outcome) {

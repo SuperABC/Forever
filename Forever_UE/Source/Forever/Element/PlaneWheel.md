@@ -15,7 +15,3 @@
 
 - 依赖：`UChaosVehicleWheel`。
 - 被谁依赖：`APlaneElement`构造函数里把`WheelSetups`的三个轮子指派成这两个类。
-
-## 待办/后续阶段
-
-- 半径是估值，需按模型调。

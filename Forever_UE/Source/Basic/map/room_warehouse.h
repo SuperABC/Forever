@@ -15,6 +15,8 @@ public:
 	virtual const char* GetType() const override { return "room_warehouse"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
+	// 房间中央摆10个汉堡(物品流式加载/捡起的测试内容)，见room_warehouse.md。
+	virtual void Layout(const RoomLayoutInfo& info) override;
 
 public:
 	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。

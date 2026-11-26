@@ -56,13 +56,6 @@
 `SetParam`(由`UPuzzleWidget`在`Init`之前调用)解析剧情参数`elem=金木水火土的任意组合`(玩家)和`enemy_elem=…`(敌人)，`Init`里`SetElements`；不传就是无属性，和以前完全一样。
 状态条名字后面用`[金木]`标出当前五行属性；护盾hint里写了同属性扣盾减半。规则见`battle/battle.md`的"玩家五行属性"。
 
-## 待办/后续阶段
-
-- **PvE模型接入**：`battle/ai.cpp`只认PvP维数(83/50)的权重；训练出PvE模型后(PvE训练侧暂时移除了，之后重做)，让`ai.cpp`按权重维数加载`ai_weights_pve.bin`并调用`features.h`的`MoveExtrasPvE/StateExtrasPvE`，再在`SetParam`/剧情里选用。
-
-- **胜负分支**：`Finish()`返回`{"result": 1/-1/0}`(1=胜，-1=负，0=中途退出)，宿主把它展平进`puzzle_result`事件；`Wxdj.script`目前还没有按胜负分支。
-- 战报面板暂不支持滚轮回看历史(只显示最新的若干条，上限200条)。
-- 玩家目前只有`xiaohua.txt`这一套招式，没有随剧情成长/换招式表。
-- PvE特性/暴击/敌人禁止积攒的入口也没接(只接了`elem=`/`enemy_elem=`)，见`battle/battle.md`待办。
+## 补充说明
 - **被禁锢**：玩家这回合被禁锢(`Controller::IsLocked(0)`，回合开始时由禁锢效果设置)时，所有家族按钮和"释放真气炸弹"置灰且不可点，只有"积攒真气炸弹"和"跳过"可用；操作栏外框标红，提示行换成红底白字"被禁锢！本回合无法出招..."。
 - **敏捷**：状态条名字后面显示"AGI 当前/上限"(跳过一次损失`agiLoss`点、每回合恢复`agiRecover`点，规则见`battle/battle.md`)。

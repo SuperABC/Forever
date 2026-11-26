@@ -2,6 +2,7 @@
 
 #include "Element/AssetElement.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/CoreGuard.h"
 
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Player/ForeverExplosionEffect.h"
@@ -28,30 +29,186 @@
 
 #include <algorithm>
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/OverlapResult.h"
 #include "CollisionQueryParams.h"
 
-AAssetElement* UForeverAssetFrameworkComponent::SpawnWorldAsset(Asset* asset, FVector location, FRotator rotation) {
+#define ASSET_WORLD_SCALE 1000.f
+// 固定物品的生成高度比地板高这么多(cm)，和房间家具的BUILDING_HEIGHT_EPSILON一致，避免和地板共面闪烁。
+#define ASSET_FIXTURE_HEIGHT_EPSILON 1.f
+// 布局摆的可移动物品(restOnBottom)：底面比给定高度再高这么多(cm)，靠重力落地，不嵌进地板。
+#define ASSET_REST_HEIGHT_EPSILON 2.f
+
+namespace {
+	// Core的地面摆位(地图单位、度) <-> UE世界坐标(cm、度)。
+	void GroundToWorld(const AssetGround& ground, FVector& location, FRotator& rotation) {
+		location = FVector(ground.x, ground.y, ground.z) * ASSET_WORLD_SCALE;
+		rotation = FRotator(ground.pitch, ground.yaw, ground.roll);
+	}
+
+	AssetGround WorldToGround(const FVector& location, const FRotator& rotation) {
+		AssetGround ground;
+		ground.x = static_cast<float>(location.X / ASSET_WORLD_SCALE);
+		ground.y = static_cast<float>(location.Y / ASSET_WORLD_SCALE);
+		ground.z = static_cast<float>(location.Z / ASSET_WORLD_SCALE);
+		ground.pitch = static_cast<float>(rotation.Pitch);
+		ground.yaw = static_cast<float>(rotation.Yaw);
+		ground.roll = static_cast<float>(rotation.Roll);
+		ground.restOnBottom = false; // 这是实体原点的实际位置
+		return ground;
+	}
+}
+
+UForeverAssetFrameworkComponent::UForeverAssetFrameworkComponent() {
+	PrimaryComponentTick.bCanEverTick = true;
+}
+
+int32 UForeverAssetFrameworkComponent::AddGroundEntry(Asset* asset) {
+	if (int32* found = entryIndexByAsset.Find(asset)) return *found;
+	FGroundEntry entry;
+	entry.asset = asset;
+	entry.name = UTF8_TO_TCHAR(asset->GetName().c_str());
+	GroundToWorld(asset->GetGround(), entry.location, entry.rotation);
+	const int32 index = groundEntries.Add(entry);
+	entryIndexByAsset.Add(asset, index);
+	assetByName.Add(entry.name, asset);
+	return index;
+}
+
+void UForeverAssetFrameworkComponent::RemoveGroundEntry(Asset* asset) {
+	const int32* found = entryIndexByAsset.Find(asset);
+	if (!found) return;
+	const int32 index = *found;
+	assetByName.Remove(groundEntries[index].name);
+	entryIndexByAsset.Remove(asset);
+	groundEntries.RemoveAtSwap(index, 1, EAllowShrinking::No);
+	if (groundEntries.IsValidIndex(index)) entryIndexByAsset.Add(groundEntries[index].asset, index); // 被换到这个下标的那一项
+}
+
+void UForeverAssetFrameworkComponent::RegisterGroundAssets() {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!framework) return;
+	if (Map* map = framework->GetMap()) {
+		for (const auto& [buildingName, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				if (!room) continue;
+				for (const auto& [name, asset] : room->GetAssets()) if (asset) AddGroundEntry(asset);
+			}
+		}
+	}
+	if (Player* player = framework->GetPlayer()) {
+		for (const auto& [name, entry] : player->GetWorldAssets()) if (entry.asset) AddGroundEntry(entry.asset);
+	}
+	bGroundRegistered = true;
+	UE_LOG(LogTemp, Log, TEXT("UForeverAssetFrameworkComponent: %d ground assets registered for streaming."), groundEntries.Num());
+}
+
+AAssetElement* UForeverAssetFrameworkComponent::SpawnElementFor(Asset* asset) {
 	if (!asset || !GetWorld()) return nullptr;
 
-	// 延迟生成：先Init换好网格、并把meshScale写进Transform，再FinishSpawning——物理体在
-	// 那时才按最终的网格和缩放创建，不会先按Cube创建再换。没指定meshPath的资产保持原来的
-	// Cube、缩放1。
-	float scale = asset->GetMeshPath().empty() ? 1.f : asset->GetMeshScale();
-	FTransform transform(rotation, location, FVector(scale));
+	// 带脚本的资产第一次变成场景物体时补发game_start(脚本里一般在这时add_option)，要在Init烘焙选项快照之前。
+	// 脚本可能把这件物品弄走(捡起/销毁)，所以发完再重新找登记项。
+	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner())) {
+		if (framework->GetStoryFramework()) framework->GetStoryFramework()->StartAssetScript(asset);
+	}
+	const int32* found = entryIndexByAsset.Find(asset);
+	if (!found) return nullptr;
+	FGroundEntry& entry = groundEntries[*found];
+	if (AAssetElement* existing = entry.element.Get()) return existing;
+
+	// 缩放走Transform：本Actor的根就是网格组件，物理体在FinishSpawning时按最终的网格和缩放创建。
+	// 没指定meshPath的资产保持Cube占位、缩放1。
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
+	if (!asset->GetMeshPath().empty()) asset->GetMeshScale3(scaleX, scaleY, scaleZ);
+	FVector location = entry.location;
+	const bool restOnBottom = !asset->IsFixture() && asset->GetGround().restOnBottom;
+	if (asset->IsFixture()) {
+		location.Z += ASSET_FIXTURE_HEIGHT_EPSILON;
+	}
+	else if (restOnBottom) {
+		// 房间mod布局时给的z是"底面该落的高度"：按网格包围盒把原点抬上去(网格原点不一定在底面)。
+		UStaticMesh* staticMesh = AAssetElement::LoadAssetMesh(asset->GetMeshPath());
+		if (!staticMesh) staticMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Asset/Common/Mesh/Cube.Cube"));
+		if (staticMesh) {
+			const FBoxSphereBounds bounds = staticMesh->GetBounds();
+			location.Z += -(bounds.Origin.Z - bounds.BoxExtent.Z) * scaleZ + ASSET_REST_HEIGHT_EPSILON;
+		}
+	}
+
+	FTransform transform(entry.rotation, location, FVector(scaleX, scaleY, scaleZ));
 	AAssetElement* element = GetWorld()->SpawnActorDeferred<AAssetElement>(
 		AAssetElement::StaticClass(), transform, nullptr, nullptr,
 		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!element) return nullptr;
-
-	// 带脚本的资产第一次变成场景物体时补发game_start(脚本里一般在这时add_option)，要在Init烘焙选项快照之前。
-	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner())) {
-		if (framework->GetStoryFramework()) framework->GetStoryFramework()->StartAssetScript(asset);
-	}
 	element->Init(asset);
 	element->FinishSpawning(transform);
-	worldAssetActors.Add(asset, element);
+
+	entry.element = element;
+	entry.spawnedAt = GetWorld()->GetTimeSeconds();
+	if (restOnBottom) {
+		// 从这一刻起Core里记的就是实体原点的位置，以后重新生成不再抬高。
+		entry.location = location;
+		asset->SetGround(WorldToGround(location, entry.rotation));
+	}
 	return element;
+}
+
+void UForeverAssetFrameworkComponent::WriteBackToCore(FGroundEntry& entry) {
+	AAssetElement* element = entry.element.Get();
+	if (!element || !entry.asset || entry.asset->IsFixture()) return;
+	entry.location = element->GetActorLocation();
+	entry.rotation = element->GetActorRotation();
+	entry.asset->SetGround(WorldToGround(entry.location, entry.rotation));
+}
+
+void UForeverAssetFrameworkComponent::TickComponent(float deltaTime, ELevelTick tickType, FActorComponentTickFunction* thisTickFunction) {
+	Super::TickComponent(deltaTime, tickType, thisTickFunction);
+	CORE_GUARD_BEGIN("UForeverAssetFrameworkComponent::TickComponent")
+	if (!bGroundRegistered || groundEntries.Num() == 0 || !GetWorld()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!framework || !framework->IsInitialGenerationDone()) return; // 楼层地板(外壳)要等世界生成完才有碰撞
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn) return;
+
+	// 水平距离(不看高度)：和建筑近处细节的加载一样，站在楼下时整栋楼各层的物品都在范围内。
+	const FVector2D player(pawn->GetActorLocation());
+	const double spawnLimit = FMath::Max(0.f, assetSpawnDistance) * ASSET_WORLD_SCALE;
+	const double despawnLimit = FMath::Max(assetSpawnDistance, assetDespawnDistance) * ASSET_WORLD_SCALE;
+	const double spawnSquared = spawnLimit * spawnLimit, despawnSquared = despawnLimit * despawnLimit;
+	const double now = GetWorld()->GetTimeSeconds();
+
+	// 生成会跑物品脚本的game_start，脚本可能增删登记项(捡起/销毁)，所以按下标走、每次重新取引用。
+	for (int32 index = 0; index < groundEntries.Num(); index++) {
+		FGroundEntry& entry = groundEntries[index];
+		AAssetElement* element = entry.element.Get();
+		if (!element) {
+			if (FVector2D::DistSquared(player, FVector2D(entry.location)) < spawnSquared) SpawnElementFor(entry.asset);
+			continue;
+		}
+		if (FVector2D::DistSquared(player, FVector2D(element->GetActorLocation())) > despawnSquared &&
+			now - entry.spawnedAt >= minAssetLifetime) {
+			WriteBackToCore(entry); // 走远了：把实际位置记回Core，下次回来在原处生成
+			element->Destroy();
+			entry.element = nullptr;
+		}
+	}
+	CORE_GUARD_END
+}
+
+AAssetElement* UForeverAssetFrameworkComponent::SpawnWorldAsset(Asset* asset, FVector location, FRotator rotation) {
+	if (!asset || !GetWorld()) return nullptr;
+
+	const int32 index = AddGroundEntry(asset);
+	FGroundEntry& entry = groundEntries[index];
+	entry.location = location;
+	entry.rotation = rotation;
+	asset->SetGround(WorldToGround(location, rotation)); // 室内室外的物品都把落点记进Core
+	if (AAssetElement* stale = entry.element.Get()) {
+		stale->Destroy();
+		entry.element = nullptr;
+	}
+	return SpawnElementFor(asset);
 }
 
 AAssetElement* UForeverAssetFrameworkComponent::SpawnThrownAsset(Asset* asset, FVector location,
@@ -62,11 +219,7 @@ AAssetElement* UForeverAssetFrameworkComponent::SpawnThrownAsset(Asset* asset, F
 
 	// 先登记进Player::worldAssets(所有权转给Player)，再生成Actor——同名已存在就整个失败，
 	// 不留下一个没有归属的Actor。
-	Player::WorldAssetTransform transform;
-	transform.x = location.X;
-	transform.y = location.Y;
-	transform.z = location.Z;
-	if (!player->AddWorldAsset(asset, transform)) return nullptr;
+	if (!player->AddWorldAsset(asset, WorldToGround(location, FRotator::ZeroRotator))) return nullptr;
 
 	AAssetElement* element = SpawnWorldAsset(asset, location);
 	if (!element) {
@@ -78,37 +231,8 @@ AAssetElement* UForeverAssetFrameworkComponent::SpawnThrownAsset(Asset* asset, F
 }
 
 void UForeverAssetFrameworkComponent::SyncWorldAssetsToCore() {
-	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
-	Player* player = framework ? framework->GetPlayer() : nullptr;
-	if (!player) return;
-
-	for (const auto& [name, entry] : player->GetWorldAssets()) {
-		AAssetElement** found = worldAssetActors.Find(entry.asset);
-		if (!found || !IsValid(*found)) continue; // 没有对应的Actor就保留上一次记的位置
-
-		FVector location = (*found)->GetActorLocation();
-		FRotator rotation = (*found)->GetActorRotation();
-		Player::WorldAssetTransform transform;
-		transform.x = location.X;
-		transform.y = location.Y;
-		transform.z = location.Z;
-		transform.pitch = rotation.Pitch;
-		transform.yaw = rotation.Yaw;
-		transform.roll = rotation.Roll;
-		player->SetWorldAssetTransform(name, transform); // 只改value，不增删，遍历中安全
-	}
-}
-
-void UForeverAssetFrameworkComponent::RestoreWorldAssets() {
-	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
-	Player* player = framework ? framework->GetPlayer() : nullptr;
-	if (!player) return;
-
-	for (const auto& [name, entry] : player->GetWorldAssets()) {
-		if (worldAssetActors.Contains(entry.asset)) continue;
-		const Player::WorldAssetTransform& t = entry.transform;
-		SpawnWorldAsset(entry.asset, FVector(t.x, t.y, t.z), FRotator(t.pitch, t.yaw, t.roll));
-	}
+	// 有实体的物品(室内室外都算)把实际位置朝向写回Core；没有实体的保留上一次写回的位置。
+	for (FGroundEntry& entry : groundEntries) WriteBackToCore(entry);
 }
 
 void UForeverAssetFrameworkComponent::CollectNearby(FVector center, float radiusCm, TArray<Asset*>& out) const {
@@ -142,19 +266,16 @@ void UForeverAssetFrameworkComponent::CollectNearby(FVector center, float radius
 
 void UForeverAssetFrameworkComponent::DestroyWorldAsset(Asset* asset) {
 	if (!asset) return;
-
-	if (AAssetElement** found = worldAssetActors.Find(asset)) {
-		if (*found) (*found)->Destroy();
-		worldAssetActors.Remove(asset);
+	if (const int32* found = entryIndexByAsset.Find(asset)) {
+		if (AAssetElement* element = groundEntries[*found].element.Get()) element->Destroy();
+		RemoveGroundEntry(asset);
 	}
 }
 
 AAssetElement* UForeverAssetFrameworkComponent::FindElementByName(const FString& name) const {
-	std::string nameUtf8 = TCHAR_TO_UTF8(*name);
-	for (const TPair<Asset*, AAssetElement*>& pair : worldAssetActors) {
-		if (pair.Key && pair.Value && pair.Key->GetName() == nameUtf8) return pair.Value;
-	}
-	return nullptr;
+	Asset* const* asset = assetByName.Find(name);
+	const int32* index = asset ? entryIndexByAsset.Find(*asset) : nullptr;
+	return index ? groundEntries[*index].element.Get() : nullptr;
 }
 
 namespace {
@@ -171,7 +292,6 @@ namespace {
 	// 地上的资产(房间根或Player::worldAssets)被摘下来之前的位置，失败时原样放回。
 	struct FGroundOrigin {
 		Room* room = nullptr;
-		Player::WorldAsset world;
 		bool bWorld = false;
 	};
 
@@ -182,7 +302,6 @@ namespace {
 			auto it = player->GetWorldAssets().find(name);
 			if (it != player->GetWorldAssets().end()) {
 				origin.bWorld = true;
-				origin.world = it->second;
 				return player->RemoveWorldAsset(name);
 			}
 		}
@@ -191,7 +310,9 @@ namespace {
 				if (!building) continue;
 				for (Room* room : building->GetRooms()) {
 					if (!room) continue;
-					if (room->GetAssets().count(name)) {
+					auto held = room->GetAssets().find(name);
+					if (held != room->GetAssets().end()) {
+						if (held->second && held->second->IsFixture()) return nullptr; // 固定物品拿不走、也不能用脚本销毁
 						origin.room = room;
 						return room->RemoveAsset(name);
 					}
@@ -205,7 +326,7 @@ namespace {
 		// 它刚从原处被拿起来，正常一定放得回去；放不回去(原处又出现了同名物品)只能记一笔，物品不再属于任何地方。
 		bool restored = true;
 		if (origin.bWorld) {
-			if (Player* player = framework->GetPlayer()) restored = player->AddWorldAsset(asset, origin.world.transform);
+			if (Player* player = framework->GetPlayer()) restored = player->AddWorldAsset(asset, asset->GetGround()); // 摆位一直记在物品自己身上
 		}
 		else if (origin.room) {
 			restored = origin.room->AddAsset(asset);
@@ -364,11 +485,7 @@ void UForeverAssetFrameworkComponent::ApplyDropAsset(const DropAssetChange* chan
 			room->AddAsset(asset);
 		}
 		else {
-			Player::WorldAssetTransform transform;
-			transform.x = location.X;
-			transform.y = location.Y;
-			transform.z = location.Z;
-			player->AddWorldAsset(asset, transform);
+			player->AddWorldAsset(asset, WorldToGround(location, FRotator::ZeroRotator));
 		}
 		SpawnWorldAsset(asset, location);
 		story->NotifyAssetEvent(asset, /*bGet=*/false, "success", sender);
@@ -381,9 +498,17 @@ bool UForeverAssetFrameworkComponent::ResolvePosition(const std::string& positio
 		return FForeverDamage::ParseVec3(ToString(EvaluateExpression(positionExpression, context)), out);
 	}
 	const std::string name = ResolveTargetAssetName(assetExpression, context);
-	AAssetElement* element = name.empty() || !GetWorld() ? nullptr : FindElementByName(UTF8_TO_TCHAR(name.c_str()));
-	if (!element) return false;
-	out = element->GetActorLocation();
+	if (name.empty() || !GetWorld()) return false;
+	const FString key = UTF8_TO_TCHAR(name.c_str());
+	if (AAssetElement* element = FindElementByName(key)) {
+		out = element->GetActorLocation();
+		return true;
+	}
+	// 物品在地上但实体已经被流式销毁(玩家走远了，比如手雷到点时)：用最后已知位置。
+	Asset* const* asset = assetByName.Find(key);
+	const int32* index = asset ? entryIndexByAsset.Find(*asset) : nullptr;
+	if (!index) return false;
+	out = groundEntries[*index].location;
 	return true;
 }
 

@@ -39,10 +39,20 @@
   "从当前推算位置起的剩余路径"，读档用`BeginWalk(path, dest, 0, speed)`恢复，再由UE侧`RestartWalk(now)`把起算时间
   对齐到新关卡的游戏时钟。`wasSpawned`（`WasSpawned`/`SetWasSpawned`）记录存档时这个市民是否有Actor，
   同样随人口段存档，读档后UE侧据此先把这些市民全部生成出来，生成完清掉，不参与游戏逻辑。
-- **动态属性（目前只有饱食度）**：只有`statsActive`的市民参与`Populace::Tick`的每日衰减，避免全城实时模拟。
+- **动态属性（饱食度、瞌睡值）**：只有`statsActive`的市民参与`Populace::Tick`的计算，避免全城实时模拟。这是**暂定逻辑**，见下面"待办"。
   `ActivateStats()`在被玩家`change_control`操控时调用（饱食度随机0.5~1），放手后保持实例化。`DecaySatiety(days)`
   乘`0.5^days`（一天减半），`AddSatiety`截断到[0,1]；`GetSatiety()`对外四舍五入到两位小数，内部存精确值（否则
   每帧衰减量小于0.005时永远降不下去）。目前没有任何后续影响（不饿死）。随人口段存档。
+- **瞌睡值（2026-11-26，暂定逻辑）**：`sleepiness`，1=完全清醒，`ActivateStats()`时从1开始(不抽随机数)。
+  **只有玩家正在操控的那个市民扣瞌睡值**(`Populace::Tick`的`controlled`参数)；操控过又放手的市民瞌睡值停在原处，不会被强制睡觉，重新操控后接着掉。
+  - **下降**：醒着时每个Tick按经过的游戏时间扣，速度分时段——6点到24点每小时2%(`kSleepDropDay`)、0点到6点每小时3%(`kSleepDropNight`)；
+    `SleepinessDrop(from, seconds)`把一段时间按0点/6点切开分段累加。
+  - **要睡多久**：`SleepHoursFor(sleepiness) = 20 - 1/(0.0025x)`小时，x=离100%差的百分点，夹在[0,16]。瞌睡值在80%及以上时是0=还不困、不能睡；
+    清醒16小时(68%)约睡7.5小时；0%睡16小时。
+  - **睡觉**：`BeginSleep(now, hours)`记下`sleepUntil`；睡着期间不掉瞌睡值，到点`Populace::Tick`调`WakeUp()`回满。`Citizen`不管"跳过这段时间"。
+  - **强制睡觉**：瞌睡值掉到0时`Populace::Tick`就地`BeginSleep(now, kForcedSleepHours=16)`并把他记进`forcedSleepers`。这一步写在Core里，不走脚本；
+    世界要跟着跳时间，由`WorldStep::TickPopulace`发一条`player_sleep`(见`common/world_step.md`)。能掉到0的只有玩家正在操控的市民。
+  - 玩家主动睡觉走脚本指令`player_sleep`(床的脚本`Resource/Story/fixture_bed.script`)，UE层执行。瞌睡值、是否在睡、`sleepUntil`随人口段存档。
 - **`IsInEconomy`**：false的市民不分配住处、不产生每日需求、不参与招聘/交税/补助（钱包照开）。开局市民默认true，
   `spawn_npc`的`economy`字段可置false。**不存档**：读档时开局市民都是true，spawn出来的false市民存档里本来
   就没有住处/岗位。
@@ -50,7 +60,7 @@
   `TakeDamage`对死人无效。`Die()`：置`isDead`、血量归零、`EndWalk`、`SetCurrentRoom(nullptr)`、`ClearPosition`，
   **保留“家”**。`Revive(health=-1)`：清`isDead`，血量恢复（<=0或超过`maxHealth`取满血），**不设房间/位置**，
   需后续`npc_teleport`（destination可写`"home"`）才会在场景里出现；脚本入口是`npc_revive` Change。
-  Forever层流式生成会跳过`IsDead()`的市民。默认100点血是占位值，待PIE调。
+  Forever层流式生成会跳过`IsDead()`的市民。默认100点血。
 - **离城**：`departed`是另一个独立标记（不可逆）。`Depart()`：置`departed`、断开岗位（`Job::SetOccupant(nullptr)`）、`EndWalk`、`SetCurrentRoom(nullptr)`、`ClearPosition`，**保留“家”和户**，账户和房产由`Emigration`结算。`IsActive()`=!isDead&&!departed，经济结算和UE流式生成判断“人在不在场”都用它。`departed`随人口段存档。
 - **`Personality`/`Relation`**：`Personality`13项各自`clamp(GetRandomNormal(0, 1/3), -1, 1)`（±1大致对应3σ）；
   `Relation`6项全部初始化为0。两者都支持按枚举和按脚本变量名（`operator()(name)`，未知名抛
@@ -81,10 +91,6 @@
 `AddAsset/RemoveAsset/GetAssets`：列表里只能放`mobility`为`Estate`/`Vehicle`的`Asset*`（`EstateAsset`归`Map`、
 `VehicleAsset`归`Traffic`，市民不拥有）。市民可以有不动产（`Map::BuildEstateAssets`按归属挂上，只记最高层）和`car`
 载具（`Traffic::AssignVehicles`给成年人20%概率分配）。不存档：不动产由owner推导，载具随traffic段存所有者下标。
-
-## 待办/后续阶段
-
-- 没有Job或Job没有产生调度的市民仍是“站在分配到的房间里的固定点”，没有工作驱动之外的自主移动。
 
 ## 走路速度倍率（2026-11-19）
 `GetWalkSpeedFactor()=walkSpeedScale×walkSpeedJitter`：`walkSpeedScale`是脚本给的`speed`(npc_navigate/assign_task每次执行都重设，省略=1.0，下限0无上限)，

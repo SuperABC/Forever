@@ -14,7 +14,3 @@
 
 - 依赖：`ForeverFrameworkActor`、`ForeverStoryFrameworkComponent`。
 - 被谁依赖：`Framework/ForeverStoryFrameworkComponent`、`Input/ForeverKeyBindingSubsystem`、`Player/ForeverPlayerController`、`PuzzleWidget.h`。
-
-## 待办/后续阶段
-
-- 补上点击防误触的最短展示时长(需要时再加)。

@@ -16,7 +16,3 @@
 
 - 依赖：`common/mod_state.h`、`common/utility.h`(`Time`)、`common/handle.h`、`Change`(前向声明)。
 - 被谁依赖：`scheduler_factory.h`创建它；`Core/populace/scheduler.h`消费它；具体实现在`Source/Basic/populace/scheduler_basic.*`。
-
-## 待办/后续阶段
-
-- 无。

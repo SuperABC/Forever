@@ -32,7 +32,22 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 	meshPath = mod->meshPath;
 	meshScale = mod->meshScale;
 
-	script = MakeScript(&Registry::Get().GetScriptFactory(), mod->scriptModName, mod->milestoneNames);
+	InitScript(mod->scriptModName, mod->milestoneNames);
+}
+
+Asset::Asset(const AssetFixtureDesc& desc, const string& uniqueName) :
+	factory(nullptr), mod(nullptr) {
+	builtin = true;
+	mobility = AssetMobility::Fixed;
+	name = uniqueName;
+	type = desc.type;
+	meshPath = desc.meshPath;
+	InitScript(desc.scriptModName, desc.milestoneNames); // 可能抛(脚本mod没启用/里程碑文件有错)，所以放在分配fixture之前
+	fixture = new AssetFixtureDesc(desc);
+}
+
+void Asset::InitScript(const string& scriptModName, const vector<string>& milestoneNames) {
+	script = MakeScript(&Registry::Get().GetScriptFactory(), scriptModName, milestoneNames);
 	if (script) {
 		script->SetOwner(ScriptOwnerKind::Asset, this);
 		script->SetStableKey("asset:" + name);
@@ -52,6 +67,7 @@ Asset::Asset(AssetMobility builtinMobility, const string& builtinName, const str
 Asset::~Asset() {
 	for (auto& [name, content] : contents) delete content;
 	delete script;
+	delete fixture;
 	if (mod) factory->DestroyAsset(mod);
 }
 
@@ -75,6 +91,16 @@ bool Asset::IsThrowable() const { return throwableFlag; }
 const string& Asset::GetMeshPath() const { return meshPath; }
 float Asset::GetMeshScale() const { return meshScale; }
 bool Asset::IsContainer() const { return volume > 0.f; }
+bool Asset::IsFixture() const { return mobility == AssetMobility::Fixed; }
+
+void Asset::GetMeshScale3(float& outX, float& outY, float& outZ) const {
+	if (fixture) { outX = fixture->scaleX; outY = fixture->scaleY; outZ = fixture->scaleZ; }
+	else { outX = outY = outZ = meshScale; }
+}
+
+const AssetFixtureDesc* Asset::GetFixtureDesc() const { return fixture; }
+const AssetGround& Asset::GetGround() const { return ground; }
+void Asset::SetGround(const AssetGround& value) { ground = value; }
 
 Script* Asset::GetScript() const { return script; }
 const vector<string>& Asset::GetOptions() const { return options; }
@@ -122,6 +148,7 @@ float Asset::GetSpace() const {
 
 bool Asset::AddContent(Asset* content) {
 	if (!content) return false;
+	if (content->IsFixture()) return false; // 固定物品不能被装进任何容器
 	if (contents.count(content->GetName())) return false; // 名字全局唯一，正常不会撞；防止覆盖泄漏旧物品
 	if (content->size * content->count > GetSpace()) return false;
 	contents.insert_or_assign(content->GetName(), content);

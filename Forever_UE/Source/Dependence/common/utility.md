@@ -59,7 +59,3 @@
   不想抛异常的调用方用`Time::TryParse`、`TryParseInt`、`TryParseDouble`）。`.cpp`只用标准库。
 - 被谁依赖：`story/expression.h`（`ValueType`）、`map/general_geometry.h`（`OBJECT_HOLDER`宏、
   `GetRandom`）、Core层各domain代码（`Time`常被城市模拟里的日程/日历系统使用）。
-
-## 待办/后续阶段
-
-- 无。

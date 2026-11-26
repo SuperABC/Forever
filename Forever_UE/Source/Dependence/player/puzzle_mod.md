@@ -15,7 +15,3 @@
 
 - 依赖：`common/mod_state.h`、`player/canvas.h`、`common/handle.h`。
 - 被谁依赖：`puzzle_factory.h`创建它；`Core/player/puzzle.h`消费它；具体实现在`Source/Basic/player/puzzle_*.h/.cpp`和`Forever_Mod/Wxdj`等外部mod里。
-
-## 待办/后续阶段
-
-- 无。

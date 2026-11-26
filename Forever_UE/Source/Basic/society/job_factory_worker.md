@@ -13,7 +13,3 @@
 ## 依赖关系
 
 - 依赖：`society/job_mod.h`、`story/change.h`(`NPCNavigateChange`)、`common/json.h`。
-
-## 待办/后续阶段
-
-- 无。

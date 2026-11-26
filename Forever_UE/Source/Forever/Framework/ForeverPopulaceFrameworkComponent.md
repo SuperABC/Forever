@@ -121,11 +121,6 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
   `UForeverStoryFrameworkComponent`（`FindOrSpawnCitizenByName`）、武器系统（`HandleCitizenDeath`）、
   存档子系统、`ACitizenElement`/`ACitizenController`（`NotifyArrived`、`HandleElementEndPlay`、`PlanWalkPath`）。
 
-## 待办/后续阶段
-
-- `streamingBatchStride`/距离阈值/数量上限是经验初始值，人口规模和地图尺寸确定后按PIE结果调整。
-- 全员随机走动之类的压力测试不放C++，在script里用`npc_navigate`等Change实现。
-
 ## 行走实例化概率
 每次行走的寻路结果落地时(`ApplyWalkResult`)掷一次骰子(`Citizen::RollWalkInstantiable(全局概率)`)，决定这次行走是否参与流式实例化。
 不参与的市民在 `TickComponent` 里一直由 Core 按时间推算位置，走完为止，不占 `maxMovingCitizens` 名额，也不会在视口中间凭空出现。

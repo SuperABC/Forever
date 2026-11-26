@@ -15,7 +15,3 @@
 
 - 依赖：`MeetButtonWidget`、`ForeverFrameworkActor`。
 - 被谁依赖：`Element/AssetElement`、`BuildingElement`、`CitizenElement`、`DoorComponent`、`TransitVehicleElement`、`VehicleElement`，`Framework/ForeverStoryFrameworkComponent`，`Player/ForeverCharacter`、`Player/ForeverPlayerController`。
-
-## 待办/后续阶段
-
-- 无。

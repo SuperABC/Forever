@@ -1,5 +1,6 @@
 #include "Element/BuildingElement.h"
 
+#include "Element/FurnitureCollision.h"
 #include "Framework/CoreGuard.h"
 
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -32,8 +33,6 @@
 #include <algorithm>
 
 #define BUILDING_WORLD_SCALE 1000.f
-// 家具碰撞盒的最小高度(cm)：更矮的(地毯)不生成碰撞体，免得绊脚。
-#define FURNITURE_COLLISION_MIN_HEIGHT 12.0
 // Building没有真实高度数据，楼层cube统一从这个高度起算(相当于室外地坪grade)；它同时是地上1楼地板和地下1楼天花板共用的Z。
 // 必须小于地形mesh自己的z-fighting偏移(HEIGHT_EPSILON 0.002地图单位 x BUILDING_WORLD_SCALE = 2.f)：否则地下室天花板会从地面里冒出来一截；
 // 又必须大于0，与地形之间留1个世界单位间隙，避免共面z-fighting。这不是彻底修复：目前仍不采样building位置的真实地形高度，
@@ -300,26 +299,6 @@ void ABuildingElement::BuildCollisionBox() {
 }
 
 namespace {
-	// 家具碰撞盒的裁剪：床去掉床头板(只留床本身)，沙发/扶手椅去掉靠背(只留座位+扶手)，否则碰撞盒远高于/厚于视觉上能走近的部分。
-	// 网格约定(make_furniture.py，米，-X=背面、+X=正面，XY已居中，原点在底面)：
-	//   床：X长2.0~2.1，床头板在-X端厚0.07、高1.05，床身(含枕头)高到0.60；
-	//   沙发/扶手椅：进深0.90、总高0.88，靠背在-X端厚0.20，扶手顶0.62。
-	// 用占包围盒的比例表示，不依赖网格导入单位。boxMin/boxMax是网格局部系的包围盒(cm)。
-	void TrimFurnitureCollisionBox(const FString& meshKey, FVector& boxMin, FVector& boxMax) {
-		int32 slash = INDEX_NONE;
-		meshKey.FindLastChar(TEXT('/'), slash);
-		const FString name = meshKey.Mid(slash + 1);
-		const FVector size = boxMax - boxMin;
-		if (name.StartsWith(TEXT("Bed_"))) {
-			boxMin.X += size.X * 0.035; // 床头板厚0.07/2.0~2.1
-			boxMax.Z = boxMin.Z + size.Z * 0.571; // 0.60/1.05
-		}
-		else if (name.StartsWith(TEXT("Sofa")) || name.StartsWith(TEXT("Armchair"))) {
-			boxMin.X += size.X * 0.222; // 靠背厚0.20/0.90
-			boxMax.Z = boxMin.Z + size.Z * 0.705; // 0.62/0.88
-		}
-	}
-
 	UForeverStoryFrameworkComponent* FindBuildingStoryFramework(UWorld* world) {
 		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
@@ -1087,18 +1066,21 @@ void ABuildingElement::BuildRoomFurniture(int32 floorIndex) {
 		}
 		ism->AddInstances(pair.Value, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
 
-		// 碰撞：每件家具一个包围盒(取网格自己的包围盒，实例变换同家具)。地毯这类薄片(高度<FURNITURE_COLLISION_MIN_HEIGHT)不挡路。
+		// 碰撞：每件家具按种类拆成几个盒子(FurnitureCollision::GetBoxes，网格局部系，实例变换同家具)。
+		// 地毯这类薄片(整件高度<kMinBlockingHeight)不挡路。
 		const FBoxSphereBounds meshBounds = ism->GetStaticMesh()->GetBounds();
-		FVector boxMin = meshBounds.Origin - meshBounds.BoxExtent, boxMax = meshBounds.Origin + meshBounds.BoxExtent;
-		TrimFurnitureCollisionBox(pair.Key, boxMin, boxMax);
-		const FVector boxCenter = (boxMin + boxMax) * 0.5, boxExtent = (boxMax - boxMin) * 0.5;
+		const FVector boundsMin = meshBounds.Origin - meshBounds.BoxExtent, boundsMax = meshBounds.Origin + meshBounds.BoxExtent;
+		TArray<FBox> localBoxes;
+		FurnitureCollision::GetBoxes(pair.Key, boundsMin, boundsMax, localBoxes);
 		for (const FTransform& instance : pair.Value) {
 			const FVector scale = instance.GetScale3D();
-			if (boxExtent.Z * 2.0 * scale.Z < FURNITURE_COLLISION_MIN_HEIGHT) continue;
-			collisionBoxes.Add(FTransform(
-				instance.GetRotation(),
-				instance.TransformPosition(boxCenter),
-				scale * (boxExtent * 2.0 / 100.0))); // 引擎Cube边长100cm
+			if ((boundsMax.Z - boundsMin.Z) * scale.Z < FurnitureCollision::kMinBlockingHeight) continue;
+			for (const FBox& box : localBoxes) {
+				collisionBoxes.Add(FTransform(
+					instance.GetRotation(),
+					instance.TransformPosition(box.GetCenter()),
+					scale * (box.GetSize() / 100.0))); // 引擎Cube边长100cm
+			}
 		}
 	}
 
@@ -1114,15 +1096,7 @@ void ABuildingElement::BuildRoomFurniture(int32 floorIndex) {
 				comp->SetHiddenInGame(true);
 				comp->SetCastShadow(false);
 				comp->SetGenerateOverlapEvents(false);
-				// 只挡人/物理物体/射线(玩家和市民是Pawn通道；本项目Pawn预设不理会Visibility，武器射线用ECC_Pawn)，其余全忽略。
-				comp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-				comp->SetCollisionObjectType(ECC_WorldStatic);
-				comp->SetCollisionResponseToAllChannels(ECR_Ignore);
-				comp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-				comp->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Block);
-				// 例外：必须Block ECC_Visibility。Mannequin的脚部IK控制绑定(CR_Mannequin_FootIK)用Visibility球形射线找地面，
-				// 盒子若忽略它，玩家站上盒顶时射线穿过盒子打到地板，IK把脚和骨盆往下拉到地板——胶囊在盒顶、小白人却插在家具里。
-				comp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+				FurnitureCollision::ApplyBlockingResponse(comp); // 挡人/物理物体/射线/相机，见FurnitureCollision.h
 				comp->RegisterComponent();
 				AddInstanceComponent(comp);
 				nearFurnitureCollisionISM = comp;

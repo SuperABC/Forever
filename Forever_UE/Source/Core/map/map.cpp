@@ -665,6 +665,7 @@ bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent,
 	building->BuildDoors(*this);
 	building->BuildCabins(*this);
 	BuildBuildingScripts(building);
+	BuildRoomAssets(building);
 	AddBuilding(building); // 重名已经在上面查过，这里一定成功
 	if (created) *created = building;
 	return true;
@@ -744,6 +745,7 @@ void Map::InitBuildings() {
 			building->BuildDoors(*this);
 			building->BuildCabins(*this);
 			BuildBuildingScripts(building);
+			BuildRoomAssets(building);
 			if (AddBuilding(building)) {
 				zone->AddInternalBuilding(building);
 			}
@@ -789,6 +791,7 @@ void Map::InitBuildings() {
 			building->BuildDoors(*this);
 			building->BuildCabins(*this);
 			BuildBuildingScripts(building);
+			BuildRoomAssets(building);
 			if (!AddBuilding(building)) delete building;
 		}
 
@@ -3920,6 +3923,14 @@ void Map::BuildBuildingScripts(Building* building) {
 		room->script = MakeEntityScript(scriptFactory, room->scriptModName, room->scriptMilestones,
 			room->GetName(), room->GetAddress());
 		if (room->script) room->script->SetValue("building", ValueType(building->GetName()));
+	}
+}
+
+void Map::BuildRoomAssets(Building* building) {
+	if (!building) return;
+	AssetFactory& assetFactory = Registry::Get().GetAssetFactory();
+	for (Room* room : building->GetRooms()) {
+		if (room) room->CreatePlacedAssets(assetFactory, warnedPlacedAssetMods);
 	}
 }
 

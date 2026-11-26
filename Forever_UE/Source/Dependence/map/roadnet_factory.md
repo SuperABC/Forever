@@ -14,7 +14,3 @@
 
 - 依赖：`map/roadnet_mod.h`。
 - 被谁依赖：`Source/Core/map/map.h`(`Map::roadnetFactory`成员)。
-
-## 待办/后续阶段
-
-- 无。

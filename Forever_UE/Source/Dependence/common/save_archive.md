@@ -30,7 +30,3 @@
 
 - 依赖：只有标准库。
 - 被谁依赖：`Source/Core/common/save.*`、`Source/Forever/Mod/ForeverSaveSubsystem.*`。
-
-## 待办/后续阶段
-
-- 无。

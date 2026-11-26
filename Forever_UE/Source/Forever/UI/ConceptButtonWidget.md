@@ -14,7 +14,3 @@
 
 - 依赖：`loader.h`的concept描述；`ModPanelWidget`提供回调。
 - 被谁依赖：`ModPanelWidget.cpp`。
-
-## 待办/后续阶段
-
-- 无。

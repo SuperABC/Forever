@@ -104,9 +104,5 @@
   `Asset`/`Phone`)取Factory引用；`SaveGame`(`save.cpp`，读档时`ReloadModArgs`)；
   `Source/Forever/Framework/ForeverFrameworkActor.cpp`(`BeginPlay()`里调`RefreshMods()`)。
 
-## 待办/后续阶段
-
-- 无。
-
 ## 种子(`--seed`)
 `ReloadModArgs`先`RandomRegistry::Reset()`，再读config顶层`seed`登记全局种子，并对每个`<concept>_mods`条目用`RandomRegistry::ExtractSeed`剥掉`--seed N`(mod构造函数收到的参数里没有它)、把种子登记给该mod id。23个concept因此都自动支持`--seed`。`ModLoader::LoadHandle`加载DLL后调用它导出的`BindModHost`(见`FOREVER_MOD_BIND_HOST`，`Dependence/common/mod_concepts.md`)，把Core的随机host和`debugf`输出函数交给DLL自己那份Dependence。详见`Dependence/common/random.md`。

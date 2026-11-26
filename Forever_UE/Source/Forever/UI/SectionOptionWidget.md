@@ -13,7 +13,3 @@
 
 - 依赖：`SectionButtonWidget`、`ForeverFrameworkActor`。
 - 被谁依赖：`Framework/ForeverStoryFrameworkComponent`(`ShowCurrentItem`)、`Player/ForeverPlayerController`。
-
-## 待办/后续阶段
-
-- 无。

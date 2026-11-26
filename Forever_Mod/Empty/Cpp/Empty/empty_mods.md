@@ -15,6 +15,3 @@
 ## 依赖关系
 - 依赖:`Source/Dependence`里这22个concept的`<Concept>Mod`/`<Concept>Factory`头文件,链接`Dependence.lib`(`#pragma comment(lib)`);不依赖Core、不依赖UE。
 - 不在`Framework.sln`里,Dependence公共头文件变动后需单独重编(见CONVENTIONS第9节)。
-
-## 待办/后续阶段
-- 无。

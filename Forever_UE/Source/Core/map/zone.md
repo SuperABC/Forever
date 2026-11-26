@@ -109,9 +109,3 @@
   `PlaceZoneInternalBuilding`四个私有方法）、
   `Source/Forever/Framework/ForeverZoneFrameworkComponent.h/.cpp`（`GenerateZones(Map*)`
   读`Zone::GetWalls()`/`GetGates()`铺围墙ISM）。
-
-## 待办/后续阶段
-
-- Zone内部再对自己剩余的矩形跑一次Building分配流程（推迟，等设计好细节再补）——现有的
-  `internalBuildings`是`ZoneMod`显式指定的固定建筑列表，不是自动填充剩余空间，两者不是
-  一回事。

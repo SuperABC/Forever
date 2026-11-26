@@ -18,7 +18,3 @@
 
 - 依赖：`common/mod_state.h`。
 - 被谁依赖：`storage_factory.h`创建它；`Core/industry/storage.h`消费它；具体实现在`Source/Basic/industry/storage_*.h/.cpp`和外部mod里。
-
-## 待办/后续阶段
-
-- 无。

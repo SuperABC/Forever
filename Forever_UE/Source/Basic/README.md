@@ -22,7 +22,3 @@
   `Source/Dependence/<domain>/<concept>_factory.h`(`basic.cpp`的`RegisterMod<Concept>`要用)。
 - 被谁依赖：不被任何代码静态`#include`/链接——`Basic.dll`只在运行时被`Config`/`ModLoader`
   按符号名发现、加载，和`Forever_Mod/Test`、`Forever_Mod/Wxdj`等外部mod处于同一层级。
-
-## 待办/后续阶段
-
-- 确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前靠`<concept>_<name>`的习惯写法避免撞名，没有出现冲突场景；这只是弱约定)。

@@ -14,7 +14,3 @@
 
 - 依赖：`society/job_mod.h`、`story/change.h`(`NPCNavigateChange`)、`common/json.h`。
 - 被谁依赖：`basic.cpp`注册(`ShopSalerJob`依赖`room_shop`)；`ShopOrganization::DesignJobsForRoom`/`ManufactureOrganization::DesignJobsForRoom`按id配岗；`Core/society/job.h`消费。
-
-## 待办/后续阶段
-
-- 无。
