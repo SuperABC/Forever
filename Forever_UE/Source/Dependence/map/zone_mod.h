@@ -88,7 +88,7 @@ public:
 	std::vector<ZoneInternalBuildingSpec> internalBuildings;
 
 	// 园区的Script,milestoneNames非空才创建,见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
 	std::vector<std::string> milestoneNames;
 
 	// 放一个自定义StaticMesh,在Layout()里调用,坐标约定见zone_mod.md。

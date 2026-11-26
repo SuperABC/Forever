@@ -15,10 +15,6 @@
 class Event;
 class Dialog;
 
-// 默认ScriptMod的id：实体要建Script但mod没填scriptModName时Core用它，Zone/Building/Room/电梯/门的scriptModName
-// 字段默认值也是它(Forever_Mod/Empty提供的空脚本mod)。靠默认值用到它的mod同样要在GetModDependencies里声明依赖它。
-inline constexpr const char* kDefaultScriptModId = "script_empty";
-
 // 一次Script::MatchEvent匹配命中后要执行的一个动作；指针是引用，本体挂在Milestone上，绝不delete
 using ScriptAction = std::variant<const Dialog*, const Change*>;
 

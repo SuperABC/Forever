@@ -15,7 +15,7 @@
 - `mod`：转发`GetType()`/`GetCategory()`/`IsDrivable()`/`IsBoardable()`/`GetCapacity()`/
   `GetSize()`/`GetBlueprintPath()`/`GetTransitMeshPath()`/网格变换/下车偏移等只读属性
   （`mod`为空时返回空/默认值，见下"创建失败"）。种类`GetCategory()`在构造时向工厂按modId查一次
-  （注册的静态`GetCategory()`），查不到兜底`"car"`。
+  （注册的静态`GetCategory()`）。Core不认识任何具体的种类名，mod没声明种类就是空串——这样的车不匹配任何车位、不会被按种类的逻辑挑中；`VehicleFactory::RegisterVehicle`注册时会打一条警告，ModTest把它判为失败。
 - `x`/`y`/`z`/`yaw`/`pitch`：当前世界位姿，由UE侧`AVehicleElement::Tick`或`Route::Update`
   通过`SetTransform`/`SetPitch`写回；`pitch`只有沿坡道/隧道行驶的线路载具才非零，纯运行时不存档。
 - `script`/`options`：自己的`Script`（按`mod->scriptModName`创建、按`mod->milestoneNames`加载

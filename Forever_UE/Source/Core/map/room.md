@@ -61,6 +61,7 @@
     `Citizen`自己都不做级联同步。
 
 - **`assets`（房间地上摆放的资产）**：`Room`独占持有这些`Asset`（析构时`delete`，和`households`/`occupants`
+  `AddAsset`返回`bool`：房间里已经有同名物品时拒绝(打警告、返回false)，不覆盖——覆盖的话旧的那件没人释放。物品名由mod保证全局唯一，正常不会撞。
   那两个非owning指针不同），key=`Asset::GetName()`；`RemoveAsset`只摘除不delete，调用方接手所有权。
   "当前房间"是玩家真实物理位置（`Player::currentRoom`），见`Source/Core/player/asset.md`。
 

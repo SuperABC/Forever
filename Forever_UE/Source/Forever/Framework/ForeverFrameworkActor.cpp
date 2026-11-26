@@ -372,9 +372,9 @@ namespace {
 			static const std::string type = "for_range";
 			return type;
 		}
-		virtual std::pair<bool, ValueType> GetLocalValue(const std::string& key) const override {
-			if (key == name) return { true, ValueType(value) };
-			return outer ? outer->GetLocalValue(key) : std::pair<bool, ValueType>{ false, ValueType() };
+		virtual bool GetLocalValue(const std::string& key, const ValueReceiver& receive) const override {
+			if (key == name) { receive(ValueType(value)); return true; }
+			return outer ? outer->GetLocalValue(key, receive) : false;
 		}
 	private:
 		const Event* outer;
@@ -899,7 +899,7 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 		}
 	}
 
-	if (economy && society) society->RecruitCitizen(citizen, *player->GetTime());
+	if (economy && society && player) society->RecruitCitizen(citizen, *player->GetTime());
 
 	if (populaceFramework) populaceFramework->AddCitizen(citizen);
 }
@@ -1155,7 +1155,7 @@ WorldStepHooks AForeverFrameworkActor::MakeStepHooks()
 	hooks.onImmigrated = [this](Citizen* immigrant) {
 		if (populaceFramework) populaceFramework->AddCitizen(immigrant);
 	};
-	// 公交停稳/离站：Core只产出事件队列，转发给载具自己的script(脚本据此控制上下车选项)。
+	// 线路车停稳/离站：Core只产出事件队列，转发给载具自己的script(脚本据此控制上下车选项)。
 	hooks.onTrafficTicked = [this]() {
 		if (!storyFramework || !traffic) return;
 		for (const Route::StopEvent& stopEvent : traffic->ConsumeStopEvents()) {
@@ -1339,7 +1339,7 @@ void AForeverFrameworkActor::FinishTimeSkip()
 	// 先交通后市民：未走完的车辆腿用Core推算续跑，市民腿落成真实步行。
 	if (trafficFramework) trafficFramework->EndTimeSkip();
 	if (populaceFramework) populaceFramework->EndTimeSkip();
-	if (trafficFramework) trafficFramework->ResyncBusesAfterTimeSkip();
+	if (trafficFramework) trafficFramework->ResyncLineVehiclesAfterTimeSkip();
 	if (storyFramework) storyFramework->UpdateSystemTime();
 
 	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(this, 0)) {
@@ -1354,7 +1354,7 @@ void AForeverFrameworkActor::FinishTimeSkip()
 
 namespace {
 		// 默认地图尺寸(地图元素,1元素=10m)，必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，
-		// 且width*height/(512*512)必须大于1才会生成山，详见Source/Basic/map/terrain_mountain.md。
+		// 地图太小时有的地形mod可能不生成(各mod的门槛见它们自己的文档)，默认值取得足够大。
 		// config.json顶层"map_size"(数字或[宽,高])可覆盖；不写、格式不对或不是2的整数次幂时用默认值。
 	constexpr int kDefaultMapWidth = 1024;
 	constexpr int kDefaultMapHeight = 1024;
@@ -1792,9 +1792,9 @@ void AForeverFrameworkActor::RestoreControlledPawn(const FForeverPendingLoad& lo
 		}
 	}
 	if (!vehicleName.IsEmpty() && trafficFramework) {
-		// 读档恢复不发enter_vehicle事件(script变量/选项已随存档恢复)。线路公交(搭乘)的位置由Core
+		// 读档恢复不发enter_vehicle事件(script变量/选项已随存档恢复)。线路车(搭乘)的位置由Core
 		// 的Route算，不能用存档里的位姿覆盖。
-		if (trafficFramework->FindTransitElement(vehicleName) || trafficFramework->IsSwitchableRouteBus(vehicleName)) {
+		if (trafficFramework->FindTransitElement(vehicleName) || trafficFramework->IsSwitchableRouteVehicle(vehicleName)) {
 			trafficFramework->ApplyBoardVehicle(vehicleName, playerController, /*bSilent=*/true);
 		}
 		else {

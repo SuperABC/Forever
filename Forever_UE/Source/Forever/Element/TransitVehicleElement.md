@@ -13,7 +13,7 @@
 - **可搭乘(`BuildBoardingComponents`，由骨骼/静态网格包围盒决定)**：触发盒=包围盒(乘 `meshScale`)外扩 XY150/Z50；相机弹簧臂挂车顶中心，臂长 1100，跟随控制器旋转。玩家的 `AForeverCharacter` 进盒 -> 把车辆 options 推给 `UMeetOptionWidget`(上车选项由 `vehicle_bus.script` 在停站时通过 `add_option`/`remove_option` 控制)；Overlap 回调只在玩家当前 pawn 且是 `AForeverCharacter` 时响应。
 - **搭乘**：`UForeverTrafficFrameworkComponent::ApplyBoardVehicle` 让玩家 `Possess` 本 Pawn，`PossessedBy` 只加 `IMC_MouseLook`(没有 `IMC_Default`，WASD 无效)、绑鼠标视角和 F/滚轮选项输入；乘坐期间**一直显示** options(不需要触发盒)；没有 Q 下车键，下车只走 script 的"下车"选项(`leave_vehicle` Change)或 `force_leave`。`ShowOptions` 先 `RemoveName` 再逐个 `AddOption`，不用 `ReplaceOptions`(它在名下没有按钮时是空操作，停站前选项为空，之后新增的选项会丢)。存档记 `controlledVehicle`，读档走 `ApplyBoardVehicle(bSilent)`，位置由 Core Route 算，不用存档位姿覆盖。
 - **运行中选项变化**：`add_option`/`remove_option` 后 `AForeverFrameworkActor::RefreshInteractOptions` 调 `RefreshOptions()` 重新烘焙快照；玩家在盒内或乘坐中时同步刷新屏幕上的选项。Overlap 回调只读 `vehicleNameOnly`/`cachedOptions` 快照，不解引用 Core 对象。
-- **挂起 `SetSuspended`**：线路公交（蓝图是 `AVehicleElement` 子类时）在玩家附近(地形 `busPhysicsLodLevel` 级 LOD 范围内)换成物理 `AVehicleElement` + `ABusController`，玩家搭乘的是那辆物理公交(`SetRideMode`)；这个运动学 Actor 被挂起(隐藏、关 Tick、关触发盒并撤选项)，出范围再恢复。搭乘中的不应被挂起(调用方保证)。火车/飞机仍沿用这里的搭乘逻辑。
+- **挂起 `SetSuspended`**：线路车（蓝图是 `AVehicleElement` 子类、并且指定了线路控制器时）在玩家附近(地形 `linePhysicsLodLevel` 级 LOD 范围内)换成物理 `AVehicleElement` + 蓝图指定的线路控制器(公交是 `ABusController`)，玩家搭乘的是那辆物理公交(`SetRideMode`)；这个运动学 Actor 被挂起(隐藏、关 Tick、关触发盒并撤选项)，出范围再恢复。搭乘中的不应被挂起(调用方保证)。火车/飞机仍沿用这里的搭乘逻辑。
 - `vehicle` 是裸指针引用，不持有所有权，`EndPlay` 只置空。
 
 ## 依赖关系

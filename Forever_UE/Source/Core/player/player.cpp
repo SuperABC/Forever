@@ -17,7 +17,9 @@ Player::Player() : assetFactory(Registry::Get().GetAssetFactory()) {
 	WeaponFactory& weaponFactory = Registry::Get().GetWeaponFactory();
 	for (const string& id : weaponFactory.GetRegisteredIds()) {
 		Weapon* weapon = new Weapon(&weaponFactory, id);
-		if (!weapon->IsValid()) { // 注册了但没在config.json"weapon_mods"里启用
+		// GetRegisteredIds只列已启用的武器，正常都建得出来；建不出来(mod的创建函数没给实例)要说一声。
+		if (!weapon->IsValid()) {
+			debugf(DebugLevel::Warning, "Weapon mod %s could not create an instance, the weapon is skipped.\n", id.c_str());
 			delete weapon;
 			continue;
 		}
@@ -94,6 +96,7 @@ bool Player::IsDead() const { return health <= 0.f; }
 Asset* Player::CreateAsset(const string& id) {
 	Asset* asset = new Asset(&assetFactory, id);
 	if (!asset->IsValid()) {
+		debugf(DebugLevel::Warning, "Asset mod %s is not available (no loaded dll provides it or it is not enabled in the config), no item is created.\n", id.c_str());
 		delete asset;
 		return nullptr;
 	}
@@ -219,8 +222,7 @@ bool Player::AddByPath(const string& path, Asset* asset) {
 		}
 		if (parts[0] == "room") {
 			if (!currentRoom) return false;
-			currentRoom->AddAsset(asset);
-			return true;
+			return currentRoom->AddAsset(asset);
 		}
 		return false;
 	}

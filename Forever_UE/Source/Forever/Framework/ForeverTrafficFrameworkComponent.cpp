@@ -7,7 +7,6 @@
 #include "Element/VehicleElement.h"
 #include "Element/TransitVehicleElement.h"
 #include "Element/CitizenElement.h"
-#include "Controller/BusController.h"
 #include "Controller/VehicleCommandController.h"
 #include "traffic/junction.h"
 #include "Framework/ForeverTerrainFrameworkComponent.h"
@@ -196,7 +195,7 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 	mapRef = map;
 	trafficRef = traffic;
 	junctionTraffic.Reset(); // 换了地图：路口表按新Map重建
-	busStates.Empty();
+	lineVehicleStates.Empty();
 	stationByNodeId.Empty();
 	// pendingNavigations不清：game_start（车辆脚本的vehicle_navigate）比GenerateVehicles先发生，请求要留到车辆登记好之后处理。
 	pendingNavResults.Empty();
@@ -218,6 +217,7 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 		}
 	}
 
+	TSet<const UClass*> reportedNoLineController; // 没指定线路控制器的载具蓝图，每个只说一次
 	for (auto& [name, vehicle] : traffic->GetVehicles()) {
 		if (!vehicle) continue;
 
@@ -225,10 +225,10 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 			// 公共交通车辆：不需要换算世界坐标，Tick里直接读vehicle->GetTransform()驱动，生成时原点占位。
 			UClass* transitClass = ATransitVehicleElement::StaticClass();
 			const string& blueprintPath = vehicle->GetBlueprintPath();
-			UClass* loaded = nullptr; // 蓝图只加载这一次，transit类与公交物理表示的判断共用
+			UClass* loaded = nullptr; // 蓝图只加载这一次，transit类与物理表示的判断共用
 			if (!blueprintPath.empty()) {
 				FString path = UTF8_TO_TCHAR(blueprintPath.data());
-				// 公交同时带了给停车场驾驶用的BP(继承AVehicleElement)：加载出来不是
+				// 线路车的mod可以同时带可驾驶的BP(继承AVehicleElement，停车位驾驶和近处物理段用)：加载出来不是
 				// ATransitVehicleElement的子类就忽略，路线车仍用默认的ATransitVehicleElement。
 				loaded = LoadClass<APawn>(nullptr, *path);
 				if (loaded && loaded->IsChildOf(ATransitVehicleElement::StaticClass())) {
@@ -244,18 +244,24 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 			FString transitName = UTF8_TO_TCHAR(vehicle->GetName().c_str());
 			activeTransitVehicles.Add(transitName, transitElement);
 
-			// 公交：蓝图是 AVehicleElement 子类的话，玩家附近（地形 LOD 范围内）换成它的物理表示+Controller。
-			if (vehicle->GetRoute()->GetStationType() == "bus" && !blueprintPath.empty()) {
-				UClass* physicsClass = (loaded && loaded->IsChildOf(AVehicleElement::StaticClass())) ? loaded : nullptr;
-				if (physicsClass) busPhysicsClasses.Add(physicsClass);
-				FBusState state;
+			// 线路车在玩家附近（地形 LOD 范围内）换不换成物理表示，由它的载具蓝图自己声明：蓝图是 AVehicleElement 子类、
+			// 并且指定了线路控制器(lineControllerClass)才换，换过去之后由那个控制器开。这里不看线路/站点/载具是什么
+			// 种类，也不看线路走不走路网。
+			UClass* physicsClass = (loaded && loaded->IsChildOf(AVehicleElement::StaticClass())) ? loaded : nullptr;
+			if (physicsClass && GetDefault<AVehicleElement>(physicsClass)->lineControllerClass.Get()) {
+				linePhysicsClasses.Add(physicsClass); // 控制器类被这个蓝图的默认对象引用着，跟着它一起不被GC
+				FLineVehicleState state;
 				state.vehicle = vehicle;
 				state.name = transitName;
-				state.bRouteBus = true;
+				state.bRouteVehicle = true;
 				state.physicsClass = physicsClass;
-				state.bNoPhysics = (physicsClass == nullptr);
 				state.kinematic = transitElement;
-				busStates.Add(transitName, state);
+				lineVehicleStates.Add(transitName, state);
+			}
+			else if (physicsClass && !reportedNoLineController.Contains(physicsClass)) {
+				reportedNoLineController.Add(physicsClass);
+				UE_LOG(LogTemp, Log, TEXT("UForeverTrafficFrameworkComponent::GenerateVehicles: 载具蓝图 %s 没有指定线路控制器(Line Controller Class)，用它的线路车一直是运动学的，不切物理。"),
+					*physicsClass->GetPathName());
 			}
 			continue;
 		}
@@ -329,7 +335,7 @@ void UForeverTrafficFrameworkComponent::SyncDrivesToCore() {
 	const double now = GetWorld()->GetTimeSeconds();
 	for (FCarEntry& entry : carEntries) {
 		Vehicle* vehicle = entry.vehicle;
-		if (!vehicle || vehicle->GetRoute()) continue; // 线路公交由时刻表推算，不存行驶状态
+		if (!vehicle || vehicle->GetRoute()) continue; // 线路车由时刻表推算，不存行驶状态
 		AVehicleElement* element = entry.element.Get();
 		vehicle->SetWasSpawned(element != nullptr);
 		vehicle->ClearDriveSnapshot();
@@ -475,7 +481,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 	trafficClock += FMath::Min(DeltaTime, 0.25f);
 	drivers.RemoveAll([](const TWeakObjectPtr<AVehicleCommandController>& driver) { return !driver.IsValid(); });
 
-	UpdateBusPhysicsHandoff();
+	UpdatePhysicsHandoff();
 	ProcessNavResults();
 	ProcessPendingNavigations();
 	UpdateRouteWatches(DeltaTime);
@@ -564,7 +570,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 		// 写，存档不受影响)。正被玩家操控的车(Controller非空)不销毁。
 		entry.location = element->GetActorLocation();
 		entry.yaw = element->GetActorRotation().Yaw;
-		// 正在自己导航的车(测试导航)、被Controller持续驱动的公交也不销毁：跑远了销毁会丢掉运行状态。
+		// 正在自己导航的车(测试导航)、被线路控制器持续驱动的车也不销毁：跑远了销毁会丢掉运行状态。
 		if (!element->IsPlayerControlled() && IsDrivenByController(element)) {
 			// 脱困：在开却长时间没前进(现实时间)，强制交回Core推算。暂停时不计。
 			if (stuckTimeoutSeconds > 0.f && DeltaTime > 0.f && !GetWorld()->IsPaused()) {
@@ -575,15 +581,15 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 				}
 				else if (realNow - entry.stuckSinceReal >= stuckTimeoutSeconds) {
 					UE_LOG(LogTemp, Warning, TEXT("脱困：车辆 %s 超过%.0f秒没有前进，强制流式销毁并交回Core推算。"), *entry.name, stuckTimeoutSeconds);
-					entry.stuckSinceReal = realNow; // 交不回去(公交等)就再等一个周期
+					entry.stuckSinceReal = realNow; // 交不回去(线路车等)就再等一个周期
 					if (HandBackDriveToCore(entry)) {
 						entry.respawnBlockedUntil = GetWorld()->GetTimeSeconds() + 30.0;
 						entry.stuckSinceReal = 0.0;
 						continue;
 					}
-					// 线路公交没有导航目标交不回去：直接传送到下一站。
-					if (TeleportBusToNextStop(entry.name)) {
-						UE_LOG(LogTemp, Warning, TEXT("脱困：公交 %s 传送到下一站。"), *entry.name);
+					// 线路车没有导航目标交不回去：直接传送到下一站。
+					if (TeleportLineVehicleToNextStop(entry.name)) {
+						UE_LOG(LogTemp, Warning, TEXT("脱困：线路车 %s 传送到下一站。"), *entry.name);
 						entry.stuckSinceReal = 0.0;
 						continue;
 					}
@@ -593,7 +599,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 				entry.stuckSinceReal = 0.0;
 			}
 			// 脚本导航中的车：走远了把剩余路径交还Core继续推算并销毁Actor（和市民一样）；
-			// 交不回去（公交等）就保留。
+			// 交不回去（线路车等）就保留。
 			if (TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE &&
 				GetWorld()->GetTimeSeconds() - entry.spawnedAt >= minVehicleLifetime) HandBackDriveToCore(entry);
 		}
@@ -616,7 +622,7 @@ AVehicleElement* UForeverTrafficFrameworkComponent::FindOrSpawnVehicle(const FSt
 	for (FCarEntry& entry : carEntries) {
 		if (entry.name == vehicleName) return SpawnCar(entry);
 	}
-	if (IsSwitchableRouteBus(vehicleName)) return EnsureBusPhysicsElement(vehicleName);
+	if (IsSwitchableRouteVehicle(vehicleName)) return EnsureLinePhysicsElement(vehicleName);
 	return nullptr;
 }
 
@@ -626,7 +632,7 @@ void UForeverTrafficFrameworkComponent::FireVehicleEvent(Vehicle* vehicle, bool 
 	UForeverStoryFrameworkComponent* storyFramework = framework ? framework->GetStoryFramework() : nullptr;
 	if (!storyFramework) return;
 
-	// 只发给被进出的这辆车自己的script，见vehicle_bus.script。
+	// 只发给被进出的这辆车自己的script。
 	if (entering) {
 		EnterVehicleEvent event(vehicle->GetName(), mode);
 		storyFramework->BroadcastToVehicle(event, vehicle);
@@ -651,10 +657,10 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 	APawn* currentPawn = controller->GetPawn();
 	if (!currentPawn || currentPawn == vehicleElement) return;
 
-	// 公交 Controller 在运动学段时车没有物理，先切回物理才能开。
+	// 线路控制器在运动学段时车没有物理，先切回物理才能开。
 	if (Vehicle* driveVehicle = vehicleElement->GetVehicle()) {
-		if (FBusState* busState = busStates.Find(UTF8_TO_TCHAR(driveVehicle->GetName().c_str()))) {
-			if (ABusController* busController = busState->controller.Get()) busController->ForcePhysicsMode();
+		if (FLineVehicleState* lineState = lineVehicleStates.Find(UTF8_TO_TCHAR(driveVehicle->GetName().c_str()))) {
+			if (AVehicleCommandController* lineController = lineState->controller.Get()) lineController->ForcePhysicsMode();
 		}
 	}
 
@@ -706,23 +712,23 @@ ATransitVehicleElement* UForeverTrafficFrameworkComponent::FindTransitElement(co
 void UForeverTrafficFrameworkComponent::ApplyBoardVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent) {
 	if (!controller) return;
 
-	// 线路公交：搭乘的是物理公交（玩家一定在地形 LOD 范围内），公交 Controller 继续按引用开。
-	if (IsSwitchableRouteBus(vehicleName)) {
-		AVehicleElement* bus = EnsureBusPhysicsElement(vehicleName);
-		APawn* busCurrentPawn = controller->GetPawn();
-		if (!bus || !busCurrentPawn || busCurrentPawn == bus) {
-			UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ApplyBoardVehicle: 公交物理表示不可用 %s"), *vehicleName);
+	// 能切物理的线路车：搭乘的是物理车（玩家一定在地形 LOD 范围内），线路控制器继续按引用开。
+	if (IsSwitchableRouteVehicle(vehicleName)) {
+		AVehicleElement* lineElement = EnsureLinePhysicsElement(vehicleName);
+		APawn* riderPawn = controller->GetPawn();
+		if (!lineElement || !riderPawn || riderPawn == lineElement) {
+			UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ApplyBoardVehicle: 线路车的物理表示不可用 %s"), *vehicleName);
 			return;
 		}
-		if (ACitizenElement* citizenElement = Cast<ACitizenElement>(busCurrentPawn)) {
+		if (ACitizenElement* citizenElement = Cast<ACitizenElement>(riderPawn)) {
 			citizenElement->SetDespawnExempt(true);
 		}
-		busCurrentPawn->SetActorHiddenInGame(true);
-		busCurrentPawn->SetActorEnableCollision(false);
-		bus->SetPreviousPawn(busCurrentPawn);
-		bus->SetRideMode(true);
-		controller->Possess(bus);
-		if (!bSilent) FireVehicleEvent(bus->GetVehicle(), true, "ride");
+		riderPawn->SetActorHiddenInGame(true);
+		riderPawn->SetActorEnableCollision(false);
+		lineElement->SetPreviousPawn(riderPawn);
+		lineElement->SetRideMode(true);
+		controller->Possess(lineElement);
+		if (!bSilent) FireVehicleEvent(lineElement->GetVehicle(), true, "ride");
 		return;
 	}
 
@@ -771,7 +777,7 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	if (AVehicleElement* driven = Cast<AVehicleElement>(vehicleElement)) {
 		vehicle = driven->GetVehicle();
 		previousPawn = driven->GetPreviousPawn().Get();
-		bRide = driven->IsRideMode(); // 搭乘物理公交：和ATransitVehicleElement搭乘一样不做遮挡判定
+		bRide = driven->IsRideMode(); // 搭乘物理线路车：和ATransitVehicleElement搭乘一样不做遮挡判定
 	}
 	else if (ATransitVehicleElement* ridden = Cast<ATransitVehicleElement>(vehicleElement)) {
 		vehicle = ridden->GetVehicle();
@@ -1096,7 +1102,7 @@ void UForeverTrafficFrameworkComponent::RefreshGuide() {
 		}
 	}
 	else if (const AVehicleElement* vehicle = Cast<AVehicleElement>(pawn)) {
-		if (vehicle->IsRideMode()) { HideGuideLine(); return; } // 公交乘客：不画
+		if (vehicle->IsRideMode()) { HideGuideLine(); return; } // 线路车乘客：不画
 		// 开车：车道导航。先试直接到房间；车到不了就去建筑1楼外部连接点附近的车道。
 		const FVector location = pawn->GetActorLocation();
 		const FVector forward = pawn->GetActorForwardVector();
@@ -1361,7 +1367,7 @@ AVehicleElement* UForeverTrafficFrameworkComponent::FindVehicleElement(const FSt
 
 
 // ---------------------------------------------------------------------------------------------
-// 公交 Controller 驱动
+// 线路车的 Controller 驱动与远近切换
 // ---------------------------------------------------------------------------------------------
 
 void UForeverTrafficFrameworkComponent::FireStopEvent(Vehicle* vehicle, int32 stationNodeId, bool entering) {
@@ -1383,16 +1389,16 @@ void UForeverTrafficFrameworkComponent::FireStopEvent(Vehicle* vehicle, int32 st
 	}
 }
 
-UForeverTrafficFrameworkComponent::FBusState* UForeverTrafficFrameworkComponent::FindOrAddBusState(const FString& vehicleName) {
-	if (FBusState* found = busStates.Find(vehicleName)) return found;
-	// 停车场公交第一次被 Controller 驱动：登记状态（没有时刻表、没有运动学表示）。
+UForeverTrafficFrameworkComponent::FLineVehicleState* UForeverTrafficFrameworkComponent::FindOrAddLineVehicleState(const FString& vehicleName) {
+	if (FLineVehicleState* found = lineVehicleStates.Find(vehicleName)) return found;
+	// 停着的车第一次被 Controller 驱动：登记状态（没有时刻表、没有运动学表示）。
 	for (FCarEntry& entry : carEntries) {
 		if (entry.name == vehicleName && entry.vehicle) {
-			FBusState state;
+			FLineVehicleState state;
 			state.vehicle = entry.vehicle;
 			state.name = vehicleName;
 			state.bNoPhysics = true;
-			return &busStates.Add(vehicleName, state);
+			return &lineVehicleStates.Add(vehicleName, state);
 		}
 	}
 	return nullptr;
@@ -1404,27 +1410,27 @@ bool UForeverTrafficFrameworkComponent::IsDrivenByController(const AVehicleEleme
 	if (const TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(elementName)) {
 		if (driver->IsValid() && (*driver)->HasCommands()) return true;
 	}
-	const FBusState* state = busStates.Find(elementName);
+	const FLineVehicleState* state = lineVehicleStates.Find(elementName);
 	if (!state) return false;
-	const ABusController* controller = state->controller.Get();
+	const AVehicleCommandController* controller = state->controller.Get();
 	return controller && controller->HasCommands();
 }
 
-AVehicleElement* UForeverTrafficFrameworkComponent::FindBusPhysicsElement(const FString& vehicleName) const {
-	const FBusState* state = busStates.Find(vehicleName);
+AVehicleElement* UForeverTrafficFrameworkComponent::FindLinePhysicsElement(const FString& vehicleName) const {
+	const FLineVehicleState* state = lineVehicleStates.Find(vehicleName);
 	return state ? state->element.Get() : nullptr;
 }
 
-bool UForeverTrafficFrameworkComponent::IsSwitchableRouteBus(const FString& vehicleName) const {
-	const FBusState* state = busStates.Find(vehicleName);
-	return state && state->bRouteBus && !state->bNoPhysics;
+bool UForeverTrafficFrameworkComponent::IsSwitchableRouteVehicle(const FString& vehicleName) const {
+	const FLineVehicleState* state = lineVehicleStates.Find(vehicleName);
+	return state && state->bRouteVehicle && !state->bNoPhysics;
 }
 
-AVehicleElement* UForeverTrafficFrameworkComponent::EnsureBusPhysicsElement(const FString& vehicleName) {
-	FBusState* state = busStates.Find(vehicleName);
+AVehicleElement* UForeverTrafficFrameworkComponent::EnsureLinePhysicsElement(const FString& vehicleName) {
+	FLineVehicleState* state = lineVehicleStates.Find(vehicleName);
 	if (!state) return nullptr;
 	if (AVehicleElement* element = state->element.Get()) return element;
-	if (state->bRouteBus && !state->bNoPhysics && BusToPhysics(*state)) return state->element.Get();
+	if (state->bRouteVehicle && !state->bNoPhysics && HandoffToPhysics(*state)) return state->element.Get();
 	return nullptr;
 }
 
@@ -1463,8 +1469,10 @@ JunctionTraffic* UForeverTrafficFrameworkComponent::GetJunctionTraffic() {
 	return junctionTraffic.Get();
 }
 
-ABusController* UForeverTrafficFrameworkComponent::SpawnBusController(AVehicleElement* element) {
-	return Cast<ABusController>(SpawnDriver(ABusController::StaticClass(), element));
+AVehicleCommandController* UForeverTrafficFrameworkComponent::SpawnLineController(AVehicleElement* element) {
+	// 每种载具用自己的线路控制器，由载具蓝图指定；没指定的车不能跑线路。
+	UClass* controllerClass = element ? element->lineControllerClass.Get() : nullptr;
+	return controllerClass ? SpawnDriver(controllerClass, element) : nullptr;
 }
 
 AVehicleCommandController* UForeverTrafficFrameworkComponent::SpawnDriver(UClass* controllerClass, AVehicleElement* element) {
@@ -1483,25 +1491,26 @@ AVehicleCommandController* UForeverTrafficFrameworkComponent::SpawnDriver(UClass
 		AForeverFrameworkActor* framework = self ? Cast<AForeverFrameworkActor>(self->GetOwner()) : nullptr;
 		UForeverTerrainFrameworkComponent* terrain = framework ? framework->GetTerrainFramework() : nullptr;
 		if (!terrain || !terrain->IsTerrainGenerated()) return true; // 地形没好：保持原状（物理）
-		return terrain->IsInsideLodLevel(position, self->busPhysicsLodLevel, bCurrentlyPhysics ? 1.f : self->busPhysicsEnterScale);
+		return terrain->IsInsideLodLevel(position, self->linePhysicsLodLevel, bCurrentlyPhysics ? 1.f : self->linePhysicsEnterScale);
 	});
 	controller->Possess(element);
 	return controller;
 }
 
-ABusController* UForeverTrafficFrameworkComponent::GetOrCreateBusController(FBusState& state) {
-	if (ABusController* existing = state.controller.Get()) return existing;
+AVehicleCommandController* UForeverTrafficFrameworkComponent::GetOrCreateLineController(FLineVehicleState& state) {
+	if (AVehicleCommandController* existing = state.controller.Get()) return existing;
 	AVehicleElement* element = state.element.Get();
 	if (!element) return nullptr;
-	ABusController* controller = SpawnBusController(element);
+	AVehicleCommandController* controller = SpawnLineController(element);
 	state.controller = controller;
 	return controller;
 }
 
-void UForeverTrafficFrameworkComponent::CollectBusLoops(TArray<TArray<int32>>& outLoops) const {
-	if (!trafficRef) return;
+void UForeverTrafficFrameworkComponent::CollectLineLoops(const std::string& vehicleType, TArray<TArray<int32>>& outLoops) const {
+	if (!trafficRef || vehicleType.empty()) return;
 	for (const auto& [routeName, route] : trafficRef->GetRoutes()) {
-		if (!route || route->GetStationType() != "bus") continue;
+		// 只要"用这种载具跑的线路"，不认线路/站点的种类名。站点没接上路网的线路 GetLineStopNodeIds 给空，自然跳过。
+		if (!route || route->GetVehicleType() != vehicleType) continue;
 		for (size_t lineIdx = 0; lineIdx < route->GetLines().size(); lineIdx++) {
 			std::vector<int> ids = route->GetLineStopNodeIds(lineIdx);
 			if (ids.size() < 2) continue;
@@ -1512,17 +1521,17 @@ void UForeverTrafficFrameworkComponent::CollectBusLoops(TArray<TArray<int32>>& o
 	}
 }
 
-void UForeverTrafficFrameworkComponent::UpdateBusPhysicsHandoff() {
-	if (busStates.Num() == 0) return;
+void UForeverTrafficFrameworkComponent::UpdatePhysicsHandoff() {
+	if (lineVehicleStates.Num() == 0) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework || !framework->IsInitialGenerationDone()) return;
 	UForeverTerrainFrameworkComponent* terrain = framework->GetTerrainFramework();
 	if (!terrain || !terrain->IsTerrainGenerated()) return;
 
-	// 每帧最多切换一辆（生成物理公交是整车 Chaos 组件，成本高）。
-	for (TPair<FString, FBusState>& pair : busStates) {
-		FBusState& state = pair.Value;
-		if (!state.bRouteBus || state.bDetached || state.bNoPhysics || !state.vehicle) continue;
+	// 每帧最多切换一辆（生成物理车是整车 Chaos 组件，成本高）。
+	for (TPair<FString, FLineVehicleState>& pair : lineVehicleStates) {
+		FLineVehicleState& state = pair.Value;
+		if (!state.bRouteVehicle || state.bDetached || state.bNoPhysics || !state.vehicle) continue;
 
 		AVehicleElement* element = state.element.Get();
 		const bool bPhysics = element != nullptr;
@@ -1542,19 +1551,19 @@ void UForeverTrafficFrameworkComponent::UpdateBusPhysicsHandoff() {
 			state.vehicle->GetTransform(x, y, z, yaw);
 			position = FVector(x, y, z) * TRAFFIC_WORLD_SCALE;
 		}
-		const bool bInside = terrain->IsInsideLodLevel(position, busPhysicsLodLevel, bPhysics ? 1.f : busPhysicsEnterScale);
+		const bool bInside = terrain->IsInsideLodLevel(position, linePhysicsLodLevel, bPhysics ? 1.f : linePhysicsEnterScale);
 		if (bInside && !bPhysics) {
-			if (BusToPhysics(state)) return;
+			if (HandoffToPhysics(state)) return;
 		}
 		else if (!bInside && bPhysics) {
 			if (element->IsPlayerControlled()) continue; // 玩家在开/搭乘：不能收回
-			BusToKinematic(state);
+			HandoffToKinematic(state);
 			return;
 		}
 	}
 }
 
-bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
+bool UForeverTrafficFrameworkComponent::HandoffToPhysics(FLineVehicleState& state) {
 	Vehicle* vehicle = state.vehicle;
 	Route* route = vehicle ? vehicle->GetRoute() : nullptr;
 	if (!route || !state.physicsClass || !GetWorld()) {
@@ -1569,6 +1578,8 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 	if (!schedule.valid) return false;
 	std::vector<int> ids = route->GetLineStopNodeIds(static_cast<size_t>(schedule.line));
 	if (ids.size() < 2) {
+		// 交接给控制器的内容目前是"一圈站点的路网节点"：站点没接上路网的线路给不出来，这辆车就一直走时刻表。
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::HandoffToPhysics: 线路车 %s 的蓝图指定了线路控制器，但它的线路站点没有接上路网，无法交给控制器，保持运动学。"), *state.name);
 		state.bNoPhysics = true;
 		return false;
 	}
@@ -1597,7 +1608,7 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 
 	state.element = element;
 	activeVehicles.Add(state.name, element);
-	ABusController* controller = SpawnBusController(element);
+	AVehicleCommandController* controller = SpawnLineController(element);
 	state.controller = controller;
 	if (!controller) return true;
 
@@ -1620,11 +1631,11 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 	return true;
 }
 
-void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state, bool bSyncProgress) {
+void UForeverTrafficFrameworkComponent::HandoffToKinematic(FLineVehicleState& state, bool bSyncProgress) {
 	AVehicleElement* element = state.element.Get();
 	// 先把时刻表进度对齐到实车当前位置（必须在ClearCommands之前读控制器状态）：物理车比名义速度慢，
-	// 不对齐的话交还瞬间时刻表算出来的位置早已领先一大截，公交会"瞬移"到玩家附近。
-	if (ABusController* controller = bSyncProgress ? state.controller.Get() : nullptr) {
+	// 不对齐的话交还瞬间时刻表算出来的位置早已领先一大截，车会"瞬移"到玩家附近。
+	if (AVehicleCommandController* controller = bSyncProgress ? state.controller.Get() : nullptr) {
 		int32 legIndex;
 		float legFraction, dwellFraction;
 		bool bDwelling;
@@ -1634,7 +1645,7 @@ void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state, bool bS
 			}
 		}
 	}
-	if (ABusController* controller = state.controller.Get()) {
+	if (AVehicleCommandController* controller = state.controller.Get()) {
 		controller->ClearCommands(); // 停站中会补发 leave_stop
 		controller->Destroy();
 	}
@@ -1652,11 +1663,11 @@ void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state, bool bS
 	if (ATransitVehicleElement* kinematic = state.kinematic.Get()) kinematic->SetSuspended(false);
 }
 
-bool UForeverTrafficFrameworkComponent::TeleportBusToNextStop(const FString& vehicleName) {
-	FBusState* state = busStates.Find(vehicleName);
-	if (!state || !state->bRouteBus || state->bDetached || !state->vehicle) return false;
+bool UForeverTrafficFrameworkComponent::TeleportLineVehicleToNextStop(const FString& vehicleName) {
+	FLineVehicleState* state = lineVehicleStates.Find(vehicleName);
+	if (!state || !state->bRouteVehicle || state->bDetached || !state->vehicle) return false;
 	AVehicleElement* element = state->element.Get();
-	ABusController* controller = state->controller.Get();
+	AVehicleCommandController* controller = state->controller.Get();
 	if (!element || !controller || element->IsPlayerControlled()) return false;
 	Route* route = state->vehicle->GetRoute();
 	if (!route) return false;
@@ -1666,36 +1677,40 @@ bool UForeverTrafficFrameworkComponent::TeleportBusToNextStop(const FString& veh
 	if (!controller->QueryLoopProgress(legIndex, legFraction, bDwelling, dwellFraction) || bDwelling) return false;
 	// 这一腿正驶向第legIndex+1站：进度设成这一腿走完(=到站)，再收回物理Actor；位置由时刻表给出。
 	if (!route->SyncVehicleProgress(state->vehicle, legIndex, 1.f, false, 0.f)) return false;
-	BusToKinematic(*state, false);
+	HandoffToKinematic(*state, false);
 	return true;
 }
 
-void UForeverTrafficFrameworkComponent::ResyncBusesAfterTimeSkip() {
-	for (TPair<FString, FBusState>& pair : busStates) {
-		FBusState& state = pair.Value;
-		if (!state.bRouteBus || state.bDetached || !state.element.IsValid()) continue;
+void UForeverTrafficFrameworkComponent::ResyncLineVehiclesAfterTimeSkip() {
+	for (TPair<FString, FLineVehicleState>& pair : lineVehicleStates) {
+		FLineVehicleState& state = pair.Value;
+		if (!state.bRouteVehicle || state.bDetached || !state.element.IsValid()) continue;
 		if (state.element->IsPlayerControlled()) continue; // 玩家在开/搭乘：不动
-		BusToKinematic(state, false); // 之后UpdateBusPhysicsHandoff会按时刻表位置重新决定要不要切物理
+		HandoffToKinematic(state, false); // 之后UpdatePhysicsHandoff会按时刻表位置重新决定要不要切物理
 	}
 }
 
 void UForeverTrafficFrameworkComponent::StartVehicleLineRun(const FString& vehicleName) {
-	AVehicleElement* element = IsSwitchableRouteBus(vehicleName) ? EnsureBusPhysicsElement(vehicleName) : FindOrSpawnVehicle(vehicleName);
+	AVehicleElement* element = IsSwitchableRouteVehicle(vehicleName) ? EnsureLinePhysicsElement(vehicleName) : FindOrSpawnVehicle(vehicleName);
 	if (!element) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartVehicleLineRun: 找不到车辆 %s"), *vehicleName);
 		return;
 	}
-	FBusState* state = FindOrAddBusState(vehicleName);
+	if (!element->lineControllerClass.Get()) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartVehicleLineRun: 车辆 %s 的蓝图没有指定线路控制器(Line Controller Class)，不能按线路运行"), *vehicleName);
+		return;
+	}
+	FLineVehicleState* state = FindOrAddLineVehicleState(vehicleName);
 	if (!state) return;
 	state->element = element;
 
 	TArray<TArray<int32>> loops;
-	CollectBusLoops(loops);
+	CollectLineLoops(state->vehicle ? state->vehicle->GetType() : std::string(), loops);
 	if (loops.Num() == 0) {
-		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartVehicleLineRun: 没有可用的公交环线"));
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartVehicleLineRun: 没有使用车辆 %s 这种载具、并且站点接上路网的线路"), *vehicleName);
 		return;
 	}
-	ABusController* controller = GetOrCreateBusController(*state);
+	AVehicleCommandController* controller = GetOrCreateLineController(*state);
 	if (!controller) return;
 
 	CORE_RANDOM_SCOPE("core.traffic");
@@ -1705,12 +1720,12 @@ void UForeverTrafficFrameworkComponent::StartVehicleLineRun(const FString& vehic
 	controller->PushCommand(FVehicleCommand::MakeNavigate(loop[stopIndex]));
 	FVehicleCommand loopCommand = FVehicleCommand::MakeLoop(loop, (stopIndex + 1) % loop.Num());
 	loopCommand.bStartAtStop = true;               // 导航到这个站之后，接着像刚进站一样先停靠再出发
-	loopCommand.startDwellSeconds = controller->dwellSeconds;
+	loopCommand.startDwellSeconds = controller->GetStopDwellSeconds(loop[stopIndex]);
 	loopCommand.bFireEnterAtStart = true;
 	controller->PushCommand(loopCommand);
 
-	if (state->bRouteBus) {
-		// 线路公交退出时刻表，之后一直由 Controller 持有（LOD 外靠 Controller 的运动学模式）。
+	if (state->bRouteVehicle) {
+		// 线路车退出时刻表，之后一直由 Controller 持有（LOD 外靠 Controller 的运动学模式）。
 		state->bDetached = true;
 		if (state->vehicle) state->vehicle->SetPhysicsDriven(true);
 	}
@@ -2161,9 +2176,9 @@ void UForeverTrafficFrameworkComponent::StartVehicleNavigation(const FNavRequest
 		}
 	};
 	if (!mapRef) { reportPresetFailure(); return; }
-	// 线路公交有自己的时刻表/循环指令，不接这条路。
-	if (const FBusState* busState = busStates.Find(request.vehicleName)) {
-		if (busState->bRouteBus) { reportPresetFailure(); return; }
+	// 线路车有自己的时刻表/循环指令，不接这条路。
+	if (const FLineVehicleState* lineState = lineVehicleStates.Find(request.vehicleName)) {
+		if (lineState->bRouteVehicle) { reportPresetFailure(); return; }
 	}
 	FCarEntry* entry = nullptr;
 	for (FCarEntry& candidate : carEntries) {
@@ -2402,15 +2417,15 @@ void UForeverTrafficFrameworkComponent::ProcessNavResults() {
 }
 
 void UForeverTrafficFrameworkComponent::StopVehicleLineRun(const FString& vehicleName) {
-	FBusState* state = busStates.Find(vehicleName);
+	FLineVehicleState* state = lineVehicleStates.Find(vehicleName);
 	if (!state) return;
-	if (state->bRouteBus) {
-		// 线路公交：停止运行 = 退出时刻表，由 Controller 刹停并持有。先确保物理表示+Controller 存在。
-		EnsureBusPhysicsElement(vehicleName);
+	if (state->bRouteVehicle) {
+		// 线路车：停止运行 = 退出时刻表，由 Controller 刹停并持有。先确保物理表示+Controller 存在。
+		EnsureLinePhysicsElement(vehicleName);
 		if (state->vehicle) state->vehicle->SetPhysicsDriven(true);
 		state->bDetached = true;
 	}
-	if (ABusController* controller = GetOrCreateBusController(*state)) {
+	if (AVehicleCommandController* controller = GetOrCreateLineController(*state)) {
 		controller->StopNow();
 	}
 }

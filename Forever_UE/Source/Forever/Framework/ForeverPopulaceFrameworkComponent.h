@@ -224,7 +224,7 @@ private:
 		Green* greenDest = nullptr, int32 greenCircle = -1);
 	double GameSecondsPerRealSecond() const;
 	// 组织任务行程：见AssignTask。
-	void BoardTruck(Citizen* citizen);                   // 员工走到组织的车：员工消失，车开往预订好的目的车位
+	void BoardTaskVehicle(Citizen* citizen);             // 员工走到组织的车(什么种类的车都一样)：员工消失，车开往预订好的目的车位
 	void OnTaskVehicleFinished(Traffic::TaskTrip* trip, Room* room, bool bArrived); // 任务车导航结束
 	// 员工从车里在room出现：failReason为空=接着走向目的房间；非空=车没能开成/被玩家开走，员工落在room、任务结束并给组织脚本发task_failed。
 	// 没有员工(死亡/离城)就直接结束任务。

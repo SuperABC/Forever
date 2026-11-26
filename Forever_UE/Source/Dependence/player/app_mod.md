@@ -11,6 +11,7 @@
 - **`Loop`不返回int**：没有App需要单方面结束整个Phone，退出/切换完全由Phone自己的Home/Back/任务列表逻辑决定。
 - **`Back`**：收到"返回"操作(底部工具栏返回按钮/Backspace)时调用，多级页面的App在这里弹出自己的导航栈，单页App留空。
 - **`Refresh`**：从后台切回前台时调用，不重新`Init`，只按已有状态重画一次(恢复被切走前的页面/滚动位置)。
+- **`showOnDesktop`**(成员，默认true)：要不要在手机桌面上放图标。不放的App(占位模板、以后只在后台跑的App)在自己的构造函数里设成false，`Phone::BuildAppList`据此跳过。
 
 ## 依赖关系
 

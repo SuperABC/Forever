@@ -172,8 +172,8 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 			uint32_t assetCount = r.U32();
 			for (uint32_t k = 0; k < assetCount && !r.Failed(); k++) {
 				Asset* asset = ReadAsset(player->assetFactory, r);
-				if (asset && room) room->AddAsset(asset);
-				else delete asset;
+				// 没有房间、或者房间里已经有同名物品(存档被改过)：这件没处放，丢掉。
+				if (!(asset && room && room->AddAsset(asset))) delete asset;
 			}
 		}
 

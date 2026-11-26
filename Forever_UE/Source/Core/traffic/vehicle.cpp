@@ -14,8 +14,9 @@ using namespace std;
 
 Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const string& id, const string& name) :
 	factory(factory), mod(nullptr), modId(id), name(name) {
+	// 种类就是mod注册的那个字符串，Core不认识任何具体的种类名。mod没声明种类就是空串：这样的车不匹配任何车位、
+	// 不会被任何按种类的逻辑挑中(注册时VehicleFactory已经打过警告，ModTest也会判失败)。
 	category = factory->GetCategory(id);
-	if (category.empty()) category = "car";
 	mod = factory->CreateVehicle(id);
 	if (mod) MOD_CALL(mod, mod->SetProperty());
 

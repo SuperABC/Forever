@@ -7,7 +7,10 @@ using namespace std;
 Product::Product(ProductFactory* factory, const string& id) :
 	factory(factory), batchSize(1.f) {
 	mod = factory->CreateProduct(id);
-	if (!mod) return;
+	if (!mod) {
+		invalidReason = "no loaded dll provides it or it is not enabled in the config";
+		return;
+	}
 
 	type = mod->GetType();
 	MOD_CALL(mod, mod->SetProperty());
@@ -26,6 +29,7 @@ Product::Product(ProductFactory* factory, const string& id) :
 	if (!(retailPrice > importPrice && importPrice > exportPrice && exportPrice > 0)) {
 		factory->DestroyProduct(mod);
 		mod = nullptr;
+		invalidReason = "its prices must satisfy retail > import > export > 0";
 	}
 }
 
@@ -34,6 +38,7 @@ Product::~Product() {
 }
 
 bool Product::IsValid() const { return mod != nullptr; }
+const string& Product::GetInvalidReason() const { return invalidReason; }
 int64_t Product::GetRetailPrice() const { return retailPrice; }
 int64_t Product::GetImportPrice() const { return importPrice; }
 int64_t Product::GetExportPrice() const { return exportPrice; }

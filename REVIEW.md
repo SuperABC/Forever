@@ -1,15 +1,15 @@
 # 全项目 Review（2026-11-25）
 
-初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮到第十七轮也已入库（`021e707`、`3a402f1`、`de8e1f9`）；第十八轮（异常系统重构，含 C9）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
+初版基于提交 `7731158`；第二轮修复、第三轮（ModTest 拆分）、第四轮（引用检查）、第五轮（A7–A11）已随提交 `3500c67`、`1d86cff` 入库；第六轮到第十七轮也已入库（`021e707`、`3a402f1`、`de8e1f9`）；第十八轮（异常系统重构，含 C9）、第十九轮（C11）、第二十轮（B10、删 terrainshot）、第二十一轮（A5）、第二十二轮（A4）、第二十三轮（A3）、第二十四轮（B3）和第二十五轮（B7）还没提交。**已修的条目已经从清单里删掉**，下面 A–G 只剩还没处理的（`[ ]`）；修了什么见各轮小结。
 
 **怎么读这份清单**
 
-- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A6–A11、B1、B2、B4、B5、B6、B8、C1、C2、C3、C4、C5、C6、C7、C8、C9、C10、D1、D3、D4、D5、D6、D7、D8、D9、D10、F2、F3、G1、G3 和整个 E 节（E1–E4）已修并删掉（D9 里 `VehicleMod::drivable`/`capacity` 你决定留着），B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
+- 编号：A=Core 感知具体 mod，B=UE 感知具体 mod，C=bug，D=设计问题，E=违反 `CONVENTIONS.md`，F=文档/注释遗留，G=现有测试失败。编号和初版保持一致，所以有空缺：A3–A11、B1、B2、B3、B4、B5、B6、B7、B8、B10、C1、C2、C3、C4、C5、C6、C7、C8、C9、C10、C11、D1、D3、D4、D5、D6、D7、D8、D9、D10、F2、F3、G1、G3 和整个 E 节（E1–E4）已修并删掉（D9 里 `VehicleMod::drivable`/`capacity` 你决定留着），B9 你决定保持现状、不再关注，D2 你认为不算问题，F1 你决定不管，都删掉了；D4 没有按我最初建议的分发表改，改成了"种类标签 + `switch`"，见第十轮，文中别处提到这些编号时指的就是它们。
 - 可信度：
   - **已确认**：读过对应代码，行号核对过。
   - **潜伏**：代码确实有问题，但当前没有调用路径会触发。
   - **推测**：有依据但没有实际复现/回退验证。
-- 行号对应第十八轮结束时的工作区。
+- 行号对应第二十五轮结束时的工作区。
 
 **覆盖范围**
 
@@ -17,6 +17,251 @@
 
 - mod 感知（A、B）：对 Core/Dependence/Forever 三层的字符串字面量和标识符做了全量扫描，再逐处读上下文核对，这部分比较全。
 - 找 bug（C）：重点精读 + 模式扫描，不是逐行通读。精读过的：`Core/common` 全部、`traffic.cpp`/`vehicle.cpp`、`room.cpp`、`economy.cpp`、`market.cpp`、`election.cpp`、`script.cpp` 的非词汇表部分、`map.cpp` 的前 1200 行和寻路部分、`ForeverFrameworkActor.cpp` 的前 1200 行、`ForeverModSubsystem.cpp`。Basic 各 mod、大部分 UI、存档编解码、`building.cpp`、`route.cpp` 主体只做了扫描，没有精读。
+
+---
+
+## 第二十五轮：B7 按载具/武器命名的类——只改了三处，类名不动
+
+B 节（UE 感知具体 mod）到这里清空了。
+
+**类名为什么不动**
+
+- `APlaneElement`、`ABoatElement`、两个飞机轮子类、`AForeverRocketProjectile` 都保留原名。
+- 它们和 `ABusController` 是同一种情况：是某种载具或武器自己的实现，由 mod 给的蓝图路径间接选中，主程序里没有任何地方按名字或 mod id 去挑它们。你在 B3 里已经认可了这种做法。
+- 我初版建议的"按能力改名"不做了：改类名要给三个蓝图加类重定向，换来的只是名字。
+
+**改了的三处**
+
+- **`BoardTruck` 改名 `BoardTaskVehicle`**：它做的是"员工走到组织的车、上车出发"，什么种类的车都走这里，和卡车无关。一条日志里的 truck 也改成了 vehicle。纯改名。
+- **轮子动画类不再认识飞机类**：`UVehicleWheelAnimInstance` 是所有载具共用的，原来里面直接转成 `APlaneElement` 去读螺旋桨。现在载具基类 `AVehicleElement` 多了一个虚函数"有没有轮子之外一直转的骨骼"，默认没有；飞机覆盖它，把螺旋桨的骨骼名、轴、角度交出来。动画类只认基类。以后别的载具有类似的旋转部件，也是覆盖这个函数，不用改动画类。
+- **一处注释**：`ForeverExplosionEffect.h` 里拿 Test 插件的资产路径举例，换成了中性的示例路径。
+
+**没动的**
+
+- 键位表里三个只给飞机用的动作（加减动力、自由环视）保留。只要飞机类在主程序里，这就是必然的。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod）。
+- 这轮只改了 UE 模块，Dependence、Core、Basic 没动，所以没有重跑 ModTest 和 CoreTest。
+- 没有进 UE 编辑器验证：螺旋桨还转不转、转的方向对不对，要在 PIE 里看一眼；UE 管线仍然没跑过。
+
+---
+
+## 第二十四轮：B3 线路车换不换物理由载具蓝图自己声明
+
+UE 里不再有 `"bus"` 这个字符串，交通组件也不再引用 `ABusController`。
+
+**判据换了**
+
+- **载具蓝图多了一项"线路控制器类"**（`AVehicleElement::lineControllerClass`，蓝图里显示为 Line Controller Class，默认空）。每种载具选自己的控制器，公交选 `BusController`。
+- **线路车换不换物理只看这一项**：蓝图是可驾驶载具、并且指定了线路控制器，才在玩家附近换成物理车并交给那个控制器开。不看线路、站点、载具是什么种类，也不看线路走不走路网。
+- **`ABusController` 保留**，仍然是公交自己的控制器。它现在只通过蓝图被选中，C++ 里没有任何地方直接引用它。
+- **"测试运行"选线路**：原来是"所有站点类型为 bus 的线路"，现在是"使用这种载具的线路"。车的蓝图没指定线路控制器时拒绝并打警告。
+
+**接管机制改成了通用名字**
+
+- 代码里约 120 处按公交起的名字都换了（文档里另有 20 多处跟着改），例如 `FBusState` → `FLineVehicleState`、`BusToPhysics` → `HandoffToPhysics`、`busPhysicsLodLevel` → `linePhysicsLodLevel`。讲通用机制的注释和文档里的"公交"也改成了"线路车"，只在举例时保留"公交"。
+- **两个可调参数改了名**：`busPhysicsLodLevel`、`busPhysicsEnterScale` 改成 `linePhysicsLodLevel`、`linePhysicsEnterScale`，分类从 Traffic|Bus 改成 Traffic|Line。我在 Content 和 Config 里没搜到任何资产改过这两个值，所以没有加属性重定向；如果你在某个蓝图里改过而我没搜到，那个值会回到默认（4 和 0.9）。
+- `ABusController` 和它的文件名不变，它本来就是公交专用的。
+
+**需要你做的（不做公交就不切物理）**
+
+- 在编辑器里打开 `BP_BusElement`，类默认值的 Line 分类下，把 Line Controller Class 选成 `BusController`。
+- 只设在 `BP_BusElement` 上，不要设在 `BP_VehicleElement`（轿车）上：公交蓝图是从轿车蓝图派生的，设在轿车上轿车自己也会带上。
+- 没设的时候，世界生成时日志里会有一条"载具蓝图 … 没有指定线路控制器"。飞机蓝图也会有这一条，那是正常的。
+
+**这轮没解决的**
+
+- **交接内容还是公路专用的**：时刻表交给控制器的是"一圈站点的路网节点 + 当前第几段"。站点没接上路网的线路给不出来，这种线路车即使指定了控制器也保持运动学，并打一条警告。要支持不走路网的物理线路车，得把"怎么从时刻表接手"挪到控制器自己身上，等第一个这样的载具真要做时再抽。
+- **`BP_BusElement` 的父类没动**：它继承自轿车蓝图而不是 `AVehicleElement`，这要在编辑器里改。载具制作说明里补了"父类要直接选 `VehicleElement`"。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod），改名之后又完整编了一遍。
+- 这轮只改了 UE 模块，Dependence、Core、Basic 没动，所以没有重跑 ModTest 和 CoreTest。
+- 没有进 UE 编辑器验证：公交切物理、"测试运行"的实际表现都没看过；UE 管线仍然没跑过。
+
+---
+
+## 第二十三轮：A3 载具查不到种类时不再当成 "car"
+
+- **去掉兜底**：`Vehicle` 的种类就是 mod 注册的那个字符串。mod 没声明种类就是空串，这样的车不匹配任何车位，也不会被按种类的逻辑挑中，各处表现一致。
+- **注册时报出来**：`VehicleFactory::RegisterVehicle` 发现种类为空时打一条警告，指名是哪个 mod。
+- **ModTest 里拦住**：载具的字段检查加了一条"声明了种类"，mod 作者自测时就会失败。
+- 现有 7 个载具 mod 都声明了种类，行为没有任何变化；不改存档格式，不改任何 mod 的接口。
+
+**还剩的写死种类名**
+
+- Core 里现在只剩 `Traffic::AssignVehicles` 里的 `"car"` 和 `"truck"` 两个种类名，那是 A2。
+
+**测试**
+
+- fault 套件加了一组：用测试自己的工厂登记两个假的载具 mod，一个不声明种类、一个声明成别的名字。检查前者注册时报一次警告、车的种类是空串，后者种类原样保留。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑 1373 项通过；扫两个目录下全部 mod 1419 项通过。
+- CoreTest quick：7489 通过、8 失败（都是 polit，即 G2）。报告在 `Forever_UE/Saved/TestReports/review_20261126_a3/core`。
+- 没有进 UE 编辑器验证；UE 管线仍然没跑过。
+
+---
+
+## 第二十二轮：A4 Core 不再按名字跳过占位 mod
+
+Core、Dependence、UE 三层的代码里现在搜不到任何 `<concept>_empty` 的名字了。
+
+**三处特判都删了，换成不认名字的规则**
+
+- **站点**：直接删。占位站点对"想贴哪些路"的回答本来就是"不贴"，行为不变。
+- **线路**：删掉认名字的那行，加了一条通用规则——建完之后既没有线、也没有轨道的线路直接丢掉，打一条日志。对占位线路行为不变；真正的线路 mod 如果什么都没排出来，以前会留下一个空的线路对象，现在也不留了。
+- **手机应用**：应用 mod 加了一个成员 `showOnDesktop`（默认 true），由 mod 自己声明要不要上桌面。占位应用把它设成 false。Core 只看这个标记。
+
+**需要你知道的**
+
+- **应用 mod 的基类多了一个成员**，没有改任何现有函数。四个外部 mod 已随 `build.bat` 重编。
+- **线路那条规则对真实线路也生效，而且测试里已经发生了**。绿化、路网预设、高处地块这三个套件用的是手工做的小地图，上面没有任何车站，公交、火车、飞机三个线路 mod 在那里一条线都排不出来。以前这些世界里会留着 3 个空的线路对象，现在不留了（6 个测试世界各丢掉 3 个，日志里各有一条说明）。正常生成的世界里没有线路被丢掉，econ 摘要和上一轮相同。我认为这是对的——空线路没有任何用处——但它是一个行为变化。
+- 平时用的 `config.json` 没有启用这三个占位 mod，所以平时的游戏不受影响。受影响的是 `Forever_Mod` 下三份示例配置，它们启用了这三个占位 mod；改完之后表现和以前一样。
+- `empty_mods.md` 里补了一条原则：占位 mod 不起作用要靠自己，不要指望 Core 按名字跳过。
+
+**测试**
+
+- fault 套件子进程的配置里启用了占位的应用、线路、站点三个 mod，检查：占位应用没有桌面图标、其它应用照常有；线路表里没有空线路；世界正常生成。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑 1373 项通过；扫两个目录下全部 mod 1419 项通过。
+- CoreTest quick：7485 通过、8 失败（都是 polit，即 G2）。报告在 `Forever_UE/Saved/TestReports/review_20261126_a4/core`。
+- 没有进 UE 编辑器验证；UE 管线仍然没跑过。手机桌面在 UE 里的实际显示没有看过。
+
+---
+
+## 第二十一轮：A5 脚本 mod 可以为空；"拿不到 mod 就跳过"的地方都打警告
+
+**A5：Core 不再依赖 `script_empty`**
+
+- `Script` 背后的脚本 mod 现在可以没有。mod 名留空时不去工厂创建，指针为空，匹配出的动作原样执行。
+- mod 名非空但那个 mod 没注册或没启用，仍然是数据错误。点了名的 mod 拿不到是配置问题，不会悄悄变成"没有 mod"。
+- 三处兜底代码（`MakeScript`、电梯、园区/建筑/房间）和常量 `kDefaultScriptModId` 删掉了。
+- 9 处默认值从 `"script_empty"` 改成空串（Dependence 6 处、Core 3 处）。
+- Basic 里 46 处显式写的 `"script_empty"` 去掉了，依赖表里对它的 43 条依赖声明也去掉了。Yuanshen 的 1 处同样处理。
+- ModTest 跟着改：脚本 mod 留空不再算作引用；"有名字的门必须填脚本 mod"这条检查删了。
+- 这是只对脚本这个 concept 做的决定，写进了 `CONVENTIONS.md` 第 5 节和 `script.md`：脚本的内容来自脚本文件，mod 只是可选的 C++ 钩子；别的 concept 的 mod 仍然必须存在。
+
+**"拿不到 mod 就跳过"的地方都打警告**
+
+| 哪里 | 现在的警告 |
+|---|---|
+| 产品 | 说明原因：mod 拿不到，或者价格关系不成立 |
+| 仓库、工坊 | mod 拿不到，哪间房因此没有仓库/产线 |
+| 载具 | mod 拿不到，哪辆车没建出来 |
+| 物品 | mod 拿不到，没有创建物品 |
+| 武器 | mod 的创建函数没给出实例 |
+
+- 产品、仓库、工坊、载具按 mod 去重：同一个 mod 缺失只报一次，不会每个房间、每辆车各刷一行。
+- 读档时丢弃载具和物品原来就有警告，没动。
+- 核对过：正常跑完 16 个测试套件，这些警告一条都不会出现。枚举武器和产品时工厂只给出已启用的 id，所以禁用一个 mod 不会触发警告。
+
+**需要你知道的**
+
+- **旧存档读不了**：存档里每条脚本记着它的 mod 类型，原来是 `script_empty`，现在是空串，读档比对不上。
+- **`script_empty` 这个 mod 还在**，只是 Core 和 Basic 都不再需要它。`Forever_Mod` 里几份示例配置的 `main_story` 仍然用它当主线的脚本 mod，那是配置自己的选择。
+- **主线脚本没有跟着改**：`main_story` 留空时仍然是"没有配置主线"，`Story::Init` 会跳过，配置界面也要求必须选一个。主线的系统变量池和全局变量池是存变量用的，不在这次范围内。
+- **有名字但没有脚本文件的门**仍然会建一个空 Script（只存名字和标签）。它现在不需要任何 mod 了，所以不再有问题；要不要改成不建，我没有动。
+- `Tools` 下单独编译的四个程序没有重编。
+
+**测试**
+
+- fault 套件的子进程改用一份去掉了 `script_empty` 的配置：世界照样生成出来，载具的脚本都存在且都没有 mod。
+- 新增检查：没有 mod 的 `Script` 能创建、动作原样放行；点名一个不存在的脚本 mod 仍然是数据错误；5 种"拿不到就跳过"各报一次警告、去重有效。
+- 模拟结果没有变：econ 的 4 份摘要和上一轮逐字节相同。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑 1373 项通过；扫两个目录下全部 mod 1419 项通过。比上一轮各少 57、58 项，正好是去掉的依赖声明（Basic 43 条依赖、14 个只依赖 `script_empty` 的条目，全量扫描多 Yuanshen 的 1 条）。
+- CoreTest quick：7481 通过、8 失败（都是 polit，即 G2）。报告在 `Forever_UE/Saved/TestReports/review_20261126_a5/core`。
+- 没有进 UE 编辑器验证；UE 管线仍然没跑过。
+
+---
+
+## 第二十轮：B10 注释里不再点名具体 mod；删掉 terrainshot
+
+**B10**
+
+- UE 层代码注释里点名具体 mod 的地方重新扫了一遍，一共 11 处、9 个文件（初版只列了 4 处），全部改成了不指向具体 mod 的写法：
+  - 拿具体 mod 当例子的 7 处（Mohar、`/Yuanshen/kong.kong`、`asset_pistol`、`weapon_pistol`、`weapon:weapon_rocket`）：换成一般性的描述或 `xxx` 占位。
+  - 指着某个 mod 的脚本解释代码的 4 处（`vehicle_basic.script`、`vehicle_bus.script`、`job_factory_worker.script`、`job_shop_saler.script`）：去掉脚本文件名，直接说行为。
+  - 默认地图尺寸旁边那条"宽×高/(512×512) 必须大于 1 才会生成山"：改成"地图太小时有的地形 mod 可能不生成，各 mod 的门槛见它们自己的文档"。
+- 改完后在 UE 层的 `.h`/`.cpp` 里搜这些名字，已经没有了。
+- **没有处理的**：UE 层的 `.md` 文档里还有大量提到具体 mod 的地方。B10 说的是代码注释，文档我没有统计也没有动。
+
+**删掉 terrainshot**
+
+- 按你的决定，把 UE 测试模块里的 terrainshot 截图套件删了：两个函数、一个阶段状态、四个成员、两个只有它用到的头文件引用，以及 `Test/README.md` 里的条目。
+- 地形材质的画面现在只能在 PIE 里目测。
+
+**验证**
+
+- `build.bat` 全量通过。两处改动一处全是注释，一处是删测试代码，没有重跑 ModTest 和 CoreTest。
+- UE 管线（包括不需要窗口的 boot、components、saveload）这几轮一次都没跑过。
+
+---
+
+## 第十九轮：C11 的七个小问题
+
+七条全部按之前说的修法改了。C 节到这里清空。
+
+**1. 房间里放同名物品**
+- `Room::AddAsset` 改成返回 `bool`：已经有同名物品时拒绝并打警告，不再覆盖。
+- 三个调用方跟着处理了放不进去的情况：玩家丢东西返回失败、读档时丢掉放不进去的那件、UE 层把物品放回原处失败时记一条错误。
+
+**2. 配置里的 `seed`**
+- 只接受 0 到 2^64-1 的整数。负数、超范围的数、不是数字的都打警告并当作没配置。
+- 数字写法和字符串写法两条分支行为一致。
+
+**3. 生成 NPC 时判空**
+- `ApplySpawnNpc` 接入经济系统前加了对 `player` 的判断。
+
+**4. 建筑重名**
+- `CreateBuildingAt` 在布局之前就查重名。重名时这栋建筑还没往地图里登记任何东西，直接删掉即可。
+
+**5. 销毁线路上的车**
+- `Route` 加了 `RemoveVehicle`：从车辆列表、停靠状态、相位修正、还没取走的进站/离站事件里都拿掉。
+- `Traffic::DetachVehicle` 里补了这一步。
+- 线路的排班是按"第几辆/共几辆"算相位的，所以拿掉一辆后，同一条线路上剩下的车会重新均匀排开，位置会跳一下。
+
+**6. 事件取字段的接口**
+- `Event::GetLocalValue` 从"按值返回"改成"把值交给调用方给的回调"。值在事件这一侧算出来、这一侧销毁，调用方在回调里自己拷一份。
+- 34 个实现、112 处 `return` 用脚本批量改的。返回类型从"一对值"变成了 `bool`，漏改任何一处都编译不过，所以这次没有 C8 那种"编译通过但行为变了"的风险。
+
+**7. 按文件名找资源**
+- 资源目录的先后顺序现在单独记着（原来存在无序表里，连写回 `config.json` 的顺序都不稳定）。几个目录里有同名文件时，配置里排在前面的目录优先。
+- 找脚本、找资源文件、列 layout、写回配置都按这个顺序。扫描时发现同名脚本或同名 layout 会打警告，说明用了哪个。
+- 按文件名找资源文件改成查索引，不再每次递归扫盘。索引在扫描目录时顺手建好。
+
+**需要你知道的**
+
+- **第 7 条有一个行为变化**：一局游戏进行当中新放进资源目录的文件，要等下一次开始新游戏或读档才找得到。脚本和 layout 原来就是这样。
+- **第 7 条顺带改了 layout**：原来几个目录里有同名 layout 时用哪个也是不确定的，现在同样是排在前面的目录优先，后面的丢掉并打警告。
+- **第 4 条没有加测试**。建筑名由 mod 生成、保证不重复，测试里造不出重名的建筑。这条只靠读代码确认。
+- **第 3 条没有加测试**。它是防御性的判空，正常流程走不到。
+- `Event` 的虚函数变了，四个外部 mod 已随 `build.bat` 重编；`Tools` 下单独编译的四个程序没有重编。
+
+**测试**
+
+- world 套件加了两条：房间拒绝同名物品；销毁线路上的车之后线路不再认识它、交通照常能走一步。
+- fault 套件加了三组：`seed` 的 9 种写法、两个资源目录有同名文件时谁优先（含调换顺序、扫描后新放文件）、事件通过回调交出字段。
+- 这一轮不应该改变模拟结果：econ 的 4 份摘要和上一轮逐字节相同，polit 的指标也没变。
+
+**验证**
+
+- `build.bat` 全量通过（含 UE 模块和四个外部 mod）。
+- ModTest 跑两遍，都是 0 失败：按 `config.json` 跑 1430 项通过；扫两个目录下全部 mod 1477 项通过。
+- CoreTest quick：7469 通过、8 失败（都是 polit，即 G2）。报告在 `Forever_UE/Saved/TestReports/review_20261126_c11/core`。
+- 没有进 UE 编辑器验证。
 
 ---
 
@@ -751,50 +996,13 @@ CoreTest quick 从 22 项失败降到 8 项，剩下的 8 项全是 G2（polit�
 - 附带：成年年龄用自己的 `kAdultAge = 18`，而经济/选举用的是可调政策 `GovernmentPolicy::adultAge`，两处会不一致。
 - 建议：改成由 mod 声明"谁拥有哪类车、概率多少"（例如 `OrganizationMod`/`SchedulerMod` 上的字段，或车辆 mod 注册时带"适用所有者"），Core 只负责找车位和建资产。
 
-### - [ ] A3 车辆种类查不到时兜底 `"car"`（已确认）
-- 位置：[vehicle.cpp:16](Forever_UE/Source/Core/traffic/vehicle.cpp:16)，[vehicle.h:36](Forever_UE/Source/Core/traffic/vehicle.h:36) 的注释也写着"查不到返回 car"
-- 建议：没注册种类就是空串，或者注册时强制要求种类非空。
-
-### - [ ] A4 按名字特判占位 mod（已确认）
-- 位置：[traffic.cpp:405](Forever_UE/Source/Core/traffic/traffic.cpp:405)（`station_empty`）、[466](Forever_UE/Source/Core/traffic/traffic.cpp:466)（`route_empty`）、[phone.cpp:54](Forever_UE/Source/Core/player/phone.cpp:54)（`app_empty`）
-- 问题：只有这三个 concept 特判了占位 id，其余 20 个没有；`<concept>_empty` 是 `Forever_Mod/Empty` 这个具体 mod 的 id。
-- 建议：二选一——占位 mod 不应该出现在 `config.json` 的启用列表里（那就不需要特判）；或者在 Factory 注册时加一个通用的"占位"标记，Core 统一跳过。
-
-### - [ ] A5 实体脚本兜底 `script_empty`，Core 强依赖一个具体 mod（已确认）
-- 位置（兜底用的 id 第四轮收成了 Dependence 的 `kDefaultScriptModId`，问题本身没变）：`MakeScript` [script.cpp:879](Forever_UE/Source/Core/story/script.cpp:879)；[cabin.cpp:20](Forever_UE/Source/Core/map/cabin.cpp:20)、[map.cpp:3908](Forever_UE/Source/Core/map/map.cpp:3908)；默认值在 `Core/map/building.h`、`room.h`、`zone.h`，以及 Dependence 的 `building_mod.h`、`room_mod.h`、`zone_mod.h`、`feature_spec.h`
-- 问题：没指定 ScriptMod 的实体脚本一律用 `"script_empty"`。`Script::Script` 在 mod 创建失败时抛 `NullPointerException`（[script.cpp:27](Forever_UE/Source/Core/story/script.cpp:27)），而配置界面允许把 `script_empty` 取消勾选。
-- 影响：禁用 `script_empty` 后生成世界会抛异常退出。
-- 建议：没指定 ScriptMod 时用 Dependence 里一个内建的"直通"ScriptMod（不经过 Factory），而不是依赖外部 mod 提供的 id。
-
 ---
 
 ## B. UE（Forever 模块）感知具体 mod
 
-### - [ ] B3 整套公交专用子系统（已确认，改动量最大）
-- 位置：[ForeverTrafficFrameworkComponent.cpp:246](Forever_UE/Source/Forever/Framework/ForeverTrafficFrameworkComponent.cpp:246)、[1549](Forever_UE/Source/Forever/Framework/ForeverTrafficFrameworkComponent.cpp:1549)，以及 `FBusState`、`busStates`、`busPhysicsClasses`、`EnsureBusPhysicsElement`、`BusToPhysics`/`BusToKinematic`、`CollectBusLoops`、`StartBusTestRun`/`StopBusRun`、`ResyncBusesAfterTimeSkip`；`Controller/BusController.*`
-- 问题："近处切物理、远处走时刻表"这套机制靠 `GetStationType() == "bus"` 分派，类名和成员全按公交命名。
-- 建议：抽象成能力而不是车型——例如 `RouteMod` 上加一个"近处切换为物理表示"的开关，UE 这边改名成"线路载具的物理接管"，任何打开这个开关的线路都能用。
-
-### - [ ] B7 按具体载具/武器命名的原生类（已确认，受约束）
-- 位置：`Element/PlaneElement.*`、`BoatElement.*`、`PlaneWheel.*`、`VehicleWheelAnimInstance.*`（里面直接用 `APlaneElement`）、`Player/ForeverRocketProjectile.*`；`BoardTruck`（[ForeverPopulaceFrameworkComponent.cpp:1168](Forever_UE/Source/Forever/Framework/ForeverPopulaceFrameworkComponent.cpp:1168)，实际是"员工上组织的车"，和卡车无关）；`ForeverExplosionEffect.h:38` 的注释举例 `/Test/Effect/BP_GrenadeExplosion`
-- 背景：安装版引擎下 mod 不能带 UE C++，这些类只能留在主程序。它们是通过 mod 给的蓝图路径间接选中的，UE 代码里没有按 mod id 分派，所以算"命名和归属"问题而不是硬违例。
-- 建议：按能力命名（飞行载具/浮力载具/带尾迹的发射物），`BoardTruck` 改成中性名字。
-
-### - [ ] B10 UE 注释里点名具体 mod（已确认，软性）
-- `BuildingElement.cpp:645`、`ForeverBuildingFrameworkComponent.cpp:82`（Mohar），`ForeverAvatarSubsystem.cpp:107`（Yuanshen），`ForeverWeaponVisualComponent.h`（`weapon_pistol`）。没动。
-
 ---
 
 ## C. Bug
-
-### - [ ] C11 小问题（已确认，优先级低）
-- [room.cpp:369](Forever_UE/Source/Core/map/room.cpp:369)：`Room::AddAsset` 用 `insert_or_assign`，同名资产会被覆盖并泄漏。资产名目前唯一，所以没触发。
-- [config.cpp:196](Forever_UE/Source/Core/common/config.cpp:196)：`seed` 写成负数或超大浮点数时，`double` 转 `unsigned long long` 是未定义行为。
-- [ForeverFrameworkActor.cpp:841](Forever_UE/Source/Forever/Framework/ForeverFrameworkActor.cpp:841)：`ApplySpawnNpc` 里 `*player->GetTime()` 没判空（世界生成完之后 `player` 一定非空，实际不会触发）。
-- `Map::CreateBuildingAt`（[map.cpp:665](Forever_UE/Source/Core/map/map.cpp:665)）：建筑重名时 `delete building`，但之前已经登记的 `entityNav[building]` 和 `pendingBuildingRoadAccess` 里的 `owner` 指针还留着。mod 名字唯一，所以没触发。
-- `Traffic::DestroyVehicle` 销毁线路上的车（公交/火车/飞机）时，`Route::lineVehicles` 里还留着它的指针，`Route` 没有移除车辆的入口。第十七轮修 C7 时发现；`DestroyVehicle` 目前没有调用方，所以没触发。
-- `Event::GetLocalValue` 和 C8 修之前的 `Container::GetValue` 是同一种写法：虚函数按值返回 `pair<bool, ValueType>`。目前没有任何 mod 调用它或调用 `EvaluateExpression`，所以不跨 DLL 边界；以后 mod 要读事件字段时得先改。它的值是现算出来的，不能像 `FindValue` 那样返回指针。
-- `Config::GetScriptPath`/`GetResourceFilePath`：遍历 `unordered_map`，多个资源目录里有同名文件时取哪个不确定；`GetResourceFilePath` 每次 post 都重新递归扫盘。
 
 ---
 
@@ -822,7 +1030,7 @@ CoreTest quick 从 22 项失败降到 8 项，剩下的 8 项全是 G2（polit�
 
 ## G. 现有测试失败（不是这几轮改动引起的）
 
-CoreTest quick（`--suite all --quick`）现在只剩 8 项失败，全在 polit 套件。最新报告在 `Forever_UE/Saved/TestReports/review_20261126_ex/core`。
+CoreTest quick（`--suite all --quick`）现在只剩 8 项失败，全在 polit 套件。最新报告在 `Forever_UE/Saved/TestReports/review_20261126_a3/core`。
 
 前五轮是 20 项；第六轮起因为 `small.roadnet` 改了地图变成 22 项；第十六轮解决了 route 的 12 项（G1）和 perform 的 2 项（G3）。
 

@@ -11,7 +11,7 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 - `Match(Event* e, const ScriptContext& context)`是有默认实现的虚函数：默认只比较`GetType()`。需要字段过滤的子类override，
   先调`Event::Match`（类型相同才`static_cast`成自己），再逐个字段比较：触发条件侧的字段用`EvaluateExpression(expr, context)`
   求值后和运行时事件的字面量比，空字段不比较。`MatchLocationField`是这类"表达式 vs 字面量"比较的公共函数（位置/站点/载具/资产事件共用）。
-- `GetLocalValue(name)`：`local.`前缀变量的求值入口（见`expression.md`）。基类默认返回`{false, {}}`，需要的子类override，把自己的字段暴露出来。
+- `GetLocalValue(name, receive)`：`local.`前缀变量的求值入口（见`expression.md`）。有这个字段就把值交给`receive`(一个`std::function<void(const ValueType&)>`)并返回true；基类默认返回false、不调`receive`，需要的子类override，把自己的字段暴露出来。**不按值返回**：事件对象和调用方可能在不同模块里，按值返回带字符串的`ValueType`就是"一侧分配、另一侧释放"(`CONVENTIONS.md`第4节)；现在值在事件这一侧算出来、这一侧销毁，调用方在`receive`里自己拷一份。和`NameMod::GenerateName`的`setResult`是同一个做法。
   事件实例上的字段读的就是运行时字面量。
 - 字段统一是`std::string`（DSL源码，不预先解析），原因同`change.md`"字段类型是`std::string`"（`Expression`树不能跨模块存活）。
   `CitizenDeceaseEvent`的`damage`/`visible`是例外，只存在于运行时事件，不做过滤。

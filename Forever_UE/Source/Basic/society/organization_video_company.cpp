@@ -17,7 +17,6 @@ namespace {
 int VideoCompanyOrganization::count = 0;
 
 VideoCompanyOrganization::VideoCompanyOrganization() : id(count++) {
-	scriptModName = "script_empty";
 	milestoneNames = { "organization_video_company" };
 
 	initialFunds = 20000000;         // 20万元

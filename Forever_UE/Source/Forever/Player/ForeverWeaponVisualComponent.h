@@ -62,7 +62,7 @@ private:
 		bool bHiddenForOwner = false;
 	};
 
-	// 武器type(weapon_pistol)→模型路径+瞄准枪口位置，从WeaponMod读，缓存。
+	// 武器type(WeaponMod的id)→模型路径+瞄准枪口位置，从WeaponMod读，缓存。
 	struct FWeaponVisualDef {
 		FString path;
 		FVector aimOffset = FVector::ZeroVector;

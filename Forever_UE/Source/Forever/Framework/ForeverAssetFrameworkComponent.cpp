@@ -202,11 +202,16 @@ namespace {
 	}
 
 	void ReattachGroundAsset(AForeverFrameworkActor* framework, Asset* asset, const FGroundOrigin& origin) {
+		// 它刚从原处被拿起来，正常一定放得回去；放不回去(原处又出现了同名物品)只能记一笔，物品不再属于任何地方。
+		bool restored = true;
 		if (origin.bWorld) {
-			if (Player* player = framework->GetPlayer()) player->AddWorldAsset(asset, origin.world.transform);
+			if (Player* player = framework->GetPlayer()) restored = player->AddWorldAsset(asset, origin.world.transform);
 		}
 		else if (origin.room) {
-			origin.room->AddAsset(asset);
+			restored = origin.room->AddAsset(asset);
+		}
+		if (!restored && asset) {
+			UE_LOG(LogTemp, Error, TEXT("物品 %s 放不回原处(那里已经有同名物品)。"), UTF8_TO_TCHAR(asset->GetName().c_str()));
 		}
 	}
 }

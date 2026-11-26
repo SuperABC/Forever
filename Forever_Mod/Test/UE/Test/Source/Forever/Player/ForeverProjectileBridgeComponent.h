@@ -19,7 +19,7 @@ class FOREVER_API UForeverProjectileBridgeComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	// 所有者脚本的稳定键(如"weapon:weapon_rocket")，由放置弹射物的Change(以后的spawn_actor)在生成后赋值。
+	// 所有者脚本的稳定键(如"weapon:<武器id>")，由放置弹射物的Change(以后的spawn_actor)在生成后赋值。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Forever")
 	FString OwnerScriptKey;
 

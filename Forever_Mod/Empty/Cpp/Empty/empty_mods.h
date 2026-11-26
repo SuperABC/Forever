@@ -202,7 +202,10 @@ private:
 class EmptyApp : public AppMod {
 public:
 	FOREVER_MOD_GENERIC_UNIT_TEST("app")
-	EmptyApp(const std::string& args) { name = "empty(" + args + ")"; }
+	EmptyApp(const std::string& args) {
+		name = "empty(" + args + ")";
+		showOnDesktop = false; // 占位模板，不在手机桌面上放图标
+	}
 
 	static const char* GetId() { return "app_empty"; }
 	virtual const char* GetType() const override { return "app_empty"; }

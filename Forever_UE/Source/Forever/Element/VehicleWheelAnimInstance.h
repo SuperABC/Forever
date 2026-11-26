@@ -8,7 +8,7 @@
 
 #include "VehicleWheelAnimInstance.generated.h"
 
-class APlaneElement;
+class AVehicleElement;
 
 // 每个轮子缓存的姿态数据——PreUpdate()(游戏线程)写，Evaluate()(可能在工作线程)读，不加锁(Proxy保证二者不同时跑)。
 struct FVehicleWheelPose
@@ -23,7 +23,7 @@ struct FVehicleWheelPose
 	bool bHasLastRawAngle = false;
 };
 
-// 重写FAnimInstanceProxy::Evaluate()，绕开Animation Blueprint节点图，纯C++驱动轮子骨骼的滚动/转向(及飞机螺旋桨)，见VehicleWheelAnimInstance.md。
+// 重写FAnimInstanceProxy::Evaluate()，绕开Animation Blueprint节点图，纯C++驱动轮子骨骼的滚动/转向(以及载具自己声明的"一直转的骨骼"，比如螺旋桨)，见VehicleWheelAnimInstance.md。
 USTRUCT()
 struct FOREVER_API FVehicleWheelAnimInstanceProxy : public FAnimInstanceProxy
 {
@@ -39,14 +39,16 @@ struct FOREVER_API FVehicleWheelAnimInstanceProxy : public FAnimInstanceProxy
 	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
 	virtual bool Evaluate(FPoseContext& Output) override;
 
-	// 飞机螺旋桨：owner是APlaneElement时设置，PreUpdate读它的旋转角/骨骼名/轴，Evaluate叠加到骨骼上。
-	void SetPropellerOwner(const APlaneElement* InPlane); // 实现在cpp：header里APlaneElement只前向声明，TWeakObjectPtr赋值需要完整类型
+	// 一直转的骨骼(螺旋桨之类)：owner是AVehicleElement时设置，PreUpdate问它AVehicleElement::GetSpinningBone，
+	// 有的话Evaluate叠加到那根骨骼上。这里不认识任何具体的载具子类。
+	void SetSpinOwner(const AVehicleElement* InVehicle); // 实现在cpp：header里AVehicleElement只前向声明，TWeakObjectPtr赋值需要完整类型
 
 private:
-	TWeakObjectPtr<const APlaneElement> PropellerOwner;
-	FBoneReference PropellerBone;
-	float PropellerAngle = 0.f;
-	FVector PropellerAxis = FVector(1.f, 0.f, 0.f);
+	TWeakObjectPtr<const AVehicleElement> SpinOwner;
+	FBoneReference SpinBone;
+	float SpinAngle = 0.f;
+	FVector SpinAxis = FVector(1.f, 0.f, 0.f);
+	bool bHasSpinBone = false; // 这一帧owner有没有给出要转的骨骼(PreUpdate写，Evaluate读)
 
 	TWeakObjectPtr<const UChaosWheeledVehicleMovementComponent> WheeledVehicleComponent;
 	TArray<FVehicleWheelPose> WheelPoses;

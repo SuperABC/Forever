@@ -111,6 +111,12 @@ const char* OceanTerrain::GetName() {
 
 不要用"构造函数里一次性拼好存进一个成员、`GetName()`只返回这个成员"的变体——两种写法效果上都能保证唯一性,但风格必须统一,全项目只用上面这一种。
 
+### 哪些对象可以没有mod
+
+一个concept的mod就是这个东西的定义，包装类拿不到mod就不能存在：建筑/房间/地形这类缺了世界就生成不出来的抛`DataException`；产品/仓库/工坊/武器/载具/物品这类缺了只是少一样东西的，创建函数返回空并打一条警告(同一个mod只报一次)，不许悄悄跳过。
+
+**脚本是例外：`ScriptMod`可以没有。** 脚本的内容来自`.script`文件，`ScriptMod`只是"匹配出一批动作之后改写它们"的C++钩子。`scriptModName`留空=这个脚本没有钩子，`Script`照常创建、动作原样执行(`Core/story/script.md`)。所以Core不兜底到任何具体的脚本mod，各concept的`scriptModName`默认值都是空串。别的concept不要照这个做——它们的mod不是可选的附加逻辑。
+
 ## 6. Player类的资产引用方式
 
 Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverPlayerGameMode`/`ForeverPlayerState`)不建Blueprint外壳,直接是可用类,用`ConstructorHelpers::FObjectFinder`/`FClassFinder`在构造函数里引用默认资产(骨骼网格、动画蓝图、Input Mapping Context/Action等)。这只是设置默认值,不影响后续换资产或走向运行时数据驱动换装——子类或运行时代码随时可以覆盖这些`EditDefaultsOnly`属性。

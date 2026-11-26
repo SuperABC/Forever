@@ -14,4 +14,4 @@
 
 ## 依赖关系
 
-- 依赖：`society/organization_mod.h`、`organization_common.h`。被谁依赖：`basic.cpp`注册(依赖`component_office`/`room_office`/`job_video_maker`/`script_empty`)。
+- 依赖：`society/organization_mod.h`、`organization_common.h`。被谁依赖：`basic.cpp`注册(依赖`component_office`/`room_office`/`job_video_maker`)。

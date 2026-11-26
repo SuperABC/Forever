@@ -1078,7 +1078,7 @@ void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* p
 		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
 			Room* current = citizen->GetCurrentRoom();
 			if (task->phase == Traffic::TaskPhase::WalkToVehicle && current == task->parkOrigin) {
-				BoardTruck(citizen); // 走到了组织的车：不是真正的到达，不广播npc_arrive
+				BoardTaskVehicle(citizen); // 走到了组织的车：不是真正的到达，不广播npc_arrive
 				return;
 			}
 			if (task->phase == Traffic::TaskPhase::WalkOut && current == task->destRoom) {
@@ -1162,7 +1162,7 @@ bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, 
 	// 事件脚本里可能又改了行程(极少)：以名字重新取，找不到就不再往下。
 	if (traffic->FindTaskByWorker(worker) != trip) return true;
 	if (bDrive) {
-		if (originRoom == parkOrigin) BoardTruck(worker);
+		if (originRoom == parkOrigin) BoardTaskVehicle(worker);
 		else RequestWalkInternal(worker, parkOrigin);
 	}
 	else {
@@ -1171,7 +1171,7 @@ bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, 
 	return true;
 }
 
-void UForeverPopulaceFrameworkComponent::BoardTruck(Citizen* citizen) {
+void UForeverPopulaceFrameworkComponent::BoardTaskVehicle(Citizen* citizen) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Traffic* traffic = GetTrafficCore();
 	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
@@ -1241,7 +1241,7 @@ void UForeverPopulaceFrameworkComponent::OnTaskVehicleFinished(Traffic::TaskTrip
 	}
 	// 车没能出发/开不到：还停在原车位，员工落回停车房，任务失败。
 	vehicle->ClearReservation();
-	UE_LOG(LogTemp, Warning, TEXT("assign_task: truck navigation failed, worker lands back at the origin."));
+	UE_LOG(LogTemp, Warning, TEXT("assign_task: vehicle navigation failed, worker lands back at the origin."));
 	FinishTaskLanding(trip, trip->parkOrigin, "navigation");
 }
 

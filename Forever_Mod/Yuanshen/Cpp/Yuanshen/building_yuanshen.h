@@ -51,7 +51,7 @@ public:
 		}
 
 		// 两个模板的elevators数组里都只有一口井(下标0)。
-		AssignElevatorCabin(0, 0, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(0, 0, layers - 1, "", "", { "elevator_basic" });
 	}
 
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

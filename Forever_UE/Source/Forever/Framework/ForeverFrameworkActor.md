@@ -118,7 +118,7 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
    每步`SetTime`→`CrossDay`(这一步跨了0点才为真，保证每日体恰好一天一次)→天气`Tick`+`weather_change`→`StepWorld`
    (map/populace/society/industry/经济+移民/traffic/story，**与常规Tick共用同一份**)→反复排空Job/Scheduler/组织到期项
    (`HasDueTimers`)→`DrainExpiredTimers`(story计时器)。
-3. `FinishTimeSkip`：结束跳时间模式、`ResyncBusesAfterTimeSkip`(公交物理车收回，以时刻表为准)、解锁输入、`ReleaseHold`渐隐。
+3. `FinishTimeSkip`：结束跳时间模式、`ResyncLineVehiclesAfterTimeSkip`(线路车的物理车收回，以时刻表为准)、解锁输入、`ReleaseHold`渐隐。
 进度：`GetTimeSkipProgress`(已推进游戏秒/总秒)，黑屏进度条直接用。跳期间再触发jump_time被忽略。
 局限：走路用瞬移代替；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
 `StepWorld`/`TickPopulaceDomain`/`TickSocietyDomain`是从原Tick里抽出来的，顺序不能变。

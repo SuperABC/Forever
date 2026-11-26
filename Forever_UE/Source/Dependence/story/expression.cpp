@@ -109,8 +109,9 @@ ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
 		break;
 	case VARIABLE_SCOPE_LOCAL:
 		if (context.local) {
-			auto value = context.local->GetLocalValue(key);
-			if (value.first) return value.second;
+			// 事件把值交给这个回调，在这里(调用方这一侧)拷一份带走。
+			ValueType value;
+			if (context.local->GetLocalValue(key, [&value](const ValueType& found) { value = found; })) return value;
 		}
 		break;
 	case VARIABLE_SCOPE_GLOBAL:

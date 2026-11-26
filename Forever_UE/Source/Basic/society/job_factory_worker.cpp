@@ -15,7 +15,6 @@ const char* FactoryWorkerJob::GetName() {
 }
 
 void FactoryWorkerJob::SetProperty() {
-	scriptModName = "script_empty";
 	milestoneNames = { "job_factory_worker" };
 }
 

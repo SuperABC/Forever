@@ -101,6 +101,10 @@ public:
 	// 把一辆车绑定到第lineIndex条线路，供Update()按时刻表驱动——Traffic::InitRoutes()按
 	// GetLineVehicleCount()创建车辆后逐个调用这个方法。
 	void AddVehicleToLine(size_t lineIndex, Vehicle* vehicle);
+	// 把一辆车从它所在的线路上拿掉(车要被销毁时调，见Traffic::DetachVehicle)：车辆列表、停站状态、相位修正、
+	// 还没取走的进站/离站事件里都不再有它。同一条线路上剩下的车按新的数量重新均匀排开(相位是按"第几辆/共几辆"算的)。
+	// 这辆车不在任何线路上时什么都不做。
+	void RemoveVehicle(Vehicle* vehicle);
 
 	// 按elapsedSeconds(Traffic::Tick累加的游戏总秒数，单调递增)算每条线路每辆车当前应该在
 	// 哪个位置/停靠在哪个站，直接调vehicle->SetTransform(...)写回——纯函数式实现

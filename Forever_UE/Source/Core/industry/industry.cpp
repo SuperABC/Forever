@@ -1,5 +1,7 @@
 #include "industry/industry.h"
 
+#include "common/utility.h"
+
 #include "common/registry.h"
 
 #include "map/component.h"
@@ -26,6 +28,9 @@ Industry::~Industry() {
 Product* Industry::CreateProduct(const string& modId) {
 	Product* product = new Product(&productFactory, modId);
 	if (!product->IsValid()) {
+		if (warnedUnavailable.insert("product:" + modId).second) {
+			debugf(DebugLevel::Warning, "Product %s is skipped: %s.\n", modId.c_str(), product->GetInvalidReason().c_str());
+		}
 		delete product;
 		return nullptr;
 	}
@@ -111,6 +116,9 @@ Storage* Industry::CreateStorage(const string& modId, const string& name) {
 
 	Storage* storage = new Storage(&storageFactory, modId, name);
 	if (!storage->IsValid()) {
+		if (warnedUnavailable.insert("storage:" + modId).second) {
+			debugf(DebugLevel::Warning, "Storage mod %s is not available (no loaded dll provides it or it is not enabled in the config): %s and every other room that asks for it get no storage.\n", modId.c_str(), name.c_str());
+		}
 		delete storage;
 		return nullptr;
 	}
@@ -145,6 +153,9 @@ Manufacture* Industry::CreateManufacture(const string& modId, const string& name
 
 	Manufacture* manufacture = new Manufacture(&manufactureFactory, modId, name, this);
 	if (!manufacture->IsValid()) {
+		if (warnedUnavailable.insert("manufacture:" + modId).second) {
+			debugf(DebugLevel::Warning, "Manufacture mod %s is not available (no loaded dll provides it or it is not enabled in the config): %s and every other room that asks for it get no production line.\n", modId.c_str(), name.c_str());
+		}
 		delete manufacture;
 		return nullptr;
 	}

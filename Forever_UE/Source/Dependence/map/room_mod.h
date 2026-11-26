@@ -49,7 +49,7 @@ public:
 	std::vector<std::string> manufactureTypes;             // 产线描述(类型列表)
 
 	// 房间的Script,milestoneNames非空才创建,见Core/map/map.md"实体脚本"一节。在SetProperty()里设置。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
 	std::vector<std::string> milestoneNames;
 
 	// 房间门,tag->DoorSpec,在SetProperty()里填写,同一RoomMod类型的房间共用,见feature_spec.h/door.h。

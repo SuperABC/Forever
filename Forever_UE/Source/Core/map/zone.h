@@ -114,7 +114,7 @@ private:
 	std::vector<Door*> doorEntities;
 
 	// ZoneMod::scriptModName/milestoneNames的快照(读档时Layout不会再跑，存档里直接存这两个)。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
 	std::vector<std::string> scriptMilestones;
 	Script* script = nullptr;
 };

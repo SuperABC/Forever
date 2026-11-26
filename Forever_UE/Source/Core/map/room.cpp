@@ -365,8 +365,14 @@ void Room::RemoveOccupant(Citizen* citizen) {
 
 const unordered_map<string, Asset*>& Room::GetAssets() const { return assets; }
 
-void Room::AddAsset(Asset* asset) {
-	if (asset) assets.insert_or_assign(asset->GetName(), asset);
+bool Room::AddAsset(Asset* asset) {
+	if (!asset) return false;
+	if (assets.count(asset->GetName())) {
+		debugf(DebugLevel::Warning, "Room %s already holds an asset named \"%s\", the second one is rejected.\n", GetAddress().c_str(), asset->GetName().c_str());
+		return false;
+	}
+	assets.emplace(asset->GetName(), asset);
+	return true;
 }
 
 Asset* Room::RemoveAsset(const string& name) {

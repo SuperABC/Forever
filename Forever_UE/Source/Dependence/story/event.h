@@ -5,12 +5,16 @@
 #include "../common/json.h"
 #include "expression.h"
 
+#include <functional>
 #include <string>
 #include <map>
 
 
 #undef GetMessage
 
+
+// Event::GetLocalValue把值交出去用的回调，见那里的说明。
+using ValueReceiver = std::function<void(const ValueType&)>;
 
 // 事件基类：Match默认只比较GetType()，需要字段级过滤的子类override，见event.md
 class Event {
@@ -27,7 +31,11 @@ public:
 
 	void SetCondition(const std::string& condition);
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const;
+	// 取这个事件的一个字段(脚本里的local.xxx)。有这个字段就把值交给receive并返回true，没有返回false(不调receive)。
+	// 不按值返回：事件对象和调用方可能在不同模块里(宿主建的事件、mod来读)，按值返回带字符串的ValueType就是
+	// "一侧分配、另一侧释放"(CONVENTIONS.md第4节)。现在值在事件这一侧算出来、这一侧销毁，调用方在receive里
+	// 自己拷一份——receive的函数体编译在调用方那一侧。和NameMod::GenerateName的setResult是同一个做法。
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const;
 
 private:
 	// 控制条件
@@ -55,7 +63,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetMessage(std::string message);
 
@@ -76,7 +84,7 @@ public:
 	virtual const std::string& GetType() const override;
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetName(std::string name);
 
@@ -103,7 +111,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetLabel(std::string label);
 
@@ -123,7 +131,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetZone(std::string zone);
 
@@ -143,7 +151,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetZone(std::string zone);
 
@@ -163,7 +171,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetZone(std::string zone);
 
@@ -190,7 +198,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetZone(std::string zone);
 
@@ -217,7 +225,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetZone(std::string zone);
 
@@ -251,7 +259,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetZone(std::string zone);
 
@@ -287,7 +295,7 @@ public:
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	bool SetFromJson(const JsonValue& root);
 
@@ -335,7 +343,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetName(std::string name);
 
@@ -357,7 +365,7 @@ public:
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetName(std::string name);
 
@@ -387,7 +395,7 @@ public:
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 private:
 	std::string task;
@@ -407,7 +415,7 @@ public:
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 private:
 	std::string task;
@@ -431,7 +439,7 @@ public:
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 private:
 	std::string task;
@@ -452,7 +460,7 @@ public:
 
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetVehicle(std::string vehicle);
 
@@ -518,7 +526,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetName(std::string name);
 
@@ -736,7 +744,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetWeather(std::string weather);
 
@@ -758,7 +766,7 @@ public:
 	virtual ~UseAssetEvent();
 
 	virtual const std::string& GetType() const override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetAsset(std::string asset);
 	const std::string& GetAsset() const;
@@ -786,7 +794,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetStop(std::string stop);
 	const std::string& GetStop() const;
@@ -803,7 +811,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetStop(std::string stop);
 	const std::string& GetStop() const;
@@ -821,7 +829,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetVehicle(std::string vehicle);
 	const std::string& GetVehicle() const;
@@ -841,7 +849,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetVehicle(std::string vehicle);
 	const std::string& GetVehicle() const;
@@ -863,7 +871,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
@@ -884,7 +892,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
@@ -906,7 +914,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
@@ -932,7 +940,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetWeapon(std::string weapon);
 	const std::string& GetWeapon() const;
@@ -956,7 +964,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	void SetField(const std::string& name, ValueType value);
 	void SetVec3(const std::string& name, double x, double y, double z);
@@ -977,7 +985,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	const std::string& GetName() const;
 	const std::string& GetAttacker() const;
@@ -1007,7 +1015,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	const std::string& GetName() const;
 	const std::string& GetFrom() const;
@@ -1030,7 +1038,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	const std::string& GetName() const;
 	const std::string& GetFrom() const;
@@ -1053,7 +1061,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	const std::string& GetParty() const;
 	const std::string& GetAddress() const;
@@ -1073,7 +1081,7 @@ public:
 
 	virtual const std::string& GetType() const override;
 	virtual bool Match(Event* e, const ScriptContext& context) override;
-	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
 
 	const std::string& GetParty() const;
 	const std::string& GetAddress() const;

@@ -11,8 +11,6 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
-#include "UnrealClient.h"
-#include "Camera/CameraActor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -150,15 +148,9 @@ bool UForeverTestSubsystem::Tick(float DeltaTime)
 		else if (WantSuite(TEXT("saveload"))) {
 			Phase = EPhase::SaveLoadSave;
 		}
-		else if (WantSuite(TEXT("terrainshot"))) {
-			BeginTerrainShot();
-		}
 		else {
 			Phase = EPhase::Finish;
 		}
-		break;
-	case EPhase::TerrainShot:
-		TickTerrainShot(DeltaTime);
 		break;
 	case EPhase::RideBoard:
 	case EPhase::RideRun:

@@ -11,7 +11,7 @@
 - 挂示例里程碑脚本`entity_event`(`milestoneNames`):进出这栋楼的事件只发给它,见`Forever_UE/Resource/Story/entity_event.script`。
 - **`YuanshenScript`是空壳**:不override`WrapScript`(默认原样透传),`ys.script`里用`record_object`(kind=`building_yuanshen`,policy=first)拿到楼的地址,再用`npc_teleport`传送角色,不写C++剧情。它存在的唯一目的是让`script_yuanshen`作为主线mod被依赖到`building_yuanshen`。
 - 命名:`GetName()`里现拼`yuanshen<id>`返回(`id(count++)`;`count`是头文件里的`static inline`,不在cpp里定义);`GetInstanceCounter`/`SetInstanceCounter`让存档保存/恢复这个计数器,见`Dependence/common/mod_state.md`。
-- `GetModDependencies`:`building_yuanshen`依赖`room_empty`/`component_empty`/`script_empty`;`script_yuanshen`依赖`building_yuanshen`。creator忽略参数字符串。
+- `GetModDependencies`:`building_yuanshen`依赖`room_empty`/`component_empty`;`script_yuanshen`依赖`building_yuanshen`。creator忽略参数字符串。
 
 ## 依赖关系
 - 依赖:`Dependence`的`building_mod`/`building_factory`/`script_mod`/`script_factory`(只链`Dependence.lib`)。

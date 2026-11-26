@@ -22,14 +22,13 @@ public:
 
 	float GetPower() const { return power; }
 
-	// 螺旋桨当前旋转角(度，0~360)，由UVehicleWheelAnimInstance每帧读取并作用到螺旋桨骨骼上
+	// 螺旋桨当前旋转角(度，0~360)，通过GetSpinningBone交给UVehicleWheelAnimInstance每帧作用到螺旋桨骨骼上
 	// (和车轮同一个纯C++动画实例，不需要动画蓝图)。动力为0时转速逐渐降到0，角度停住。
 	UPROPERTY(BlueprintReadOnly, Category = "Plane|Propeller")
 	float propellerAngle = 0.f;
 
-	// 给UVehicleWheelAnimInstance用(纯C++动画实例，不走动画蓝图)：螺旋桨骨骼名和旋转轴。
-	FName GetPropellerBoneName() const { return propellerBoneName; }
-	FVector GetPropellerAxis() const { return propellerAxis; }
+	// 螺旋桨就是本类"一直转的骨骼"：骨骼名、旋转轴、当前角度。
+	virtual bool GetSpinningBone(FName& outBoneName, FVector& outAxis, float& outAngleDegrees) const override;
 
 protected:
 	virtual void Tick(float DeltaTime) override;

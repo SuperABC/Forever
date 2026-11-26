@@ -4,20 +4,30 @@
 
 #include "common/config.h"
 #include "common/error.h"
+#include "common/json.h"
 #include "common/registry.h"
 #include "common/utility.h"
 #include "industry/industry.h"
+#include "industry/product.h"
 #include "map/building.h"
 #include "map/map.h"
 #include "player/canvas.h"
+#include "player/phone.h"
 #include "player/player.h"
 #include "player/puzzle.h"
 #include "polit/polit.h"
 #include "populace/populace.h"
 #include "society/society.h"
+#include "story/event.h"
 #include "story/expression.h"
 #include "story/script.h"
 #include "story/story.h"
+#include "story/script_mod.h"
+#include "traffic/vehicle.h"
+#include "traffic/vehicle_factory.h"
+#include "traffic/vehicle_mod.h"
+#include "story/script_factory.h"
+#include "traffic/route.h"
 #include "traffic/traffic.h"
 
 #include <filesystem>
@@ -251,6 +261,109 @@ namespace {
 		run.Check(!Config::GetDllPaths().empty() && Config::GetLastReadError().empty(), "the real config reads back fine afterwards", Config::GetLastReadError());
 	}
 
+	// seed只接受0到2^64-1的整数：负数、超范围的数都不接受(当作没配置)，不会悄悄变成别的值。
+	void CheckSeedRange(const TestOptions& options) {
+		TestRun& run = TestRun::Get();
+		const filesystem::path dir = filesystem::path(options.outDir) / "fault";
+		error_code ec;
+		filesystem::create_directories(dir, ec);
+		struct Case { const char* json; bool accepted; unsigned long long value; };
+		const Case cases[] = {
+			{ "42", true, 42ULL },
+			{ "\"42\"", true, 42ULL },
+			{ "0", true, 0ULL },
+			{ "\"18446744073709551615\"", true, 18446744073709551615ULL },
+			{ "-1", false, 0 },
+			{ "\"-1\"", false, 0 },
+			{ "1e30", false, 0 },
+			{ "\"18446744073709551616\"", false, 0 },
+			{ "\"not a number\"", false, 0 },
+		};
+		int wrong = 0;
+		for (const Case& item : cases) {
+			const filesystem::path path = dir / "config_seed.json";
+			WriteFile(path, string("{ \"seed\": ") + item.json + " }");
+			Config::ReadConfig(path.string());
+			unsigned long long seed = 0;
+			const bool has = Config::GetGlobalSeed(seed);
+			if (has != item.accepted || (has && seed != item.value)) {
+				wrong++;
+				run.Note(string("seed ") + item.json + " -> " + (has ? "accepted as " + to_string(seed) : string("rejected")));
+			}
+		}
+		run.Check(wrong == 0, "config seed accepts 0..2^64-1 and rejects negative, out-of-range and non-numeric values", to_string(wrong) + " cases wrong");
+		Config::ReadConfig(options.configPath);
+	}
+
+	// 几个资源目录里有同名文件：配置里排在前面的目录优先；按文件名找资源走索引，新放的文件要RescanFiles之后才找得到。
+	void CheckResourceOrder(const TestOptions& options) {
+		TestRun& run = TestRun::Get();
+		// 配置里的相对路径是相对配置文件所在目录解析的，这里一律给绝对路径。
+		const filesystem::path dir = filesystem::absolute(filesystem::path(options.outDir) / "fault");
+		const filesystem::path first = dir / "resources_first", second = dir / "resources_second";
+		error_code ec;
+		filesystem::remove_all(first, ec);
+		filesystem::remove_all(second, ec);
+		filesystem::create_directories(first / "nested", ec);
+		filesystem::create_directories(second, ec);
+		WriteFile(first / "shared.script", "{ \"milestones\": [] }");
+		WriteFile(second / "shared.script", "{ \"milestones\": [] }");
+		WriteFile(first / "nested" / "shared.dat", "first");
+		WriteFile(second / "shared.dat", "second");
+		WriteFile(second / "only_second.dat", "second");
+
+		auto writeConfig = [&](const filesystem::path& a, const filesystem::path& b) {
+			const filesystem::path path = dir / "config_resources.json";
+			WriteFile(path, "{ \"resource_paths\": [\"" + a.generic_string() + "\", \"" + b.generic_string() + "\"] }");
+			Config::ReadConfig(path.string());
+		};
+		auto under = [](const string& path, const filesystem::path& root) {
+			return !path.empty() && filesystem::path(path).generic_string().find(root.filename().generic_string()) != string::npos;
+		};
+
+		writeConfig(first, second);
+		const vector<string> roots = Config::GetResourceRootPaths();
+		run.Check(roots.size() == 2 && under(roots[0], first) && under(roots[1], second), "resource roots keep the order they have in the config");
+		run.Check(under(Config::GetScriptPath("shared"), first), "a script present in two resource paths resolves to the path listed first", Config::GetScriptPath("shared"));
+		run.Check(under(Config::GetResourceFilePath("shared.dat"), first), "a resource file present in two paths resolves to the path listed first", Config::GetResourceFilePath("shared.dat"));
+		run.Check(under(Config::GetResourceFilePath("only_second.dat"), second), "a resource file that only exists in the second path is still found");
+		run.Check(Config::GetResourceFilePath("missing.dat").empty(), "a resource file that does not exist is not found");
+
+		writeConfig(second, first);
+		run.Check(under(Config::GetScriptPath("shared"), second) && under(Config::GetResourceFilePath("shared.dat"), second),
+			"swapping the two paths in the config swaps which file wins", Config::GetScriptPath("shared") + " | " + Config::GetResourceFilePath("shared.dat"));
+
+		// 索引是扫描时建的：扫描之后新放的文件要等RescanFiles(开始新游戏/读档时调)才找得到。
+		WriteFile(first / "late.dat", "late");
+		run.Check(Config::GetResourceFilePath("late.dat").empty(), "a file added after the scan is not found before RescanFiles");
+		Config::RescanFiles();
+		run.Check(under(Config::GetResourceFilePath("late.dat"), first), "a file added after the scan is found after RescanFiles");
+		const vector<string> rescanned = Config::GetResourceRootPaths();
+		run.Check(rescanned.size() == 2 && under(rescanned[0], second) && under(rescanned[1], first), "RescanFiles keeps the order of the resource roots");
+
+		Config::ReadConfig(options.configPath);
+	}
+
+	// 事件取字段：值通过回调交出来(不按值返回)；没有的字段不调回调。
+	void CheckEventLocalValue() {
+		TestRun& run = TestRun::Get();
+		const string longMessage = "a message that is clearly longer than fifteen characters";
+		GlobalMessageEvent event(longMessage);
+		ValueType received;
+		int calls = 0;
+		const bool found = event.GetLocalValue("message", [&](const ValueType& value) { received = value; calls++; });
+		run.Check(found && calls == 1 && ToString(received) == longMessage, "an event hands a field to the receiver exactly once", ToString(received));
+		calls = 0;
+		const bool missing = event.GetLocalValue("no_such_field", [&](const ValueType&) { calls++; });
+		run.Check(!missing && calls == 0, "an unknown field returns false without calling the receiver");
+		ScriptContext context;
+		context.local = &event;
+		ErrorReport report;
+		string evaluated;
+		const bool finished = GuardCall([&] { evaluated = ToString(EvaluateExpression("$$local.message", context)); }, report);
+		run.Check(finished && evaluated == longMessage, "a script expression reads the event field through the receiver", finished ? evaluated : report.ToLine());
+	}
+
 	// 和AForeverFrameworkActor::EndPlay同一个销毁顺序。
 	void DestroyWorld(TestWorld& world) {
 		delete world.player; world.player = nullptr;
@@ -345,6 +458,155 @@ namespace {
 		run.Check(skipped && next && after == 5, "after a data error in one expression the next one still evaluates");
 	}
 
+	// 没有ScriptMod的脚本：Core不依赖任何具体的脚本mod。这个子进程用的config里已经把script_empty去掉了(见RunFaultSuite)，
+	// 世界照样生成出来；带里程碑文件的实体脚本都没有mod，动作原样放行。
+	void CheckScriptsWithoutMod(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		ScriptFactory& factory = Registry::Get().GetScriptFactory();
+		run.Check(!factory.CheckRegistered("script_empty"), "the placeholder script mod is disabled in this child's config");
+
+		int withScript = 0, withMod = 0;
+		if (world.traffic) {
+			for (const auto& [name, vehicle] : world.traffic->GetVehicles()) {
+				if (!vehicle->GetScript()) continue;
+				withScript++;
+				if (vehicle->GetScript()->GetMod()) withMod++;
+			}
+		}
+		run.Metric("vehicles with a script", withScript, "");
+		run.Check(withScript > 0 && withMod == 0, "the world generates without the placeholder script mod: vehicle scripts exist and have no ScriptMod",
+			to_string(withScript) + " scripts, " + to_string(withMod) + " with a mod");
+
+		ErrorReport report;
+		bool passedThrough = false, emptyType = false;
+		const bool finished = GuardCall([&] {
+			Script script(&factory, "");
+			emptyType = script.GetMod() == nullptr && script.GetType().empty();
+			const vector<ScriptAction> actions = { static_cast<const Change*>(nullptr), static_cast<const Dialog*>(nullptr) };
+			ScriptContext context;
+			const vector<ScriptAction> wrapped = script.WrapScript(nullptr, actions, context, nullptr);
+			script.AutoPop();
+			passedThrough = wrapped.size() == 2 && wrapped == actions;
+		}, report);
+		run.Check(finished && emptyType, "a Script can be created without a ScriptMod", report.ToLine());
+		run.Check(passedThrough, "a Script without a ScriptMod passes matched actions through unchanged");
+
+		// 点了名的mod拿不到仍然是数据错误，不会悄悄变成"没有mod"。
+		const bool created = GuardData([&] { Script script(&factory, "script_that_does_not_exist"); }, report);
+		run.Check(!created && report.kind == ErrorKind::Data, "naming a script mod that is not available is still a data error", report.ToLine());
+	}
+
+	// "拿不到mod就跳过"的地方都要留下一条警告(同一个mod只报一次)。用debugf的输出函数把警告截下来数。
+	vector<string>& CapturedWarnings() {
+		static vector<string> warnings;
+		return warnings;
+	}
+	void CaptureSink(DebugLevel level, const char* text) {
+		if (level == DebugLevel::Warning && text) CapturedWarnings().push_back(text);
+	}
+	int WarningsMentioning(const string& part) {
+		int count = 0;
+		for (const string& warning : CapturedWarnings()) if (Contains(warning, part)) count++;
+		return count;
+	}
+
+	void CheckSkipWarnings(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		if (!world.industry || !world.traffic || !world.player) return;
+		const DebugSink previous = GetDebugSink();
+		CapturedWarnings().clear();
+		SetDebugSink(CaptureSink);
+
+		const bool noProduct = world.industry->CreateProduct("product_missing_x") == nullptr && world.industry->CreateProduct("product_missing_x") == nullptr;
+		const bool noStorage = world.industry->CreateStorage("storage_missing_x", "fault room a") == nullptr && world.industry->CreateStorage("storage_missing_x", "fault room b") == nullptr;
+		const bool noManufacture = world.industry->CreateManufacture("manufacture_missing_x", "fault line a") == nullptr && world.industry->CreateManufacture("manufacture_missing_x", "fault line b") == nullptr;
+		const bool noVehicle = world.traffic->CreateVehicle("vehicle_missing_x", "FaultVehicleA") == nullptr && world.traffic->CreateVehicle("vehicle_missing_x", "FaultVehicleB") == nullptr;
+		const bool noAsset = world.player->CreateAsset("asset_missing_x") == nullptr;
+
+		SetDebugSink(previous);
+		run.Check(noProduct && noStorage && noManufacture && noVehicle && noAsset, "creating something from a mod that is not available returns nothing");
+		run.Check(WarningsMentioning("product_missing_x") == 1, "a skipped product is reported once", to_string(WarningsMentioning("product_missing_x")) + " warnings");
+		run.Check(WarningsMentioning("storage_missing_x") == 1, "a skipped storage is reported once per mod", to_string(WarningsMentioning("storage_missing_x")) + " warnings");
+		run.Check(WarningsMentioning("manufacture_missing_x") == 1, "a skipped production line is reported once per mod", to_string(WarningsMentioning("manufacture_missing_x")) + " warnings");
+		run.Check(WarningsMentioning("vehicle_missing_x") == 1, "a skipped vehicle is reported once per mod", to_string(WarningsMentioning("vehicle_missing_x")) + " warnings");
+		run.Check(WarningsMentioning("asset_missing_x") == 1, "a skipped item is reported", to_string(WarningsMentioning("asset_missing_x")) + " warnings");
+		CapturedWarnings().clear();
+	}
+
+	// 占位mod靠自己"什么都不做"而不起作用，Core不认它们的名字。这个子进程的config里启用了占位的应用/线路/站点mod
+	// (见RunFaultSuite)：应用自己声明不上桌面；线路什么都没排出来所以没有线路对象；站点不贴任何路。
+	void CheckPlaceholderMods(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		AppFactory& apps = Registry::Get().GetAppFactory();
+		const bool appEnabled = apps.CheckRegistered("app_empty");
+		const bool routeEnabled = Registry::Get().GetRouteFactory().CheckRegistered("route_empty");
+		const bool stationEnabled = Registry::Get().GetStationFactory().CheckRegistered("station_empty");
+		run.Check(appEnabled && routeEnabled && stationEnabled, "the placeholder app/route/station mods are enabled in this child's config",
+			string("app=") + (appEnabled ? "1" : "0") + " route=" + (routeEnabled ? "1" : "0") + " station=" + (stationEnabled ? "1" : "0"));
+
+		Phone phone;
+		phone.Init(360, 640);
+		bool placeholderOnDesktop = false;
+		for (const string& type : phone.GetAppTypes()) if (type == "app_empty") placeholderOnDesktop = true;
+		run.Check(!placeholderOnDesktop, "an app that declares showOnDesktop=false gets no desktop icon");
+		run.Check(phone.GetAppTypes().size() + 1 == apps.GetRegisteredIds().size(), "every other enabled app still gets its icon",
+			to_string(phone.GetAppTypes().size()) + " icons for " + to_string(apps.GetRegisteredIds().size()) + " enabled apps");
+
+		int emptyRoutes = 0;
+		bool placeholderRoute = false;
+		if (world.traffic) {
+			for (const auto& [name, route] : world.traffic->GetRoutes()) {
+				if (route->GetLines().empty() && route->GetTrackPaths().empty()) emptyRoutes++;
+				if (Contains(name, "route_empty")) placeholderRoute = true;
+			}
+		}
+		run.Check(emptyRoutes == 0 && !placeholderRoute, "a route mod that lays out nothing leaves no route object behind",
+			to_string(emptyRoutes) + " empty routes");
+	}
+
+	// 载具的种类就是mod注册的那个字符串：Core不兜底成任何具体的种类名。没声明种类的mod注册时报一次警告，
+	// 它的车种类是空串(不匹配任何车位)。用测试自己的工厂和两个假mod，不需要加载任何dll。
+	struct FaultVehicleMod : VehicleMod {
+		FOREVER_MOD_GENERIC_UNIT_TEST("vehicle")
+		explicit FaultVehicleMod(const char* type) : type(type) {}
+		const char* GetType() const override { return type; }
+		const char* GetName() override { return type; }
+		const char* type;
+	};
+
+	void CheckVehicleCategory() {
+		TestRun& run = TestRun::Get();
+		const string plain = "vehicle_fault_no_category", named = "vehicle_fault_with_category";
+		const DebugSink previous = GetDebugSink();
+		CapturedWarnings().clear();
+		SetDebugSink(CaptureSink);
+		VehicleFactory vehicles;
+		ScriptFactory scripts;
+		vehicles.SetModArgs({ { plain, "" }, { named, "" } });
+		vehicles.RegisterVehicle(plain, [](const string&) -> VehicleMod* { return new FaultVehicleMod("vehicle_fault_no_category"); },
+			[](VehicleMod* mod) { delete mod; }, nullptr);
+		vehicles.RegisterVehicle(named, [](const string&) -> VehicleMod* { return new FaultVehicleMod("vehicle_fault_with_category"); },
+			[](VehicleMod* mod) { delete mod; }, []() -> const char* { return "hovercraft"; });
+		SetDebugSink(previous);
+		run.Check(WarningsMentioning(plain) == 1 && WarningsMentioning(named) == 0, "registering a vehicle mod without a category is reported, one with a category is not",
+			to_string(WarningsMentioning(plain)) + " / " + to_string(WarningsMentioning(named)));
+		CapturedWarnings().clear();
+
+		ErrorReport report;
+		string plainCategory = "?", namedCategory = "?";
+		bool valid = false;
+		const bool finished = GuardCall([&] {
+			Vehicle a(&vehicles, &scripts, plain, "FaultVehicleA");
+			Vehicle b(&vehicles, &scripts, named, "FaultVehicleB");
+			valid = a.IsValid() && b.IsValid();
+			plainCategory = a.GetCategory();
+			namedCategory = b.GetCategory();
+		}, report);
+		run.Check(finished && valid, "both test vehicles are created", report.ToLine());
+		run.Check(plainCategory.empty(), "a vehicle whose mod declares no category has an empty category, not a made-up one", "category=" + plainCategory);
+		run.Check(namedCategory == "hovercraft", "a vehicle keeps exactly the category its mod declared", "category=" + namedCategory);
+	}
+
 	// 出过这些错之后收尾仍然干净：世界能销毁、没有泄漏、mod dll全部卸掉。
 	void CheckTeardown(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -363,6 +625,9 @@ namespace {
 }
 
 void FaultSuiteBody(TestWorld& world, const TestOptions& options) {
+	CheckScriptsWithoutMod(world);
+	CheckPlaceholderMods(world);
+	CheckSkipWarnings(world);
 	CheckModExceptions();
 	CheckBadData(options);
 	CheckTeardown(world);
@@ -374,8 +639,45 @@ void RunFaultSuite(const TestOptions& options) {
 	CheckScopes();
 	CheckParsers();
 	CheckBadConfig(options);
-	// 后半要mod和世界：一个种子、小地图就够了。
+	CheckSeedRange(options);
+	CheckResourceOrder(options);
+	CheckEventLocalValue();
+	CheckVehicleCategory();
+	// 后半要mod和世界：一个种子、小地图就够了。子进程用一份派生的config：把script_mods里的script_empty去掉
+	// (世界还能生成出来就说明Core不依赖这个占位脚本mod；main_story用的是别的脚本mod时才这么做)，
+	// 再启用占位的应用/线路/站点mod。
 	TestOptions copy = options;
 	copy.seeds = { options.EffectiveSeeds().front() };
+	{
+		ifstream in(options.configPath);
+		JsonReader reader;
+		JsonValue root;
+		const bool parsed = in && reader.Parse(in, root);
+		TestRun::Get().Check(parsed, "the config parses for the no-placeholder-script child", reader.GetErrorMessages());
+		if (parsed && root["main_story"].AsString() != "script_empty") {
+			JsonValue kept(DATA_ARRAY);
+			for (const auto& entry : root["script_mods"]) {
+				const string raw = entry.AsString();
+				if (raw.substr(0, raw.find(' ')) != "script_empty") kept.append(JsonValue(raw));
+			}
+			root["script_mods"] = kept;
+			// 再把占位的应用/线路/站点mod启用上：它们不起作用要靠自己，不靠Core认名字(CheckPlaceholderMods)。
+			for (const char* key : { "app_mods", "route_mods", "station_mods" }) {
+				JsonValue list(DATA_ARRAY);
+				if (root[key].IsArray()) for (const auto& entry : root[key]) list.append(JsonValue(entry.AsString()));
+				const string conceptName = string(key).substr(0, string(key).find('_'));
+				list.append(JsonValue(conceptName + "_empty"));
+				root[key] = list;
+			}
+			const filesystem::path dir = filesystem::absolute(filesystem::path(options.outDir) / "fault");
+			error_code ec;
+			filesystem::create_directories(dir, ec);
+			const filesystem::path derived = dir / "config_no_script_empty.json";
+			ofstream out(derived, ios::binary);
+			StyledWriter writer;
+			out << writer.Write(root);
+			copy.configPath = derived.string();
+		}
+	}
 	RunSuiteInChildren(copy, "fault", 256);
 }

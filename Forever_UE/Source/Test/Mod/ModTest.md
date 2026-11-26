@@ -70,9 +70,9 @@ ModTest --config Resource\Config\config.json --out Saved\TestReports\<时间>\mo
 - `UnitTest`期间没有漏包随机(没有在任何`RandomScope`之外调`GetRandom`)。
 - 连建两个实例，`GetName()`不同(名字全局唯一的约定见`CONVENTIONS.md`第5节)。`Empty.dll`里的占位模板名字固定，不查这条。
 - **按concept的字段检查**(`mod_checks.cpp`的`ValidateConcept`)：
-  - 车辆：尺寸为正、载客量不为负、能搭乘的车载客量不为0、可驾驶的车要有蓝图或网格路径。
+  - 车辆：声明了种类(`static GetCategory()`非空)、尺寸为正、载客量不为负、能搭乘的车载客量不为0、可驾驶的车要有蓝图或网格路径。
   - 产品：价格满足 零售 > 进口 > 出口 > 0、批量为正、原料/副产品有类型和正数量。
-  - 建筑：国有概率在[0,1]、电梯楼层范围不颠倒。园区：内部建筑要有类型。门：有名字(会建脚本)就必须填`scriptModName`。
+  - 建筑：国有概率在[0,1]、电梯楼层范围不颠倒。园区：内部建筑要有类型。
   - 站点：声明了端口就必须有`stationType`。
   - 房间：容量/房租不为负、住宅有床位、工位房有工位；家具布局见下。
   - 仓库：容量不为负、至少能取或能放。工坊：目标有产品类型和正的批数。地形：`SetupTexture`后有地图颜色。武器：弹匣/射程/缩放为正
@@ -80,8 +80,8 @@ ModTest --config Resource\Config\config.json --out Saved\TestReports\<时间>\mo
 - **引用的mod必须存在**(检查名`referenced mods are provided by a loaded dll`)：mod在字段里写了别的mod的id就是引用，
   被引用的id必须由加载进来的某个dll提供(写错id、忘了用`--with`带dll都在这里暴露)。能看到的引用：
   - 脚本：`scriptModName`。只在Core真的会建Script时才算——园区/建筑/房间/电梯是`milestoneNames`非空，门是`name`非空，
-    岗位/调度/组织/资产/武器/载具是`scriptModName`或`milestoneNames`任一非空。会建而`scriptModName`留空时Core用默认
-    ScriptMod(`Dependence/story/script_mod.h`的`kDefaultScriptModId`，即`script_empty`)，按引用了它算。
+    岗位/调度/组织/资产/武器/载具是`scriptModName`或`milestoneNames`任一非空。会建而`scriptModName`留空=这个脚本没有ScriptMod，
+    不引用任何mod。
   - 园区：内部建筑的类型、大门的脚本。建筑：`AssignRoom`/`ArrangeRow`/`ArrangeRowEach`用到的房间和组件、`stationMod`、
     电梯和门的脚本。这两个concept的引用是`Layout`里填的，ModTest拿8块样例地块各`Layout`一次把引用并起来
     (没被抽到的分支看不到)。

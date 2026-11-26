@@ -36,6 +36,9 @@ public:
 	// @return: 0表示继续，非0表示请求关闭整个手机UI(目前只有Home界面按ESC才会触发)
 	int Loop(Canvas* canvas, int ms, PostHandle* post);
 
+	// 桌面上的App类型(图标顺序)，Init之后有效。
+	const std::vector<std::string>& GetAppTypes() const { return appTypes; }
+
 private:
 	enum class State { Home, InApp, TaskList };
 	enum class BottomButton { None, Back, Home, Tasks };
@@ -68,7 +71,7 @@ private:
 	int barHeight = 0, barY = 0;
 
 	std::vector<std::string> appNames; // 与appTypes一一对应，桌面图标下显示的App::GetName()
-	std::vector<std::string> appTypes; // 已启用的App类型(桌面图标顺序)，来自AppFactory::GetRegisteredIds()，跳过"app_empty"占位id
+	std::vector<std::string> appTypes; // 已启用的App类型(桌面图标顺序)，来自AppFactory::GetRegisteredIds()，跳过AppMod::showOnDesktop为false的
 	std::vector<AppEntry> entries;     // 打开过的App("最近任务")
 	State state = State::Home;
 	int homeSelection = 0;

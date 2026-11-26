@@ -26,6 +26,8 @@
 - **搭乘模式**(`SetRideMode(true)`，Possess 之前设置；线路公交近处让玩家当乘客)：`PossessedBy` 只加视角 Context，常驻显示选项(如停站的"下车")；`Move`/手刹/Q 忽略；`MeetOptionUp/Down/Select` 绑定(同 `ATransitVehicleElement`)；`UnPossessed` 撤选项并清标志。
 - **运动学/物理切换**：`SetKinematicMode(true)` 清输入并关物理(位姿由 Controller 写)；`ResumePhysics(velocity)` 重新开启并 `DisableWheelBodies()`(`SetSimulatePhysics(true)` 会把 Chaos 特意关掉的轮子刚体重新打开)。`ComputeWheelbase()`/`GetFrontAxleLocation()`/`GetMaxSteerAngleDegrees()`(读 `WheelSetups[0]` 轮子类 CDO)/`GetForwardSpeed()`(运动学下为 0)供 Controller 用；约定 `WheelSetups[0..1]` 前轮、`[2..3]` 后轮。
 - **重心与轮子半径**(蓝图按车型填，在 `BeginPlay` 应用而不是 `Init`，因为直接摆在关卡里的车不走 `Init`)：`centerOfMassOffset`(车身局部坐标，非零才 `SetCenterOfMass`，Z 取负=下移防侧翻；公交的下移 60cm 在 `BP_BusElement` 里填 `(0,0,-60)`，基类没有车型特判)；`wheelRadius`(>0 时对每个轮位 `SetWheelRadius`，因为 Chaos 建物理读的是轮子类 CDO 的半径，没法按实例改；填模型轮胎实际半径，只改半径，悬挂行程等仍读类默认值)。
+- **线路控制器**(`lineControllerClass`，蓝图里的 `Line Controller Class`，按车型选，默认空)：这种载具跑线路时用的 `AVehicleCommandController` 子类，每种载具用自己的(公交的 `BP_BusElement` 选 `BusController`)。非空：线路上的这种车在玩家附近换成本蓝图的物理车并交给它开，停着的这种车也能"按线路运行"；空：线路车一直是运动学的。`UForeverTrafficFrameworkComponent` 只读这一项来决定，不看载具/线路的种类。注意它会被子蓝图继承：只在要跑线路的那个蓝图上设，不要设在被别的载具蓝图当父类的蓝图上。
+- **一直转的骨骼**(`virtual GetSpinningBone`，基类返回 false)：轮子之外还要一直转的骨骼(螺旋桨之类)由子类覆盖给出骨骼名/局部轴/累计角度，`UVehicleWheelAnimInstance` 每帧问一次并叠加到骨骼上，所以动画实例只认识本类、不认识具体子类。
 - **Core 位姿同步**：`Tick` 把位姿写回 `Vehicle::SetTransform`，有 `Route` 的车(线路公交)用地图单位，除以 1000。
 - **飞机子类**：`APlaneElement` 继承本类(复用 Chaos 轮子/骨骼网格/近身选项/上下机/存档位置)，换成 3 个轮子，不走本类 `SetupPlayerInputComponent`，见 `PlaneElement.md`。`ExitVehicle()`/`Handbrake()`/`StopHandbrake()` 和各输入成员都是 protected，供子类直接调用。
 

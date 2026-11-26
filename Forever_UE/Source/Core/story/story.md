@@ -11,7 +11,7 @@
   `Registry::Get().GetScriptFactory()`——mod dll的发现/注册只在整个UE进程生命周期里跑一次，
   统一挂在`Registry`（见`Source/Core/common/registry.md`），不是每个`Story`实例各自持有一份。
   用哪个ScriptMod由`config.json`的`main_story`决定(必须在`"script_mods"`里启用)；没指定ScriptMod的
-  实体脚本兜底用`"script_empty"`(由`Forever_Mod/Empty`提供)，所以它必须保持启用。
+  实体脚本就是不带mod(`script.md`"没有ScriptMod的Script")，不依赖任何具体的脚本mod。
 - `Script* mainScript`：主线剧情Script——一份剧本只能由一个Script表示，`Init()`从
   `Resource/Story/test.script`读取。
 - `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`"ScriptContext"一节），

@@ -13,7 +13,6 @@ int ManufactureOrganization::count = 0;
 
 ManufactureOrganization::ManufactureOrganization() : id(count++) {
 	// 有Script才会被Economy::RunServices写入每日变量(self.delivery.*)，脚本里每天上午指挥员工送货，见organization_manufacture.script。
-	scriptModName = "script_empty";
 	milestoneNames = { "organization_manufacture" };
 	initialFunds = 20000000;                // 20万元
 	shareholders = vector<float>(10, 0.1f); // 10个股东各占10%

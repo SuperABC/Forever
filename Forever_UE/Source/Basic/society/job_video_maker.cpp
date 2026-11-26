@@ -15,7 +15,6 @@ const char* VideoMakerJob::GetName() {
 }
 
 void VideoMakerJob::SetProperty() {
-	scriptModName = "script_empty";
 	milestoneNames = { "job_video_maker" };
 }
 

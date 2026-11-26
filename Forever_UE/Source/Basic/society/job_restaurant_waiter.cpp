@@ -15,7 +15,6 @@ const char* RestaurantWaiterJob::GetName() {
 }
 
 void RestaurantWaiterJob::SetProperty() {
-	scriptModName = "script_empty";
 	milestoneNames = { "job_restaurant_waiter" };
 }
 

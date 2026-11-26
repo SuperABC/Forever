@@ -14,7 +14,7 @@
 ## 依赖关系
 
 - 依赖：`VehicleCommandController`、`AVehicleElement`、`UForeverTrafficFrameworkComponent`。
-- 被谁依赖：`UForeverTrafficFrameworkComponent`(公交近处物理驾驶时创建)。
+- 被谁依赖：没有C++代码直接引用这个类。公交的载具蓝图`BP_BusElement`在`Line Controller Class`里选它，`UForeverTrafficFrameworkComponent`按蓝图指定的类创建(公交近处物理驾驶、"测试运行")。
 
 ## 待办/后续阶段
 

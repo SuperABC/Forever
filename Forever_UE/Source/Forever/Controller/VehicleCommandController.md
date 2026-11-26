@@ -15,7 +15,7 @@
 - **状态机**：`Idle`/`Driving`/`Dwelling`。`BeginDwell`/`DepartFromDwell`处理停靠；`QueryLoopProgress`返回循环进度(所在腿、已走比例、是否停靠中、停靠已过比例)，供交还Core时刻表时对齐进度。卡住检测用`stuckSeconds`。
 - **`GetRemainingWaypoints`**：行驶中返回剩余路径(世界坐标，第一个点是车当前位置)，空闲/停靠中/没有有效路径返回false，"你在去哪"折线(`UForeverTrafficFrameworkComponent::TrackTestNavigationLine`)用它。
 - 空闲(无指令)时原地保持：滑行中踩刹车，慢速后拉手刹；车被销毁则Controller自毁。
-- **子类钩子**：`OnStopEntered`/`OnStopLeft`/`GetDwellSeconds`，公交在`ABusController`里实现。
+- **子类钩子**：`OnStopEntered`/`OnStopLeft`/`GetDwellSeconds`，公交在`ABusController`里实现；外面拼指令需要停靠时长时用公开的`GetStopDwellSeconds`。哪种载具用哪个子类由载具蓝图的`lineControllerClass`指定。
 - 可调参数(UE单位cm)都是`UPROPERTY(EditAnywhere)`：`maxSpeed`/`maxLateralAccel`(弯道限速，防侧翻关键)/`maxBrakeDecel`/`maxAccel`/`arriveDistance`/`arriveSpeed`等。
 
 ## 导航结束回调

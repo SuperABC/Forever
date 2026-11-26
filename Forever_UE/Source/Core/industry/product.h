@@ -17,6 +17,8 @@ public:
 
 	// mod为空(id没有注册/没有启用/价格不合法)说明创建失败，调用方应当整个丢弃这个Product。
 	bool IsValid() const;
+	// IsValid()为false时的原因(一句英文，给日志用)：mod拿不到，或者价格关系不成立。
+	const std::string& GetInvalidReason() const;
 
 	const std::string& GetType() const;
 	const std::vector<std::string>& GetCategories() const;
@@ -33,6 +35,7 @@ public:
 	float GetServiceQuality() const;
 
 private:
+	std::string invalidReason;
 	ProductFactory* factory;
 	ProductMod* mod;
 	std::string type;

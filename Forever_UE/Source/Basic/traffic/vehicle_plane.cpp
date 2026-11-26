@@ -23,7 +23,6 @@ void PlaneVehicle::SetProperty() {
 	blueprintPath = "/Game/3rdParty/Low-poly_Airplane/Actor/BP_PlaneElement.BP_PlaneElement_C";
 
 	// 脚本：停机位里的飞机提供"驾驶"选项，线路上的飞机停靠跑道中点时提供"上车/下车"，见Resource/Story/vehicle_plane.script。
-	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_plane" };
 
 	// 下车点(车身局部坐标)：机身左后方(-X后、-Y左)，避开机翼；是估计值，不合适再调。

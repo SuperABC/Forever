@@ -20,7 +20,6 @@ void BoatVehicle::SetProperty() {
 	blueprintPath = "/Game/3rdParty/Trawler/Actor/BP_BoatElement.BP_BoatElement_C";
 
 	// 脚本：只有最基础的"驾驶"选项，没有公交船，见Resource/Story/vehicle_boat.script。
-	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_boat" };
 
 	// 下船点(船体局部坐标，船头+X)：船舷左侧(-Y)半宽外再加一点，抬高一些落入水里(玩家落水后自动进入游泳)；

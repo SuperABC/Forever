@@ -50,8 +50,8 @@ void AirportBuilding::Layout(int& direction, const Quad& quad,
 		AssignParking(0, i, spec);
 	}
 	// 两层各2台电梯，3台电梯井编号同layout的elevators。
-	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	AssignElevatorCabin(0, -basements, layers - 1, "", "", { "elevator_basic" });
+	AssignElevatorCabin(1, -basements, layers - 1, "", "", { "elevator_basic" });
 }
 
 void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

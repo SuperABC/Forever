@@ -776,7 +776,7 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 	}
 
 	// 武器Asset留在肩膀槽位上不动，EquipWeapon只让组件额外持有一份"活的"WeaponMod副本(会先销毁旧副本)。
-	// 资产id(asset_pistol)和武器id(weapon_pistol)分属两个concept，由资产自己声明对应哪把武器。
+	// 资产id(asset_xxx)和武器id(weapon_xxx)分属两个concept，由资产自己声明对应哪把武器。
 	FString activatedType = UTF8_TO_TCHAR(toActivate->GetWeaponType().c_str());
 	if (weaponComponent->EquipWeapon(activatedType)) {
 		// 弹匣余量跟着这把枪的Asset走：绑定槽位(之后开火/换弹写回)，Asset记着余量就恢复，否则保持满弹匣。

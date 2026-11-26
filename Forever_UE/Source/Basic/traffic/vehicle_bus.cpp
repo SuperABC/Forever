@@ -20,7 +20,6 @@ void BusVehicle::SetProperty() {
 	blueprintPath = "/Game/3rdParty/PAZ_652/Actor/BP_BusElement.BP_BusElement_C";
 
 	// 脚本：上下车/驾驶选项，见Resource/Story/vehicle_bus.script。
-	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_bus" };
 
 	// 下车点(车身局部坐标)：车头+X，乘客从右侧(+Y)靠前的车门下。是估计值，不合适再调。

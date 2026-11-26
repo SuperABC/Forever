@@ -43,7 +43,8 @@ Core 对站/线的类型完全不关心，也不计算任何连线几何：几�
 - `QueryVehicleState`：线路下标、`legIndex`（run 下标）、是否停靠、剩余停靠（真实秒）、巡航速度（`normalSpeed*gameSecondsPerRealSecond`，缓动段不精确，仅供给物理车初速度）。时刻表按游戏秒算，这两个真实秒的量按调用方传入的实际倍率（`60*Player::GetTimeFlowRatio()`）换算，不假定倍率是多少。
 - `GetLineStopNodeIds(line)`：每个 run 起点站的 `stationNode` id（Map 辅助导航节点），顺序即行驶顺序；任何一站没有 road link 返回空。
 - `ResetStopState(vehicle)`：物理段交还时刻表时忘掉停靠状态。
-- `SyncVehicleProgress(vehicle, legIndex, legFraction, dwelling, dwellFraction)`：给这辆车记一个运行时相位修正量 `phaseAdjust`（游戏秒，不存档），使"现在"对应的时刻表时间等于实车的路程进度（`legFraction` 是路程比例，经 `RunTimeAtArc` 换成时间）。UE 侧在 `BusToKinematic` 里、`ClearCommands` 之前用 `QueryLoopProgress` 取进度调用。
+- `RemoveVehicle(vehicle)`：车要被销毁时由`Traffic::DetachVehicle`调。把它从线路的车辆列表、停靠状态、相位修正、还没取走的进站/离站事件里都拿掉，线路里不留它的指针。同一条线路上剩下的车按新的数量重新均匀排开(相位是按"第几辆/共几辆"算的)，所以拿掉一辆后其余的车位置会跳一下。
+- `SyncVehicleProgress(vehicle, legIndex, legFraction, dwelling, dwellFraction)`：给这辆车记一个运行时相位修正量 `phaseAdjust`（游戏秒，不存档），使"现在"对应的时刻表时间等于实车的路程进度（`legFraction` 是路程比例，经 `RunTimeAtArc` 换成时间）。UE 侧在 `HandoffToKinematic` 里、`ClearCommands` 之前用 `QueryLoopProgress` 取进度调用。
 
 ## 实例化线路（火车铺轨）
 

@@ -55,17 +55,19 @@ void Phone::BuildAppList() {
 	appTypes.clear();
 	appNames.clear();
 	for (const string& id : Registry::Get().GetAppFactory().GetRegisteredIds()) {
-		if (id == "app_empty") continue; // 每个concept都有的占位id，不当真实App显示在桌面上
-		appTypes.push_back(id);
-		// 桌面图标下显示App的GetName()：临时建一个实例取名字(不Init)，随即销毁。
+		// 临时建一个实例(不Init)读两样东西，随即销毁：要不要上桌面(AppMod::showOnDesktop，由mod自己声明)、图标下显示的名字。
 		string name = id;
+		bool show = true;
 		ErrorReport report;
 		if (!GuardCall([&] {
 			App probe(&Registry::Get().GetAppFactory(), id);
+			show = probe.ShowOnDesktop();
 			name = probe.GetName();
 		}, report)) {
 			debugf(DebugLevel::Warning, "Phone: cannot read the name of app %s, showing its id instead: %s\n", id.c_str(), report.ToLine().c_str());
 		}
+		if (!show) continue;
+		appTypes.push_back(id);
 		appNames.push_back(name);
 	}
 }

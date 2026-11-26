@@ -44,8 +44,8 @@ void Event::SetCondition(const std::string& condition) {
 	this->condition = condition;
 }
 
-pair<bool, ValueType> Event::GetLocalValue(const string& name) const {
-	return { false, ValueType() };
+bool Event::GetLocalValue(const string& name, const ValueReceiver& receive) const {
+	return false;
 }
 
 GameStartEvent::GameStartEvent() {
@@ -83,9 +83,9 @@ bool GlobalMessageEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> GlobalMessageEvent::GetLocalValue(const string& key) const {
-	if (key == "message") return { true, ValueType(message) };
-	return { false, ValueType() };
+bool GlobalMessageEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "message") { receive(ValueType(message)); return true; }
+	return false;
 }
 
 void GlobalMessageEvent::SetMessage(std::string message) {
@@ -119,10 +119,10 @@ bool OptionDialogEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> OptionDialogEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	if (key == "option") return { true, ValueType(option) };
-	return { false, ValueType() };
+bool OptionDialogEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "option") { receive(ValueType(option)); return true; }
+	return false;
 }
 
 void OptionDialogEvent::SetName(std::string name) {
@@ -163,9 +163,9 @@ bool SpeakingFinishEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> SpeakingFinishEvent::GetLocalValue(const string& key) const {
-	if (key == "label") return { true, ValueType(label) };
-	return { false, ValueType() };
+bool SpeakingFinishEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "label") { receive(ValueType(label)); return true; }
+	return false;
 }
 
 void SpeakingFinishEvent::SetLabel(std::string label) {
@@ -198,9 +198,9 @@ bool EnterZoneEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> EnterZoneEvent::GetLocalValue(const string& key) const {
-	if (key == "zone") return { true, ValueType(zone) };
-	return { false, ValueType() };
+bool EnterZoneEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "zone") { receive(ValueType(zone)); return true; }
+	return false;
 }
 
 void EnterZoneEvent::SetZone(std::string zone) {
@@ -233,9 +233,9 @@ bool LeaveZoneEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> LeaveZoneEvent::GetLocalValue(const string& key) const {
-	if (key == "zone") return { true, ValueType(zone) };
-	return { false, ValueType() };
+bool LeaveZoneEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "zone") { receive(ValueType(zone)); return true; }
+	return false;
 }
 
 void LeaveZoneEvent::SetZone(std::string zone) {
@@ -269,10 +269,10 @@ bool EnterBuildingEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> EnterBuildingEvent::GetLocalValue(const string& key) const {
-	if (key == "zone") return { true, ValueType(zone) };
-	if (key == "building") return { true, ValueType(building) };
-	return { false, ValueType() };
+bool EnterBuildingEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "zone") { receive(ValueType(zone)); return true; }
+	if (key == "building") { receive(ValueType(building)); return true; }
+	return false;
 }
 
 void EnterBuildingEvent::SetZone(std::string zone) {
@@ -314,10 +314,10 @@ bool LeaveBuildingEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> LeaveBuildingEvent::GetLocalValue(const string& key) const {
-	if (key == "zone") return { true, ValueType(zone) };
-	if (key == "building") return { true, ValueType(building) };
-	return { false, ValueType() };
+bool LeaveBuildingEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "zone") { receive(ValueType(zone)); return true; }
+	if (key == "building") { receive(ValueType(building)); return true; }
+	return false;
 }
 
 void LeaveBuildingEvent::SetZone(std::string zone) {
@@ -360,11 +360,11 @@ bool EnterRoomEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> EnterRoomEvent::GetLocalValue(const string& key) const {
-	if (key == "zone") return { true, ValueType(zone) };
-	if (key == "building") return { true, ValueType(building) };
-	if (key == "room") return { true, ValueType(room) };
-	return { false, ValueType() };
+bool EnterRoomEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "zone") { receive(ValueType(zone)); return true; }
+	if (key == "building") { receive(ValueType(building)); return true; }
+	if (key == "room") { receive(ValueType(room)); return true; }
+	return false;
 }
 
 void EnterRoomEvent::SetZone(std::string zone) {
@@ -415,11 +415,11 @@ bool LeaveRoomEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> LeaveRoomEvent::GetLocalValue(const string& key) const {
-	if (key == "zone") return { true, ValueType(zone) };
-	if (key == "building") return { true, ValueType(building) };
-	if (key == "room") return { true, ValueType(room) };
-	return { false, ValueType() };
+bool LeaveRoomEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "zone") { receive(ValueType(zone)); return true; }
+	if (key == "building") { receive(ValueType(building)); return true; }
+	if (key == "room") { receive(ValueType(room)); return true; }
+	return false;
 }
 
 void LeaveRoomEvent::SetZone(std::string zone) {
@@ -465,10 +465,10 @@ bool PuzzleResultEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> PuzzleResultEvent::GetLocalValue(const string& key) const {
+bool PuzzleResultEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
 	auto it = fields.find(key);
-	if (it == fields.end()) return { false, ValueType() };
-	return { true, it->second };
+	if (it == fields.end()) return false;
+	{ receive(it->second); return true; }
 }
 
 bool PuzzleResultEvent::SetFromJson(const JsonValue& root) {
@@ -562,9 +562,9 @@ bool TimeUpEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> TimeUpEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	return { false, ValueType() };
+bool TimeUpEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	return false;
 }
 
 void TimeUpEvent::SetName(std::string name) {
@@ -598,10 +598,10 @@ bool NpcArriveEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> NpcArriveEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	if (key == "address") return { true, ValueType(address) };
-	return { false, ValueType() };
+bool NpcArriveEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "address") { receive(ValueType(address)); return true; }
+	return false;
 }
 
 void NpcArriveEvent::SetName(std::string name) {
@@ -643,10 +643,10 @@ bool ExecuteTaskEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> ExecuteTaskEvent::GetLocalValue(const string& key) const {
-	if (key == "task") return { true, ValueType(task) };
-	if (key == "destination") return { true, ValueType(destination) };
-	return { false, ValueType() };
+bool ExecuteTaskEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "task") { receive(ValueType(task)); return true; }
+	if (key == "destination") { receive(ValueType(destination)); return true; }
+	return false;
 }
 
 TaskCompleteEvent::TaskCompleteEvent(std::string task, std::string destination, std::string worker, std::string origin) :
@@ -672,12 +672,12 @@ bool TaskCompleteEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> TaskCompleteEvent::GetLocalValue(const string& key) const {
-	if (key == "task") return { true, ValueType(task) };
-	if (key == "destination") return { true, ValueType(destination) };
-	if (key == "worker") return { true, ValueType(worker) };
-	if (key == "origin") return { true, ValueType(origin) };
-	return { false, ValueType() };
+bool TaskCompleteEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "task") { receive(ValueType(task)); return true; }
+	if (key == "destination") { receive(ValueType(destination)); return true; }
+	if (key == "worker") { receive(ValueType(worker)); return true; }
+	if (key == "origin") { receive(ValueType(origin)); return true; }
+	return false;
 }
 
 TaskFailedEvent::TaskFailedEvent(std::string task, std::string destination, std::string worker, std::string origin, std::string reason) :
@@ -703,13 +703,13 @@ bool TaskFailedEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> TaskFailedEvent::GetLocalValue(const string& key) const {
-	if (key == "task") return { true, ValueType(task) };
-	if (key == "destination") return { true, ValueType(destination) };
-	if (key == "worker") return { true, ValueType(worker) };
-	if (key == "origin") return { true, ValueType(origin) };
-	if (key == "reason") return { true, ValueType(reason) };
-	return { false, ValueType() };
+bool TaskFailedEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "task") { receive(ValueType(task)); return true; }
+	if (key == "destination") { receive(ValueType(destination)); return true; }
+	if (key == "worker") { receive(ValueType(worker)); return true; }
+	if (key == "origin") { receive(ValueType(origin)); return true; }
+	if (key == "reason") { receive(ValueType(reason)); return true; }
+	return false;
 }
 
 VehicleArriveEvent::VehicleArriveEvent(std::string vehicle, std::string address) :
@@ -735,10 +735,10 @@ bool VehicleArriveEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> VehicleArriveEvent::GetLocalValue(const string& key) const {
-	if (key == "vehicle") return { true, ValueType(vehicle) };
-	if (key == "address") return { true, ValueType(address) };
-	return { false, ValueType() };
+bool VehicleArriveEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "vehicle") { receive(ValueType(vehicle)); return true; }
+	if (key == "address") { receive(ValueType(address)); return true; }
+	return false;
 }
 
 void VehicleArriveEvent::SetVehicle(std::string vehicle) {
@@ -834,16 +834,16 @@ bool CitizenDeceaseEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> CitizenDeceaseEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	if (key == "reason") return { true, ValueType(reason) };
-	if (key == "killer") return { true, ValueType(killer) };
-	if (key == "weapon") return { true, ValueType(weapon) };
-	if (key == "part") return { true, ValueType(part) };
-	if (key == "damage") return { true, ValueType(damage) };
-	if (key == "visible") return { true, ValueType(visible) };
-	if (key == "location") return { true, ValueType(location) };
-	return { false, ValueType() };
+bool CitizenDeceaseEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "reason") { receive(ValueType(reason)); return true; }
+	if (key == "killer") { receive(ValueType(killer)); return true; }
+	if (key == "weapon") { receive(ValueType(weapon)); return true; }
+	if (key == "part") { receive(ValueType(part)); return true; }
+	if (key == "damage") { receive(ValueType(damage)); return true; }
+	if (key == "visible") { receive(ValueType(visible)); return true; }
+	if (key == "location") { receive(ValueType(location)); return true; }
+	return false;
 }
 
 void CitizenDeceaseEvent::SetName(std::string name) {
@@ -1138,9 +1138,9 @@ bool WeatherChangeEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> WeatherChangeEvent::GetLocalValue(const string& key) const {
-	if (key == "weather") return { true, ValueType(weather) };
-	return { false, ValueType() };
+bool WeatherChangeEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "weather") { receive(ValueType(weather)); return true; }
+	return false;
 }
 
 void WeatherChangeEvent::SetWeather(std::string weather) {
@@ -1173,11 +1173,11 @@ const std::string& UseAssetEvent::GetAsset() const {
 	return asset;
 }
 
-pair<bool, ValueType> UseAssetEvent::GetLocalValue(const string& key) const {
-	if (key == "asset") return { true, ValueType(asset) };
-	if (key == "type") return { true, ValueType(type) };
-	if (key == "user") return { true, ValueType(user) };
-	return { false, ValueType() };
+bool UseAssetEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "asset") { receive(ValueType(asset)); return true; }
+	if (key == "type") { receive(ValueType(type)); return true; }
+	if (key == "user") { receive(ValueType(user)); return true; }
+	return false;
 }
 
 void UseAssetEvent::SetAssetType(std::string type) {
@@ -1215,9 +1215,9 @@ bool EnterStopEvent::Match(Event* e, const ScriptContext& context) {
 	return MatchLocationField(stop, static_cast<EnterStopEvent*>(e)->stop, context);
 }
 
-pair<bool, ValueType> EnterStopEvent::GetLocalValue(const string& key) const {
-	if (key == "stop") return { true, ValueType(stop) };
-	return { false, ValueType() };
+bool EnterStopEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "stop") { receive(ValueType(stop)); return true; }
+	return false;
 }
 
 void EnterStopEvent::SetStop(std::string stop) {
@@ -1247,9 +1247,9 @@ bool LeaveStopEvent::Match(Event* e, const ScriptContext& context) {
 	return MatchLocationField(stop, static_cast<LeaveStopEvent*>(e)->stop, context);
 }
 
-pair<bool, ValueType> LeaveStopEvent::GetLocalValue(const string& key) const {
-	if (key == "stop") return { true, ValueType(stop) };
-	return { false, ValueType() };
+bool LeaveStopEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "stop") { receive(ValueType(stop)); return true; }
+	return false;
 }
 
 void LeaveStopEvent::SetStop(std::string stop) {
@@ -1283,10 +1283,10 @@ bool EnterVehicleEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> EnterVehicleEvent::GetLocalValue(const string& key) const {
-	if (key == "vehicle") return { true, ValueType(vehicle) };
-	if (key == "mode") return { true, ValueType(mode) };
-	return { false, ValueType() };
+bool EnterVehicleEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "vehicle") { receive(ValueType(vehicle)); return true; }
+	if (key == "mode") { receive(ValueType(mode)); return true; }
+	return false;
 }
 
 void EnterVehicleEvent::SetVehicle(std::string vehicle) {
@@ -1328,10 +1328,10 @@ bool LeaveVehicleEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> LeaveVehicleEvent::GetLocalValue(const string& key) const {
-	if (key == "vehicle") return { true, ValueType(vehicle) };
-	if (key == "mode") return { true, ValueType(mode) };
-	return { false, ValueType() };
+bool LeaveVehicleEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "vehicle") { receive(ValueType(vehicle)); return true; }
+	if (key == "mode") { receive(ValueType(mode)); return true; }
+	return false;
 }
 
 void LeaveVehicleEvent::SetVehicle(std::string vehicle) {
@@ -1373,10 +1373,10 @@ bool GetAssetEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> GetAssetEvent::GetLocalValue(const string& key) const {
-	if (key == "type") return { true, ValueType(type) };
-	if (key == "result") return { true, ValueType(result) };
-	return { false, ValueType() };
+bool GetAssetEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "type") { receive(ValueType(type)); return true; }
+	if (key == "result") { receive(ValueType(result)); return true; }
+	return false;
 }
 
 void GetAssetEvent::SetAssetType(std::string type) {
@@ -1418,10 +1418,10 @@ bool LoseAssetEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> LoseAssetEvent::GetLocalValue(const string& key) const {
-	if (key == "type") return { true, ValueType(type) };
-	if (key == "result") return { true, ValueType(result) };
-	return { false, ValueType() };
+bool LoseAssetEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "type") { receive(ValueType(type)); return true; }
+	if (key == "result") { receive(ValueType(result)); return true; }
+	return false;
 }
 
 void LoseAssetEvent::SetAssetType(std::string type) {
@@ -1461,10 +1461,10 @@ bool ThrowAssetEvent::Match(Event* e, const ScriptContext& context) {
 	return MatchLocationField(type, other->type, context);
 }
 
-pair<bool, ValueType> ThrowAssetEvent::GetLocalValue(const string& key) const {
-	if (key == "type") return { true, ValueType(type) };
-	if (key == "thrower") return { true, ValueType(thrower) };
-	return { false, ValueType() };
+bool ThrowAssetEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "type") { receive(ValueType(type)); return true; }
+	if (key == "thrower") { receive(ValueType(thrower)); return true; }
+	return false;
 }
 
 void ThrowAssetEvent::SetThrower(std::string thrower) {
@@ -1504,11 +1504,11 @@ bool WeaponFireEvent::Match(Event* e, const ScriptContext& context) {
 	return MatchLocationField(weapon, other->weapon, context);
 }
 
-pair<bool, ValueType> WeaponFireEvent::GetLocalValue(const string& key) const {
-	if (key == "weapon") return { true, ValueType(weapon) };
+bool WeaponFireEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "weapon") { receive(ValueType(weapon)); return true; }
 	auto it = fields.find(key);
-	if (it == fields.end()) return { false, ValueType() };
-	return { true, it->second };
+	if (it == fields.end()) return false;
+	{ receive(it->second); return true; }
 }
 
 void WeaponFireEvent::SetWeapon(std::string weapon) {
@@ -1544,10 +1544,10 @@ bool ProjectileHitEvent::Match(Event* e, const ScriptContext& context) {
 	return Event::Match(e, context);
 }
 
-pair<bool, ValueType> ProjectileHitEvent::GetLocalValue(const string& key) const {
+bool ProjectileHitEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
 	auto it = fields.find(key);
-	if (it == fields.end()) return { false, ValueType() };
-	return { true, it->second };
+	if (it == fields.end()) return false;
+	{ receive(it->second); return true; }
 }
 
 void ProjectileHitEvent::SetField(const std::string& name, ValueType value) {
@@ -1585,14 +1585,14 @@ bool CitizenInjuredEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> CitizenInjuredEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	if (key == "attacker") return { true, ValueType(attacker) };
-	if (key == "weapon") return { true, ValueType(weapon) };
-	if (key == "part") return { true, ValueType(part) };
-	if (key == "damage") return { true, ValueType(damage) };
-	if (key == "health") return { true, ValueType(health) };
-	return { false, ValueType() };
+bool CitizenInjuredEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "attacker") { receive(ValueType(attacker)); return true; }
+	if (key == "weapon") { receive(ValueType(weapon)); return true; }
+	if (key == "part") { receive(ValueType(part)); return true; }
+	if (key == "damage") { receive(ValueType(damage)); return true; }
+	if (key == "health") { receive(ValueType(health)); return true; }
+	return false;
 }
 
 const std::string& CitizenInjuredEvent::GetName() const { return name; }
@@ -1625,11 +1625,11 @@ bool FleeStartEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> FleeStartEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	if (key == "from") return { true, ValueType(from) };
-	if (key == "destination") return { true, ValueType(destination) };
-	return { false, ValueType() };
+bool FleeStartEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "from") { receive(ValueType(from)); return true; }
+	if (key == "destination") { receive(ValueType(destination)); return true; }
+	return false;
 }
 
 const std::string& FleeStartEvent::GetName() const { return name; }
@@ -1660,11 +1660,11 @@ bool FleeEndEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> FleeEndEvent::GetLocalValue(const string& key) const {
-	if (key == "name") return { true, ValueType(name) };
-	if (key == "from") return { true, ValueType(from) };
-	if (key == "reason") return { true, ValueType(reason) };
-	return { false, ValueType() };
+bool FleeEndEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "from") { receive(ValueType(from)); return true; }
+	if (key == "reason") { receive(ValueType(reason)); return true; }
+	return false;
 }
 
 const std::string& FleeEndEvent::GetName() const { return name; }
@@ -1694,11 +1694,11 @@ bool MeetingStartEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> MeetingStartEvent::GetLocalValue(const string& key) const {
-	if (key == "party") return { true, ValueType(party) };
-	if (key == "address") return { true, ValueType(address) };
-	if (key == "home") return { true, ValueType(home) };
-	return { false, ValueType() };
+bool MeetingStartEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "party") { receive(ValueType(party)); return true; }
+	if (key == "address") { receive(ValueType(address)); return true; }
+	if (key == "home") { receive(ValueType(home)); return true; }
+	return false;
 }
 
 const std::string& MeetingStartEvent::GetParty() const { return party; }
@@ -1728,11 +1728,11 @@ bool MeetingEndEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
-pair<bool, ValueType> MeetingEndEvent::GetLocalValue(const string& key) const {
-	if (key == "party") return { true, ValueType(party) };
-	if (key == "address") return { true, ValueType(address) };
-	if (key == "home") return { true, ValueType(home) };
-	return { false, ValueType() };
+bool MeetingEndEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "party") { receive(ValueType(party)); return true; }
+	if (key == "address") { receive(ValueType(address)); return true; }
+	if (key == "home") { receive(ValueType(home)); return true; }
+	return false;
 }
 
 const std::string& MeetingEndEvent::GetParty() const { return party; }

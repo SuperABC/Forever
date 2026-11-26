@@ -7,7 +7,7 @@
 ## 关键设计
 
 - Basic编译为运行时DLL，和`Forever_Mod`下的mod走同一套加载机制，见`Source/Basic/README.md`。
-- 真正的"空脚本壳"是`Forever_Mod/Empty`里的`script_empty`(大量`Basic` mod依赖它)；这里只是让`Basic`自己也提供一个能被创建的`ScriptMod`。
+- 不需要C++钩子的脚本不指定ScriptMod(`Core/story/script.md`)，`Basic`里的实体脚本都是这样；这里只是让`Basic`自己也提供一个能被创建的`ScriptMod`。
 - `GetName()`必须全局唯一：static计数器+id+`GetName`里现拼。
 
 ## 依赖关系

@@ -37,6 +37,9 @@ public:
 	*/
 	std::string GetName() const;
 
+	// 这个App要不要上手机桌面(AppMod::showOnDesktop)。
+	bool ShowOnDesktop() const;
+
 	/*
 	* 第一次打开这个App时调用一次
 	* @canvas: 画布，不持有所有权

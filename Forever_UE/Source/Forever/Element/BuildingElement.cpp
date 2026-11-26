@@ -644,7 +644,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex, bool shell, bool extr
 	UMaterialInstanceDynamic* ceilingMaterial = framework->GetDefaultCeilingMaterial();
 	UStaticMesh* stairMesh = framework->GetDefaultStairMesh();
 	UStaticMesh* rampMesh = framework->GetDefaultRampMesh();
-	// 这一层的FloorAssetSpec::buildShell==false(外观由AddDecoration的成品模型提供，比如Mohar)：
+	// 这一层的FloorAssetSpec::buildShell==false(外观由AddDecoration的成品模型提供，整栋楼就是一个模型)：
 	// 不构造墙壁(含楼梯/坡道/电梯井道墙)、地板、天花板，楼梯/坡道网格照常摆，见
 	// BuildingElement.md"buildShell"一节。
 	bool buildShell = true;

@@ -7,6 +7,7 @@
 
 class Vehicle;
 class Room;
+class AVehicleCommandController;
 class UForeverTrafficFrameworkComponent;
 class USkeletalMeshComponent;
 class UChaosWheeledVehicleMovementComponent;
@@ -92,6 +93,16 @@ public:
 	// UVehicleWheelFront/Rear的默认半径。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wheels")
 	float wheelRadius = 0.f;
+
+	// 这种载具跑线路时用的控制器，每种载具用自己的(在载具蓝图里按车型选)。
+	// 指定了：线路上的这种车在玩家附近会换成本蓝图的物理车，由这个控制器按线路开；停着的这种车也能"按线路运行"。
+	// 留空：线路上的这种车一直是运动学的，不换物理。换不换只看这一项，和线路走不走路网、载具是什么种类都无关。
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Line")
+	TSubclassOf<AVehicleCommandController> lineControllerClass;
+
+	// 轮子之外还要一直转的骨骼(比如螺旋桨)：有的话子类覆盖并返回true，给出骨骼名、绕骨骼自己哪根局部轴转、当前累计角度(度)。
+	// UVehicleWheelAnimInstance每帧在游戏线程问一次，和车轮一起叠加到骨骼上，所以它只需要认识本类。基类没有这样的骨骼。
+	virtual bool GetSpinningBone(FName& outBoneName, FVector& outAxis, float& outAngleDegrees) const { return false; }
 
 protected:
 	virtual void BeginPlay() override;

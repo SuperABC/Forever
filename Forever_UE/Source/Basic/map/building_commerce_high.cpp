@@ -72,7 +72,7 @@ void CommerceHighBuilding::Layout(int& direction, const Quad& quad,
 		}
 	}
 	for (int elevator = 0; elevator < 2; elevator++) {
-		AssignElevatorCabin(elevator, 0, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(elevator, 0, layers - 1, "", "", { "elevator_basic" });
 	}
 }
 

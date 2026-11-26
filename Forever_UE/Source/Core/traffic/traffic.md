@@ -25,6 +25,7 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
    坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。站名取请求的`name`(非空)，否则`"Station"+stationCounter`。
    编辑器"路网路线"画了手动公交站(`Map::GetTransit().roadLines`)时：数据里 `stop.station==某mod` 且该mod登记了`RegisterManualAssign`，就改调它的`AssignManualRoads`(跳过自动`AssignRoads`)；指向没登记手动函数的id的站告警忽略；站名重复丢弃后到的并告警(不再`insert_or_assign`覆盖泄漏)。见`station_mod.md`。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
+   **什么都没排出来的线路不留**：`Build`之后既没有线也没有轨道的`Route`直接丢掉(打一条Log)。不看是哪个mod——占位mod、找不到站点的mod、排线失败的mod都一样，线路表里不会有空壳。贴路站点同理：`InitRoadsideStations`对每个已启用的站点mod都问一遍"想贴哪些路"，答"不贴"的自然一个站都没有。Core不按名字跳过任何mod。
    `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
 4. `InitStockedVehicles`：机场的飞机、港口的船这类没有"主人"的载具，由建筑mod把车位声明成stocked
    (`ParkingSlotSpec::stocked` -> `ParkingSlot::stocked`)，开局每个这样的车位停一辆（不挂资产）：从车位自己的`categories`随机选一个种类，再用
@@ -111,5 +112,5 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 `categories`按顺序试，第一个可行的赢：空串=走路(目的房间≠当前房间)；非空=开组织的这类载具——停着、无路线/预订/其他任务、停车房与员工**当前所在建筑**同栋，
 且目的建筑里有接受该类别的空闲车位(`PickFreeSlot`)，目的车位出发时预订。员工已在目的建筑里则不开车(`already_there`)。
 都不行就不建行程、不占车，`failReason`=`no_worker`/`no_vehicle`/`no_slot`/`already_there`。**没有原车位预留**：车开走后原车位空出来，返程由脚本再派任务另找车。
-到达(走进目的房间)`EndTask`；`CancelTask`在非WalkOut阶段清车的预订；车被销毁`DestroyVehicle`会连带取消行程(任务行程和通勤行程都取消，并让出它占着/预订的车位，见`DetachVehicle`)；员工死亡/离城时`worker=nullptr`，车仍开到站。
+到达(走进目的房间)`EndTask`；`CancelTask`在非WalkOut阶段清车的预订；车被销毁`DestroyVehicle`会连带取消行程(任务行程和通勤行程都取消，让出它占着/预订的车位，挂在线路上的车还会从线路上拿掉`Route::RemoveVehicle`，见`DetachVehicle`)；员工死亡/离城时`worker=nullptr`，车仍开到站。
 任务期间员工脚本变量`task`被置位。存档：traffic段末尾任务行程块(task/员工下标/车名/parkOrigin/parkDest/destSlot/destRoom/originRoom/phase)，`ResolveVehicleAssets`还原。

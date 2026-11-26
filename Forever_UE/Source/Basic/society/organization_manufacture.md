@@ -16,7 +16,7 @@
 ## 依赖关系
 
 - 依赖：`society/organization_mod.h`、`common/json.h`。
-- 被谁依赖：`basic.cpp`注册(商店依赖`job_shop_saler`/`job_warehouse_keeper`/`script_empty`，工厂依赖`job_factory_worker`)；`Core/society/organization.h`/`society.h`消费。
+- 被谁依赖：`basic.cpp`注册(商店依赖`job_shop_saler`/`job_warehouse_keeper`，工厂依赖`job_factory_worker`)；`Core/society/organization.h`/`society.h`消费。
 
 ## 待办/后续阶段
 
@@ -24,6 +24,6 @@
 
 ## 送货脚本（2026-11-16）
 
-构造里`scriptModName="script_empty"`、`milestoneNames={"organization_manufacture"}`，脚本`Resource/Story/organization_manufacture.script`：
+构造里不指定`scriptModName`(脚本没有ScriptMod)，只设`milestoneNames={"organization_manufacture"}`，脚本`Resource/Story/organization_manufacture.script`：
 每天10:00对`delivery.count`个目的地`for_range`发`assign_task`(`task:"delivery"`、`vehicles:["truck"]`)，员工开组织卡车去目的建筑车位、走进目的房间；
 `task_complete(delivery)`后脚本再派`return`任务(`vehicles:["truck"]`、`worker=$$local.worker`、`destination=$$local.origin`)开车回；`task_failed(return)`改派`return_walk`走路回去。纯视觉。

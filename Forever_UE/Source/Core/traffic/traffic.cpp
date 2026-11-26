@@ -402,8 +402,6 @@ void Traffic::InitRoadsideStations(Map* map) {
 	}
 
 	for (const string& modId : ids) {
-		if (modId == "station_empty") continue;
-
 		// 先探测这个mod类型想贴哪些路——AssignRoads()是static方法(见station_mod.h
 		// StationMod::AssignRoads的说明)，不需要创建/销毁任何StationMod实例，直接转发
 		// 到注册时提供的函数指针，和BuildingFactory::Assign同一个模式。
@@ -463,7 +461,6 @@ void Traffic::InitRoutes(Map* map) {
 	for (auto& [name, station] : stations) allStations.push_back(station);
 
 	vector<string> routeIds = routeFactory.GetRegisteredIds();
-	routeIds.erase(remove(routeIds.begin(), routeIds.end(), "route_empty"), routeIds.end());
 
 	// 编辑器手工线路(独立线路/线路环/路网路线)的route id指向没注册/没启用的route mod时没人消费这些数据：
 	// 线路没有"随机"可退化(站点是编辑器手摆的)，只能丢弃，这里统一告警一次，方便发现id写错。
@@ -489,6 +486,13 @@ void Traffic::InitRoutes(Map* map) {
 		}
 
 		route->Build(map, allStations);
+		// 什么都没排出来的线路(没有线、也没有轨道)不留：留着只是一个空壳，各处遍历线路表时还得绕开它。
+		// 不看是哪个mod——占位mod、找不到站点的mod、排线失败的mod都一样。
+		if (route->GetLines().empty() && route->GetTrackPaths().empty()) {
+			debugf(DebugLevel::Log, "Traffic::InitRoutes: route mod %s laid out nothing, no route is created for it.\n", modId.c_str());
+			delete route;
+			continue;
+		}
 		// 桥墩要避开路网和先建好的route轨道，所以Build之后、按已建好的route表选位。
 		vector<const Route*> built;
 		for (auto& [builtName, builtRoute] : routes) built.push_back(builtRoute);
@@ -620,6 +624,9 @@ Vehicle* Traffic::CreateVehicle(const string& modId, const string& name) {
 
 	Vehicle* vehicle = new Vehicle(&vehicleFactory, &scriptFactory, modId, name);
 	if (!vehicle->IsValid()) {
+		if (warnedUnavailableVehicleMods.insert(modId).second) {
+			debugf(DebugLevel::Warning, "Vehicle mod %s is not available (no loaded dll provides it or it is not enabled in the config): vehicle %s and every other vehicle of this mod are not created.\n", modId.c_str(), name.c_str());
+		}
 		delete vehicle;
 		return nullptr;
 	}
@@ -643,6 +650,8 @@ void Traffic::DetachVehicle(Vehicle* vehicle) {
 		if (it->second.vehicle == vehicle) it = trips.erase(it);
 		else ++it;
 	}
+	// 挂在线路上的车(公交/火车/飞机)：线路的车辆列表和按车记的状态里也有它。
+	if (Route* route = vehicle->GetRoute()) route->RemoveVehicle(vehicle);
 	// 车位的parkedVehicle/reservedBy指向这辆车：不让出来的话车位永远不空闲，还留着悬空指针。
 	vehicle->ReleaseSlot();
 	vehicle->ClearReservation();

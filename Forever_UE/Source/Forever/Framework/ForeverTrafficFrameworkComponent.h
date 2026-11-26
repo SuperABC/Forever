@@ -11,7 +11,6 @@
 class APlayerController;
 class AVehicleElement;
 class ATransitVehicleElement;
-class ABusController;
 class Station;
 class Green;
 class Route;
@@ -27,7 +26,7 @@ class JunctionTraffic;
 class AVehicleCommandController;
 
 // 载具：按停车位预置的小汽车(按距离流式生成/销毁)、玩家上下车、公共交通(公交/火车/飞机)、
-// 公交Controller驱动与远近切换、线路调试画线与铺轨。详见ForeverTrafficFrameworkComponent.md。
+// 线路车的Controller驱动与远近切换、线路调试画线与铺轨。详见ForeverTrafficFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverTrafficFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -50,7 +49,7 @@ public:
 	// 恢复，再发一次事件会让script重复处理)。
 	void ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent = false);
 
-	// board_vehicle Change的真正执行：搭乘线路上的公交(ATransitVehicleElement)。和ApplyEnterVehicle
+	// board_vehicle Change的真正执行：搭乘线路上的车(ATransitVehicleElement)。和ApplyEnterVehicle
 	// 同一套(隐藏原pawn、记previousPawn、Possess)，区别是搭乘者只有鼠标视角、车自己跑。bSilent同上。
 	void ApplyBoardVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent = false);
 
@@ -58,38 +57,40 @@ public:
 	// 所在的任何载具，非空=只在玩家正在这辆里才执行。bForce=true(force_leave)时驾驶者也不做遮挡判定。
 	void ApplyLeaveVehicle(const FString& vehicleName, APlayerController* controller, bool bForce);
 
-	// 线路上的公交Actor(按Vehicle::GetName()查)，找不到返回nullptr。
+	// 线路车的运动学Actor(按Vehicle::GetName()查)，找不到返回nullptr。
 	ATransitVehicleElement* FindTransitElement(const FString& vehicleName) const;
 
-	// ---- 公交 Controller 驱动（见 Controller/BusController、ForeverTrafficFrameworkComponent.md） ----
-	// 线路公交：远处（地形 busPhysicsLodLevel 级 LOD 范围外）是运动学的 ATransitVehicleElement（Core 时刻表），
-	// 范围内换成物理 AVehicleElement + ABusController 按站序循环；停车场公交由"测试运行"交给 ABusController。
+	// ---- 线路车的远近切换（见 ForeverTrafficFrameworkComponent.md） ----
+	// 载具蓝图指定了线路控制器(AVehicleElement::lineControllerClass)的线路车：远处（地形 linePhysicsLodLevel 级 LOD
+	// 范围外）是运动学的 ATransitVehicleElement（Core 时刻表），范围内换成物理 AVehicleElement + 那个控制器按站序循环；
+	// 停着的这种车由"测试运行"交给同一种控制器。没指定控制器的线路车一直是运动学的。本组件不认识任何具体的控制器类。
 
-	// 公交 Controller 的进站/出站（物理段由 Controller 判定，运动学段由 Core 时刻表发，同一时刻只有一个发出方）。
+	// 线路控制器的进站/出站（物理段由 Controller 判定，运动学段由 Core 时刻表发，同一时刻只有一个发出方）。
 	// stationNodeId 是 Map 辅助导航节点 id（Station 的 stationNode）。
 	void FireStopEvent(Vehicle* vehicle, int32 stationNodeId, bool entering);
 
 	// vehicle_command Change 的执行(run/stop)：run = 随机选一条环线的随机站，先导航过去再沿环线循环；
 	// stop = 刹停并保持（本来挂在线路上的载具同时退出时刻表，由 Controller 继续持有）。
-	// 入口是通用的；"哪些线路算环线、谁来开"目前只实现了走路网的线路(CollectBusLoops/ABusController)。
+	// 谁来开 = 这辆车的蓝图指定的线路控制器(没指定就拒绝并打警告)；跑哪些环线 = 使用这种载具的线路(CollectLineLoops)。
+	// 环线目前用站点的路网节点表示，站点没接上路网的线路给不出环线。
 	void StartVehicleLineRun(const FString& vehicleName);
 	void StopVehicleLineRun(const FString& vehicleName);
 
-	// 公交（线路公交处于物理段时）的物理 Actor，没有返回 nullptr。
-	AVehicleElement* FindBusPhysicsElement(const FString& vehicleName) const;
-	// 线路公交是否当前是物理段 Actor；搭乘需要。不在物理段时强制切换（不看距离），失败返回 nullptr。
-	AVehicleElement* EnsureBusPhysicsElement(const FString& vehicleName);
-	// 这辆车是不是线路公交（有物理类、能做远近切换）。
-	bool IsSwitchableRouteBus(const FString& vehicleName) const;
+	// 线路车处于物理段时的物理 Actor，没有返回 nullptr。
+	AVehicleElement* FindLinePhysicsElement(const FString& vehicleName) const;
+	// 线路车是否当前是物理段 Actor；搭乘需要。不在物理段时强制切换（不看距离），失败返回 nullptr。
+	AVehicleElement* EnsureLinePhysicsElement(const FString& vehicleName);
+	// 这辆车是不是线路车（有物理类、能做远近切换）。
+	bool IsSwitchableRouteVehicle(const FString& vehicleName) const;
 
-	// 线路公交在这个地形 LOD 级别内用物理（默认 4：LOD4 范围外 Chaos 地形碰撞太粗糙，物理不可靠）。
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Bus")
-	int32 busPhysicsLodLevel = 4;
+	// 线路车在这个地形 LOD 级别内用物理（默认 4：LOD4 范围外 Chaos 地形碰撞太粗糙，物理不可靠）。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Line")
+	int32 linePhysicsLodLevel = 4;
 	// 进入物理的范围系数（<1，滞回：进入用缩小的范围，离开用完整范围，避免边界抖动）。
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Bus")
-	float busPhysicsEnterScale = 0.9f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Line")
+	float linePhysicsEnterScale = 0.9f;
 
-	// 这辆车当前在场景里的Actor(停着/私家车；公交车没有交互选项，不在这张表里)，找不到返回nullptr。
+	// 这辆车当前在场景里的Actor(停着/私家车；线路车没有交互选项，不在这张表里)，找不到返回nullptr。
 	AVehicleElement* FindVehicleElement(const FString& vehicleName) const;
 
 	// 按名字找这辆车的Actor，当前没有生成(离玩家太远)就不看距离强制生成一个——剧情的
@@ -98,7 +99,7 @@ public:
 
 	// AVehicleElement::ExitVehicle按Q调用：按车身transform+VehicleMod的exitOffset算下车点，ECC_Pawn胶囊体
 	// sweep检测遮挡(坑见.cpp)，被挡住就打印拒绝提示、不下车；否则恢复previousPawn，车辆本身不销毁。
-	// 搭乘者(ATransitVehicleElement/搭乘模式的物理公交)也走这条流程但不做遮挡判定；bForce=true时驾驶者也不做。
+	// 搭乘者(ATransitVehicleElement/搭乘模式的物理线路车)也走这条流程但不做遮挡判定；bForce=true时驾驶者也不做。
 	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
 	// ---- 玩家导航线（script的visualize_navigation Change / T键测试入口） ----
@@ -144,9 +145,9 @@ public:
 	// 画桥墩(Route::GetPiers)：ISM，墩底贴地形、墩顶贴桥面。必须在BuildTracks之后调(它负责清实例)。
 	void BuildPiers(Map* map, Traffic* traffic);
 
-	// 跳时间(jump_time)结束后调用：线路公交的物理表示(实车位置)已经跟时刻表脱节，全部收回运动学、
-	// 以时刻表为准(不对齐实车进度)，靠近玩家的之后会被UpdateBusPhysicsHandoff重新切回物理。
-	void ResyncBusesAfterTimeSkip();
+	// 跳时间(jump_time)结束后调用：线路车的物理表示(实车位置)已经跟时刻表脱节，全部收回运动学、
+	// 以时刻表为准(不对齐实车进度)，靠近玩家的之后会被UpdatePhysicsHandoff重新切回物理。
+	void ResyncLineVehiclesAfterTimeSkip();
 
 	// ---- 有序通行（路口管理 + 跟车，见Controller/VehicleCommandController.md"有序通行"） ----
 	// 被Controller驱动的车辆登记表（跟车判断遍历它）；Controller在Setup时登记，Actor销毁后弱引用自然失效。
@@ -219,7 +220,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float minSpawnDistanceFromPlayer = 4.f;
 
-	// 场景里同时存在(有Actor)的行进中车辆上限(被Controller驱动的车，含公交)；满了之后Core推算的车继续推算，不生成Actor。
+	// 场景里同时存在(有Actor)的行进中车辆上限(被Controller驱动的车，含线路车)；满了之后Core推算的车继续推算，不生成Actor。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	int32 maxMovingVehicles = 16;
 
@@ -228,43 +229,44 @@ public:
 	int32 maxVehicleSpawnsPerFrame = 1;
 
 private:
-	// 公交运行状态：线路公交（bRouteBus）和跑过"测试运行"的停车场公交共用。element/controller 是弱引用，
+	// 被线路控制器开的车的运行状态：线路车（bRouteVehicle）和跑过"测试运行"的停着的车共用。element/controller 是弱引用，
 	// Actor 的生命周期归世界。
-	struct FBusState {
+	struct FLineVehicleState {
 		Vehicle* vehicle = nullptr;
 		FString name;
-		bool bRouteBus = false;                 // 有 Core 时刻表的线路公交
-		bool bDetached = false;                 // 线路公交已退出时刻表（停止运行/测试运行过），由 Controller 持有
+		bool bRouteVehicle = false;             // 有 Core 时刻表的线路车
+		bool bDetached = false;                 // 线路车已退出时刻表（停止运行/测试运行过），由 Controller 持有
 		bool bNoPhysics = false;                // 没有物理类/没有站序，永远运动学
-		UClass* physicsClass = nullptr;         // AVehicleElement 蓝图子类，线路公交的物理表示
+		UClass* physicsClass = nullptr;         // AVehicleElement 蓝图子类，线路车的物理表示
 		TWeakObjectPtr<ATransitVehicleElement> kinematic;
 		TWeakObjectPtr<AVehicleElement> element;
-		TWeakObjectPtr<ABusController> controller;
+		TWeakObjectPtr<AVehicleCommandController> controller; // 这辆车的蓝图指定的线路控制器
 	};
-	TMap<FString, FBusState> busStates;
-	// FBusState::physicsClass 是裸指针，LoadClass 出来的蓝图类没有别的引用，GC 后会悬空（SpawnActor 时崩溃），
+	TMap<FString, FLineVehicleState> lineVehicleStates;
+	// FLineVehicleState::physicsClass 是裸指针，LoadClass 出来的蓝图类没有别的引用，GC 后会悬空（SpawnActor 时崩溃），
 	// 所以另存一份 UPROPERTY 让 GC 看得见。
 	UPROPERTY()
-	TSet<TObjectPtr<UClass>> busPhysicsClasses;
+	TSet<TObjectPtr<UClass>> linePhysicsClasses;
 	// WarmVehicleClasses加载出来的停车位车辆蓝图类，另存UPROPERTY防止GC回收(回收了第一次生成又要重新加载)。
 	UPROPERTY()
 	TSet<TObjectPtr<UClass>> warmedVehicleClasses;
 	TMap<int32, Station*> stationByNodeId; // 辅助导航节点 id -> 车站，FireStopEvent 用
 
-	void UpdateBusPhysicsHandoff();
-	// 脱困：线路公交卡住时，把Core时刻表进度推到当前这一腿的终点(下一站)并收回物理Actor，之后按时刻表位置重新切物理。
+	void UpdatePhysicsHandoff();
+	// 脱困：线路车卡住时，把Core时刻表进度推到当前这一腿的终点(下一站)并收回物理Actor，之后按时刻表位置重新切物理。
 	// 停靠中/脱离时刻表/玩家在开的不处理，返回false。
-	bool TeleportBusToNextStop(const FString& vehicleName);
-	bool BusToPhysics(FBusState& state);
+	bool TeleportLineVehicleToNextStop(const FString& vehicleName);
+	bool HandoffToPhysics(FLineVehicleState& state);
 	// bSyncProgress=false：不把时刻表对齐到实车位置(跳时间之后实车位置已作废，以时刻表为准)。
-	void BusToKinematic(FBusState& state, bool bSyncProgress = true);
-	ABusController* SpawnBusController(AVehicleElement* element);
-	ABusController* GetOrCreateBusController(FBusState& state);
-	FBusState* FindOrAddBusState(const FString& vehicleName);
-	// 停车场公交/已脱离时刻表的公交是否正被 Controller 持续驱动（流式销毁时不能销毁）。
+	void HandoffToKinematic(FLineVehicleState& state, bool bSyncProgress = true);
+	// 按这辆车的蓝图指定的线路控制器类生成控制器并接管它；蓝图没指定返回 nullptr。
+	AVehicleCommandController* SpawnLineController(AVehicleElement* element);
+	AVehicleCommandController* GetOrCreateLineController(FLineVehicleState& state);
+	FLineVehicleState* FindOrAddLineVehicleState(const FString& vehicleName);
+	// 停着的车/已脱离时刻表的线路车是否正被线路控制器持续驱动（流式销毁时不能销毁）。
 	bool IsDrivenByController(const AVehicleElement* element) const;
-	// 收集所有公交环线：(route,line) 及其站序节点 id。
-	void CollectBusLoops(TArray<TArray<int32>>& outLoops) const;
+	// 收集使用这种载具(vehicleType = VehicleMod id)的线路的环线：每条 line 的站序节点 id。
+	void CollectLineLoops(const std::string& vehicleType, TArray<TArray<int32>>& outLoops) const;
 
 	Map* mapRef = nullptr;
 	Traffic* trafficRef = nullptr;
@@ -286,7 +288,7 @@ private:
 	TMap<FString, bool> randomTargets;
 	TArray<FNavRequest> pendingNavigations;
 	TArray<FNavResult> pendingNavResults; // Controller回调只入队，下一次Tick再发事件，避免vehicle_arrive->vehicle_navigate递归
-	TMap<FString, TWeakObjectPtr<AVehicleCommandController>> carDrivers; // 脚本导航用的通用Controller(公交用busStates)
+	TMap<FString, TWeakObjectPtr<AVehicleCommandController>> carDrivers; // 脚本导航用的通用Controller(线路控制器在lineVehicleStates里)
 	TMap<FString, Room*> navTargets; // 车辆名 -> 正在去的房间
 	TArray<Room*> vehicleRoomCache;
 	TMap<int32, TSet<int32>> reachableCache; // 起点导航节点id -> 沿车行图能到的所有节点id（懒算），随机目的地只在这里面挑
@@ -370,7 +372,7 @@ private:
 	// bCheckSpace：生成点被别的车占着就不生成（返回nullptr，下次再试），流式生成用；脚本/上车等强制生成不检查。
 	AVehicleElement* SpawnCar(FCarEntry& entry, bool bCheckSpace = false);
 
-	// Vehicle::GetName()→当前活着的AVehicleElement(含物理段的线路公交)，上车按名字反查用。
+	// Vehicle::GetName()→当前活着的AVehicleElement(含物理段的线路车)，上车按名字反查用。
 	UPROPERTY()
 	TMap<FString, TObjectPtr<AVehicleElement>> activeVehicles;
 

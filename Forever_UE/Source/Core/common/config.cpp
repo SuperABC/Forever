@@ -11,6 +11,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <cctype>
+#include <cerrno>
 #include <algorithm>
 #include <windows.h>
 
@@ -21,6 +22,8 @@ string Config::configDir = "";
 unordered_map<string, vector<string>> Config::dllPaths = {};
 unordered_map<string, vector<string>> Config::layoutPaths = {};
 unordered_map<string, vector<string>> Config::resourcePaths = {};
+vector<string> Config::resourceRootOrder = {};
+unordered_map<string, unordered_map<string, string>> Config::resourceFilesByRoot = {};
 unordered_map<string, vector<string>> Config::pluginPaths = {};
 unordered_map<string, vector<string>> Config::pakPaths = {};
 string Config::mainStoryScriptModName = "";
@@ -141,6 +144,8 @@ void Config::ClearState() {
 	dllPaths.clear();
 	layoutPaths.clear();
 	resourcePaths.clear();
+	resourceRootOrder.clear();
+	resourceFilesByRoot.clear();
 	pluginPaths.clear();
 	pakPaths.clear();
 	mainStoryScriptModName.clear();
@@ -217,15 +222,22 @@ void Config::ReadConfigFile(const string& path) {
 
 	hasGlobalSeed = false;
 	globalSeed = 0;
+	// seed必须是0到2^64-1之间的整数。负数和超范围的数不接受(打警告，当作没配置)：strtoull遇到负号会悄悄绕成一个
+	// 很大的数，double超出范围再转无符号整数则是未定义行为，两种都会让同一份配置在不同地方得到不同的世界。
 	if (root["seed"].IsString()) {
 		const string text = root["seed"].AsString();
 		char* end = nullptr;
+		errno = 0;
 		unsigned long long value = strtoull(text.c_str(), &end, 10);
-		if (!text.empty() && end != text.c_str()) { hasGlobalSeed = true; globalSeed = value; }
+		const bool negative = text.find('-') != string::npos;
+		if (!text.empty() && end != text.c_str() && !negative && errno != ERANGE) { hasGlobalSeed = true; globalSeed = value; }
+		else if (!text.empty()) debugf(DebugLevel::Warning, "[Config] \"seed\" must be an integer between 0 and 18446744073709551615, \"%s\" is ignored.\n", text.c_str());
 	}
 	else if (root["seed"].IsNumeric()) {
-		hasGlobalSeed = true;
-		globalSeed = static_cast<unsigned long long>(root["seed"].AsDouble());
+		const double value = root["seed"].AsDouble();
+		// 18446744073709551616.0 = 2^64，是第一个放不进unsigned long long的值。
+		if (value >= 0.0 && value < 18446744073709551616.0) { hasGlobalSeed = true; globalSeed = static_cast<unsigned long long>(value); }
+		else debugf(DebugLevel::Warning, "[Config] \"seed\" must be an integer between 0 and 18446744073709551615, %g is ignored.\n", value);
 	}
 
 	// map_size：数字=正方形，[宽,高]=长方形；非正整数/格式不对打警告并当没配置。
@@ -414,8 +426,18 @@ void Config::RemoveDllPath(const string& rawPath) {
 
 vector<string> Config::GetLayouts() {
 	vector<string> paths;
-	for (const auto& [_, layouts] : layoutPaths) {
-		for (const auto& layout : layouts) {
+	// 按资源根目录的顺序：几个目录里有同名的.layout(模板名=文件名)时只留排在前面的那个，后面的打警告丢掉。
+	unordered_map<string, string> seen; // 模板名 -> 采用的路径
+	for (const string& root : resourceRootOrder) {
+		auto it = layoutPaths.find(root);
+		if (it == layoutPaths.end()) continue;
+		for (const auto& layout : it->second) {
+			const string templateName = filesystem::path(layout).stem().string();
+			auto [existing, inserted] = seen.emplace(templateName, layout);
+			if (!inserted) {
+				debugf(DebugLevel::Warning, "[Config] layout \"%s\" exists more than once: using %s, ignoring %s\n", templateName.c_str(), existing->second.c_str(), layout.c_str());
+				continue;
+			}
 			paths.push_back(layout);
 		}
 	}
@@ -438,6 +460,7 @@ void Config::AddResourcePath(const string& rawPath) {
 	vector<string> plugins;
 	vector<string> paks;
 	vector<string> layouts;
+	unordered_map<string, string> files; // 文件名 -> 完整路径，给GetResourceFilePath用
 	// skip_permission_denied+error_code：递归到无权限子目录时跳过，而不是抛filesystem_error中断整次扫描(和AddDllPath一样)。
 	error_code dirIterError;
 	for (const auto& entry : filesystem::recursive_directory_iterator(
@@ -446,6 +469,8 @@ void Config::AddResourcePath(const string& rawPath) {
 		const filesystem::path absolutePath = filesystem::absolute(entry.path(), absoluteError);
 		if (absoluteError) continue;
 		string full = ToForwardSlashes(absolutePath.string());
+		error_code typeError;
+		if (entry.is_regular_file(typeError) && !typeError) files.emplace(entry.path().filename().string(), full); // 同一个目录里重名取先扫到的
 		if (CheckFileFormat(entry.path(), ".script")) {
 			scripts.push_back(full);
 		} else if (CheckFileFormat(entry.path(), ".uplugin")) {
@@ -461,7 +486,23 @@ void Config::AddResourcePath(const string& rawPath) {
 			layouts.push_back(full);
 		}
 	}
+	// 脚本按名字(文件名去掉扩展名)找：别的目录里已经有同名脚本时提醒一下，实际用排在前面的目录里的那个。
+	const bool known = find(resourceRootOrder.begin(), resourceRootOrder.end(), path) != resourceRootOrder.end();
+	if (!known) resourceRootOrder.push_back(path); // 重扫已有的目录不改变它的位置
+	for (const string& script : scripts) {
+		const string name = filesystem::path(script).stem().string();
+		for (const string& otherRoot : resourceRootOrder) {
+			if (otherRoot == path) continue;
+			auto other = resourcePaths.find(otherRoot);
+			if (other == resourcePaths.end()) continue;
+			for (const string& otherScript : other->second) {
+				if (filesystem::path(otherScript).stem().string() != name) continue;
+				debugf(DebugLevel::Warning, "[Config] script \"%s\" exists in more than one resource path (%s and %s); the path listed first wins.\n", name.c_str(), otherScript.c_str(), script.c_str());
+			}
+		}
+	}
 	resourcePaths[path] = scripts;
+	resourceFilesByRoot[path] = std::move(files);
 	pluginPaths[path] = plugins;
 	pakPaths[path] = paks;
 	layoutPaths[path] = layouts;
@@ -492,8 +533,11 @@ vector<string> Config::GetPakFiles() {
 }
 
 string Config::GetScriptPath(const string& name) {
-	for (const auto& [_, scripts] : resourcePaths) {
-		for (const auto& script : scripts) {
+	// 按资源根目录的顺序找：几个目录里有同名脚本时，排在前面的目录优先(AddResourcePath扫描时已经打过警告)。
+	for (const string& root : resourceRootOrder) {
+		auto it = resourcePaths.find(root);
+		if (it == resourcePaths.end()) continue;
+		for (const auto& script : it->second) {
 			if (filesystem::path(script).stem().string() == name) {
 				return script;
 			}
@@ -503,15 +547,13 @@ string Config::GetScriptPath(const string& name) {
 }
 
 string Config::GetResourceFilePath(const string& fileName) {
-	for (const auto& [rootPath, _] : resourcePaths) {
-		(void)_;
-		error_code dirIterError;
-		for (const auto& entry : filesystem::recursive_directory_iterator(
-				rootPath, filesystem::directory_options::skip_permission_denied, dirIterError)) {
-			if (entry.path().filename().string() == fileName && entry.is_regular_file()) {
-				return ToForwardSlashes(filesystem::absolute(entry.path()).string());
-			}
-		}
+	// 查AddResourcePath扫描时建好的索引，不碰磁盘。所以游戏进行中新放进资源目录的文件要等下一次RescanFiles
+	// (开始新游戏、读档)才找得到——和.script/.layout一样。目录顺序同GetScriptPath。
+	for (const string& root : resourceRootOrder) {
+		auto files = resourceFilesByRoot.find(root);
+		if (files == resourceFilesByRoot.end()) continue;
+		auto file = files->second.find(fileName);
+		if (file != files->second.end()) return file->second;
 	}
 	return string();
 }
@@ -557,8 +599,7 @@ void Config::SetMainStoryScriptModName(const string& name) {
 void Config::RescanFiles() {
 	// 先拷出根目录列表——AddResourcePath会erase再重新插入同一个key。.layout也由AddResourcePath
 	// 在同一次扫描里收进layoutPaths，所以只需要按resource根重扫。
-	vector<string> resourceRoots;
-	for (const auto& [root, _] : resourcePaths) resourceRoots.push_back(root);
+	const vector<string> resourceRoots = resourceRootOrder;
 	for (const string& root : resourceRoots) AddResourcePath(root);
 }
 
@@ -740,17 +781,14 @@ vector<string> Config::GetModDependences(const string& modId) {
 }
 
 vector<string> Config::GetResourceRootPaths() {
-	vector<string> paths;
-	for (const auto& [rootPath, _] : resourcePaths) {
-		(void)_;
-		paths.push_back(rootPath);
-	}
-	return paths;
+	return resourceRootOrder; // 配置里的先后顺序，也是同名文件的优先顺序
 }
 
 void Config::RemoveResourcePath(const string& rawPath) {
 	const string path = NormalizePath(rawPath); // 同一个目录只认一种写法
 	resourcePaths.erase(path);
+	resourceFilesByRoot.erase(path);
+	resourceRootOrder.erase(remove(resourceRootOrder.begin(), resourceRootOrder.end(), path), resourceRootOrder.end());
 	pluginPaths.erase(path);
 	pakPaths.erase(path);
 	layoutPaths.erase(path);
@@ -795,8 +833,7 @@ void Config::WriteConfig(const string& path) {
 	root["dll_paths"] = dllArr;
 
 	JsonValue resourceArr(DATA_ARRAY);
-	for (const auto& [rootPath, _] : resourcePaths) {
-		(void)_;
+	for (const string& rootPath : resourceRootOrder) {
 		resourceArr.append(JsonValue(rootPath));
 	}
 	root["resource_paths"] = resourceArr;

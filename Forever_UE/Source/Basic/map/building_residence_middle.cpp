@@ -126,8 +126,8 @@ void ResidenceMiddleBuilding::Layout(int& direction, const Quad& quad,
 			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
 			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
 		}
-		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(0, -basements, layers - 1, "", "", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "", { "elevator_basic" });
 	} else if (layout == 2) {
 		AssignFloor(-1, "preset_lshape_double_bg+", direction);
 		AssignRoom(-1, 0, "room_residence", kComponent, kComponentId);
@@ -194,8 +194,8 @@ void ResidenceMiddleBuilding::Layout(int& direction, const Quad& quad,
 			ArrangeRow(i, 6, "room_residence", size, kComponent, kComponentId);
 			ArrangeRow(i, 7, "room_residence", size, kComponent, kComponentId);
 		}
-		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(0, -basements, layers - 1, "", "", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "", { "elevator_basic" });
 	}
 }
 

@@ -35,7 +35,7 @@ public:
 
 	// 唯一入口：在location生成一次爆炸。normal是命中面法线(冲击波环贴着这个面)，
 	// scale整体缩放所有尺寸/速度(1=默认大小)。effectClassPath非空时生成这个蓝图子类(mod提供的特效蓝图，
-	// 如"/Test/Effect/BP_GrenadeExplosion"，不含'.'时自动补".BP_GrenadeExplosion_C")，只是换了一套参数；
+	// 如"/SomeMod/Effect/BP_MyExplosion"，不含'.'时自动补".BP_MyExplosion_C")，只是换了一套参数；
 	// 指定了路径却加载不到：不生成任何特效(不回退默认类)，只打一条Warning；路径留空=默认类。
 	static void Spawn(UWorld* world, const FVector& location, const FVector& normal, float scale = 1.f,
 		const FString& effectClassPath = FString());

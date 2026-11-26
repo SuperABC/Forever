@@ -77,7 +77,7 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 	for (auto& [name, building] : map->GetBuildings()) {
 		if (!building) continue;
 		// 0层且没有自定义模型的建筑(只有植被的)不生成Element；0层但有自定义
-		// 模型的(MoharBuilding)要生成——模型靠Element的近处LOD加载，Element自己会跳过远处方块
+		// 模型的(整栋楼是一个成品模型的建筑)要生成——模型靠Element的近处LOD加载，Element自己会跳过远处方块
 		// 和进出触发盒，见BuildingElement.md"自定义模型"一节。
 		if (building->GetBasementCount() + building->GetLayerCount() == 0 && building->GetDecorations().empty()) continue;
 

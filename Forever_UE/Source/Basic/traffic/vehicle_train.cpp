@@ -19,7 +19,6 @@ void TrainVehicle::SetProperty() {
 	transitMeshPath = "/Game/3rdParty/SciFiTram/StaticMeshes/SciFiTram.SciFiTram";
 
 	// 脚本：停站时的上车/下车选项，见Resource/Story/vehicle_train.script。
-	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_train" };
 
 	// 下车点(车身局部坐标)：车头+X，乘客从右侧(+Y)车身中段下。是估计值，不合适再调。

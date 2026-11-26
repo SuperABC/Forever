@@ -18,7 +18,7 @@ ZIL-130货车，只有停车场版本(和`SedanVehicle`同一条路线)。`bluep
 ## 依赖关系
 
 - 依赖：`traffic/vehicle_mod.h`。
-- 被谁依赖：`basic.cpp`注册(都依赖`script_empty`)；`BusRoute`/`TrainRoute`/`AirRoute`按`vehicleType`引用；`Forever`层`AVehicleElement`/`ATransitVehicleElement`/`APlaneElement`读取字段。
+- 被谁依赖：`basic.cpp`注册；`BusRoute`/`TrainRoute`/`AirRoute`按`vehicleType`引用；`Forever`层`AVehicleElement`/`ATransitVehicleElement`/`APlaneElement`读取字段。
 
 ## 待办/后续阶段
 

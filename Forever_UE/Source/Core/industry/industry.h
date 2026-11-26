@@ -75,6 +75,8 @@ public:
 	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
+	// 已经为"拿不到这个mod"打过警告的id：同一个mod缺失会影响很多房间，每个id只报一次。
+	std::unordered_set<std::string> warnedUnavailable;
 	float exportKeepRatio = 0.5f;
 
 	void Distribute();

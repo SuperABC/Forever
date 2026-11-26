@@ -14,7 +14,7 @@
 
 ## 依赖关系
 
-- 依赖：`Source/Dependence/map/building_mod.h`；`component_port`、`room_empty`、`script_empty`(`basic.cpp`依赖表声明)；`vehicle_boat`(船位的类别`boat`，运行时按类别查，不在依赖表里)。
+- 依赖：`Source/Dependence/map/building_mod.h`；`component_port`、`room_empty`(`basic.cpp`依赖表声明)；`vehicle_boat`(船位的类别`boat`，运行时按类别查，不在依赖表里)。
 - 布局坐标(占位值，按真实船在布局编辑器里调)：模板按"路在北边、y=0靠路、y向远离路增大"画，坐标=比例×边长+地图单位偏移；小房 y 0.3~2.3、x居中2单位宽；船位矩形 y 9~12.5、x居中4单位宽，`direction 2`(开口朝路，船头朝海)；只给小房铺地面/天花板。(2026-11-23 用户已把layout改成8个船位+整面地面，坐标以layout文件为准，上面只是最初的占位说明。)layout文件里可以写`//`和`/* */`注释(布局编辑器`stripJsonComments`读取时去掉，2026-11-23)，但**编辑器保存时不会保留注释**，所以注释要写在这份md里。
 - 被谁依赖：`basic.cpp`注册；`Resource/Layouts/preset_port_fg.layout`。
 

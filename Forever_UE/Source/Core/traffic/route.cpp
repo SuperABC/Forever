@@ -701,6 +701,17 @@ void Route::SilenceInitialStopEvents() {
 	silentInitialStopState = true;
 }
 
+void Route::RemoveVehicle(Vehicle* vehicle) {
+	if (!vehicle) return;
+	for (vector<Vehicle*>& vehicles : lineVehicles) {
+		vehicles.erase(remove(vehicles.begin(), vehicles.end(), vehicle), vehicles.end());
+	}
+	lastStopStation.erase(vehicle);
+	phaseAdjust.erase(vehicle);
+	pendingStopEvents.erase(remove_if(pendingStopEvents.begin(), pendingStopEvents.end(),
+		[vehicle](const StopEvent& event) { return event.vehicle == vehicle; }), pendingStopEvents.end());
+}
+
 void Route::ResetStopState(Vehicle* vehicle) {
 	lastStopStation.erase(vehicle);
 }

@@ -1,5 +1,7 @@
 #include "vehicle_factory.h"
 
+#include "common/utility.h"
+
 #include "common/error.h"
 
 #include "common/random.h"
@@ -9,6 +11,10 @@ using namespace std;
 
 void VehicleFactory::RegisterVehicle(const string& id, CreateFunc creator, DestroyFunc deleter, CategoryFunc category) {
 	registries[id] = { creator, deleter, category ? string(category()) : string() };
+	// 种类决定这辆车能停进哪些车位、能被哪些逻辑挑中；空着的话它哪儿都停不了。这是mod漏写了GetCategory()，报出来。
+	if (registries[id].category.empty()) {
+		debugf(DebugLevel::Warning, "Vehicle mod %s declares no category: its vehicles fit no parking slot and are never picked by category.\n", id.c_str());
+	}
 }
 
 string VehicleFactory::GetCategory(const string& id) const {

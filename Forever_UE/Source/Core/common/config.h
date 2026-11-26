@@ -164,6 +164,12 @@ private:
 	static std::unordered_map<std::string, std::vector<std::string>> layoutPaths;
 
 	static std::unordered_map<std::string, std::vector<std::string>> resourcePaths;
+	// 资源根目录的先后顺序(=config.json里resource_paths的顺序，之后新加的排在后面)。几个目录里有同名文件时
+	// 排在前面的目录优先；写回config.json也按这个顺序。resourcePaths本身是无序表，不能拿它的遍历顺序当顺序用。
+	static std::vector<std::string> resourceRootOrder;
+	// 每个资源根目录下"文件名 -> 完整路径"的索引，AddResourcePath扫描时顺手建好(同一个目录里重名取先扫到的)。
+	// GetResourceFilePath查它，不再每次递归扫盘。
+	static std::unordered_map<std::string, std::unordered_map<std::string, std::string>> resourceFilesByRoot;
 
 	static std::unordered_map<std::string, std::vector<std::string>> pluginPaths;
 

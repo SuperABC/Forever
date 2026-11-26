@@ -24,15 +24,18 @@ class Script : public Container {
 public:
 	Script() = delete;
 
+	// id=ScriptMod的id。**id为空=这个脚本没有ScriptMod**：ScriptMod只是"匹配出一批动作之后改写它们"的C++钩子，
+	// 脚本的内容(里程碑)来自.script文件，不需要钩子的脚本就不带mod，WrapScript原样放行。
+	// id非空但没注册/没启用时抛DataException(点了名的mod拿不到是配置错误)。
 	Script(ScriptFactory* factory, const std::string& id);
 
-	~Script(); // 走factory->DestroyScript(mod)释放mod实例
+	~Script(); // 有mod时走factory->DestroyScript(mod)释放mod实例
 
 	std::string GetType() const;
 
 	std::string GetName() const;
 
-	ScriptMod* GetMod() const;
+	ScriptMod* GetMod() const; // 没有ScriptMod的脚本返回nullptr
 
 	// 所有者：创建这份脚本的对象(Door*/Cabin*/Citizen*/Vehicle*/Asset*/Organization*/Job*，void*由kind决定类型)。
 	// parent只有Job用：它所属的Organization*。创建脚本的地方在构造时设置，读档重建同样走这些构造函数。
@@ -55,7 +58,7 @@ public:
 
 	std::string GetTask() const;
 
-	// 转调mod->WrapScript，返回mod->actionStack这一层的引用(不能按值返回，跨DLL堆)；
+	// 转调mod->WrapScript，返回mod->actionStack这一层的引用(不能按值返回，跨DLL堆)；没有ScriptMod时原样返回actions的一份拷贝。
 	// 读完必须AutoPop()，MatchEvent内部已配对处理。
 	std::vector<ScriptAction>& WrapScript(const Event* event, const std::vector<ScriptAction>& actions,
 		const ScriptContext& context, PostHandle* post);
@@ -95,7 +98,8 @@ private:
 
 	static std::vector<std::string> BuildSubsequences(const JsonValue& root);
 
-	ScriptMod* mod;
+	ScriptMod* mod; // 可以为空，见构造函数
+	std::vector<ScriptAction> passThrough; // 没有ScriptMod时WrapScript返回它
 	ScriptFactory* factory;
 	std::string type;
 	std::string name;

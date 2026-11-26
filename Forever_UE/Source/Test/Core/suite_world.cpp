@@ -16,6 +16,8 @@
 #include "traffic/traffic.h"
 #include "traffic/vehicle.h"
 #include "player/vehicle_asset.h"
+#include "player/asset.h"
+#include "traffic/route.h"
 #include "player/player.h"
 
 #include <algorithm>
@@ -494,6 +496,53 @@ namespace {
 		run.Check(!tripLeft && !taskLeft, "no commute or task trip still points at the destroyed vehicle");
 		run.Check(!assetLeft, "no vehicle asset still points at the destroyed vehicle");
 	}
+	// 房间里已经有同名物品时，第二件放不进去(不覆盖、不泄漏)，第一件原样留着。
+	void CheckRoomAssetDuplicate(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		Room* room = nullptr;
+		for (const auto& [name, building] : world.map->GetBuildings()) {
+			if (building && !building->GetRooms().empty()) { room = building->GetRooms()[0]; break; }
+		}
+		if (!room) return;
+		const string name = "coretest duplicate asset";
+		// 用mod创建的物品名字一定不同，造不出重名；借"内置物品"的构造函数(给名字就行，protected)造两件同名的。
+		struct NamedAsset : Asset {
+			explicit NamedAsset(const string& assetName) : Asset(AssetMobility::Object, assetName, "coretest") {}
+		};
+		Asset* first = new NamedAsset(name);
+		Asset* second = new NamedAsset(name);
+		const bool firstAdded = room->AddAsset(first);
+		const bool secondAdded = room->AddAsset(second);
+		auto held = room->GetAssets().find(name);
+		run.Check(firstAdded && !secondAdded && held != room->GetAssets().end() && held->second == first,
+			"a room rejects a second asset with the same name and keeps the first");
+		delete second;                      // 没放进去，还是我们的
+		delete room->RemoveAsset(name);     // 第一件拿回来销毁，不留在世界里
+	}
+
+	// 销毁线路上的车(公交/火车/飞机)：线路不再认识它，之后交通照常能走一步(线路里不留它的指针)。必须在最后跑。
+	void CheckDestroyLineVehicle(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		if (!world.traffic || !world.player) return;
+		vector<string> names;
+		for (const auto& [name, vehicle] : world.traffic->GetVehicles()) if (vehicle->GetRoute()) names.push_back(name);
+		sort(names.begin(), names.end());
+		run.Metric("line vehicles", static_cast<double>(names.size()), "");
+		if (names.empty()) {
+			run.Note("destroy-line-vehicle check: this world has no vehicle on a route, not exercised");
+			return;
+		}
+		Vehicle* victim = world.traffic->FindVehicleByName(names[0]);
+		Route* route = victim->GetRoute();
+		run.Check(route->QueryVehicleState(victim, 60.0).valid, "the line vehicle is known to its route before it is destroyed");
+		world.traffic->DestroyVehicle(names[0]);
+		// victim之后只当作一个地址来比较，不再解引用。
+		run.Check(!route->QueryVehicleState(victim, 60.0).valid, "a destroyed line vehicle is no longer on its route");
+		Time next = *world.player->GetTime();
+		next.AddSeconds(60);
+		world.traffic->Tick(next);
+		run.Check(world.traffic->FindVehicleByName(names[0]) == nullptr, "traffic keeps ticking after a line vehicle was destroyed");
+	}
 }
 
 void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
@@ -513,8 +562,10 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckRouteLegGeometry(world);
 	CheckPedestrianConnectivity(world);
 	CheckPopulaceAndSociety(world);
+	CheckRoomAssetDuplicate(world);
 	CheckClockRemainder(world);
 	CheckDestroyVehicle(world); // 会销毁一辆车，必须最后跑
+	CheckDestroyLineVehicle(world);
 }
 
 void RunWorldSuite(const TestOptions& options) {

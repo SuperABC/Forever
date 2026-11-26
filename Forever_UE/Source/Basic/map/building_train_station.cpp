@@ -49,10 +49,10 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 	AssignRoom(0, 1, "room_empty", kComponent, kComponentId);
 	AssignRoom(0, 2, "room_empty", kComponent, kComponentId);
 	AssignRoom(0, 3, "room_empty", kComponent, kComponentId);
-	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(2, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(3, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	AssignElevatorCabin(0, -basements, layers - 1, "", "", { "elevator_basic" });
+	AssignElevatorCabin(1, -basements, layers - 1, "", "", { "elevator_basic" });
+	AssignElevatorCabin(2, -basements, layers - 1, "", "", { "elevator_basic" });
+	AssignElevatorCabin(3, -basements, layers - 1, "", "", { "elevator_basic" });
 }
 
 void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

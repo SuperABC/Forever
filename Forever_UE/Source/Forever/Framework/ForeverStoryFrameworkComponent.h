@@ -222,7 +222,7 @@ public:
 	// 开火：一次射线(霰弹每颗弹丸各一次)发一个weapon_fire事件，只发给这把武器自己的脚本(没有脚本则不发)。
 	void NotifyWeaponFire(Weapon* weapon, const FWeaponFireInfo& info);
 
-	// 弹射物命中(UForeverProjectileBridgeComponent::ReportHit调)：发projectile_hit事件给ownerKey对应的脚本(如"weapon:weapon_rocket")。
+	// 弹射物命中(UForeverProjectileBridgeComponent::ReportHit调)：发projectile_hit事件给ownerKey对应的脚本(如"weapon:<武器id>")。
 	void NotifyProjectileHit(const std::string& ownerKey, const FVector& hit, const FVector& normal, const std::string& sufferer);
 
 	// 没有具体资产实例的失败(身上没有指定类型/数量不足)：只按类型发一个事件给sender。

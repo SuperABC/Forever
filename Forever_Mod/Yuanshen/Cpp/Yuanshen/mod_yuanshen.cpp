@@ -14,7 +14,7 @@ FOREVER_MOD_BIND_HOST
 
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
-		{ YuanshenBuilding::GetId(), { "room_empty", "component_empty", "script_empty" } },
+		{ YuanshenBuilding::GetId(), { "room_empty", "component_empty" } },
 		{ YuanshenScript::GetId(), { YuanshenBuilding::GetId() } },
 	};
 	return (void*)&dependencies;

@@ -86,7 +86,7 @@ public:
 	void StopNow() { ClearCommands(); }
 	bool HasCommands() const { return !commands.IsEmpty(); }
 
-	// 正在执行LoopNodes时的循环进度，供交还Core时刻表时对齐进度用（见UForeverTrafficFrameworkComponent::BusToKinematic）。
+	// 正在执行LoopNodes时的循环进度，供交还Core时刻表时对齐进度用（见UForeverTrafficFrameworkComponent::HandoffToKinematic）。
 	// legIndex：车所在的那一腿（leg i = 从nodes[i]到nodes[i+1]）；行驶中legFraction是这一腿已走的比例；
 	// 停靠中dwelling=true，车在nodes[legIndex+1]里，dwellFraction是停靠已过的比例。
 	// 不在循环指令里/没有有效路径时返回false。
@@ -181,6 +181,9 @@ public:
 	// 跟车/路口出口检查往前看多远。
 	UPROPERTY(EditAnywhere, Category = "Traffic")
 	float trafficLookahead = 6000.f;
+
+	// 到达循环里的节点后停靠多久（真实秒），给外面拼指令用；具体多久由子类的GetDwellSeconds决定。
+	float GetStopDwellSeconds(int32 nodeId) const { return GetDwellSeconds(nodeId); }
 
 protected:
 	// 到站/出站钩子（子类发事件、决定停靠时长）。bLoop=true表示是LoopNodes里的站。

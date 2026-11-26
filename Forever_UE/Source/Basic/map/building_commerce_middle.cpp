@@ -54,7 +54,6 @@ void CommerceMiddleBuilding::Layout(int& direction, const Quad& quad,
 	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
 	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 	doorSpecs["entrance"].name = "商店大门";
-	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
 
 	constexpr const char* kComponent = "component_shop";

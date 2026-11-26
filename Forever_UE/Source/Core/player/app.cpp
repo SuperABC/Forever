@@ -26,6 +26,10 @@ string App::GetName() const {
 	return mod->GetName();
 }
 
+bool App::ShowOnDesktop() const {
+	return mod->showOnDesktop;
+}
+
 void App::Init(Canvas* canvas, PostHandle* post) {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	MOD_CALL(mod, mod->Init(canvas, post));

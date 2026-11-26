@@ -12,7 +12,6 @@ using namespace std;
 int RestaurantOrganization::count = 0;
 
 RestaurantOrganization::RestaurantOrganization() : id(count++) {
-	scriptModName = "script_empty";
 	milestoneNames = { "organization_restaurant" };
 
 	initialFunds = 20000000;         // 20万元

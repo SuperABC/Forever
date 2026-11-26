@@ -152,7 +152,9 @@ public:
 
 	// 房间地上摆放的资产，房间独占持有(析构时delete)，key=Asset::GetName()
 	const std::unordered_map<std::string, Asset*>& GetAssets() const;
-	void AddAsset(Asset* asset);
+	// 把一件物品放到这个房间的地上(房间从此持有它)。已经有同名物品时拒绝并返回false——不能覆盖，
+	// 旧的那件会没人释放，而且UE里可能还有Actor指着它。物品名由mod保证全局唯一，正常不会撞。
+	bool AddAsset(Asset* asset);
 	Asset* RemoveAsset(const std::string& name); // 摘除不delete，调用方接手所有权
 
 private:
@@ -190,7 +192,7 @@ private:
 	std::vector<DecorationInstance> furniture; // 世界摆位(LayoutFurniture算好)，存档
 
 	// RoomMod::scriptModName/milestoneNames的快照(构造函数里SetProperty()之后拷贝，读档重建时同样会跑)。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
 	std::vector<std::string> scriptMilestones;
 	Script* script = nullptr;
 

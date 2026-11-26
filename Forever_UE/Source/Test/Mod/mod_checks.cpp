@@ -79,11 +79,11 @@ namespace {
 		if (!id.empty()) outcome.references.push_back({ what, id });
 	}
 
-	// 脚本的引用。created=Core会不会给这个实体建Script(各concept条件不同，调用方算好)；会建而scriptModName为空时
-	// Core用默认ScriptMod(kDefaultScriptModId)，同样算引用。不建Script时scriptModName的值没人读，不算引用。
+	// 脚本的引用。created=Core会不会给这个实体建Script(各concept条件不同，调用方算好)；会建而scriptModName为空=
+	// 这个脚本没有ScriptMod，不引用任何mod。不建Script时scriptModName的值没人读，也不算引用。
 	void ReferScript(ModOutcome& outcome, const string& what, const string& scriptModName, bool created) {
-		if (!created) return;
-		Refer(outcome, what, scriptModName.empty() ? string(kDefaultScriptModId) : scriptModName);
+		if (!created || scriptModName.empty()) return;
+		Refer(outcome, what, scriptModName);
 	}
 
 	// Job/Scheduler/Organization/Asset/Weapon/Vehicle走Core的MakeScript：scriptModName和milestoneNames都空才没有脚本。
@@ -91,11 +91,9 @@ namespace {
 		ReferScript(outcome, what, mod->scriptModName, !mod->scriptModName.empty() || !mod->milestoneNames.empty());
 	}
 
-	// 门：name非空才建Script，而且直接用scriptModName(没有默认值兜底，空着Core会抛异常)。
+	// 门：name非空才建Script；scriptModName留空=这扇门的脚本没有ScriptMod，不引用任何mod。
 	void ReferDoor(ModOutcome& outcome, const string& what, const DoorSpec& door) {
-		if (door.name.empty()) return;
-		if (door.scriptModName.empty()) outcome.problems.push_back(what + " has a name but an empty scriptModName");
-		Refer(outcome, what + " scriptModName", door.scriptModName);
+		ReferScript(outcome, what + " scriptModName", door.scriptModName, !door.name.empty());
 	}
 
 	// Zone/Building的引用在Layout里才填(内部建筑、房间、组件、电梯和门的脚本)，而且带随机：拿几块样例地块各Layout一次，
@@ -105,9 +103,11 @@ namespace {
 	// ---- 各concept的字段合法性检查：默认空实现，下面按基类重载。mod在SetProperty等方法里填字段，这里统一校验。 ----
 	template <typename Mod> void ValidateConcept(AllFactories&, Mod*, const ModCheckContext&, ModOutcome&) {}
 
-	void ValidateConcept(AllFactories&, VehicleMod* mod, const ModCheckContext&, ModOutcome& outcome) {
+	void ValidateConcept(AllFactories& all, VehicleMod* mod, const ModCheckContext& context, ModOutcome& outcome) {
 		vector<string>& problems = outcome.problems;
 		mod->SetProperty();
+		// 种类是注册时通过static GetCategory()交给工厂的，实例上没有，所以问工厂。
+		if (all.vehicle.GetCategory(context.modId).empty()) problems.push_back("vehicle declares no category (static GetCategory() missing or empty)");
 		if (mod->sizeX <= 0 || mod->sizeY <= 0 || mod->sizeZ <= 0) problems.push_back("vehicle size must be positive");
 		if (mod->capacity < 0) problems.push_back("vehicle capacity is negative");
 		if (mod->boardable && mod->capacity == 0) problems.push_back("boardable vehicle has capacity 0");

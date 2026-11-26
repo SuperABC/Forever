@@ -122,8 +122,8 @@ void ResidenceHighBuilding::LayoutWing(int direction, const Quad& quad) {
 		}
 	}
 	// 电梯到最高住人层(fr-)，不到屋面层。
-	AssignElevatorCabin(0, -basements, layers - 2, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(1, -basements, layers - 2, "", "script_empty", { "elevator_basic" });
+	AssignElevatorCabin(0, -basements, layers - 2, "", "", { "elevator_basic" });
+	AssignElevatorCabin(1, -basements, layers - 2, "", "", { "elevator_basic" });
 }
 
 void ResidenceHighBuilding::LayoutSide(int direction, const Quad& quad) {
@@ -147,7 +147,7 @@ void ResidenceHighBuilding::LayoutSide(int direction, const Quad& quad) {
 		}
 	}
 	for (int elevator = 0; elevator < 4; elevator++) {
-		AssignElevatorCabin(elevator, 0, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(elevator, 0, layers - 1, "", "", { "elevator_basic" });
 	}
 }
 
@@ -188,7 +188,7 @@ void ResidenceHighBuilding::LayoutTwin(int direction, const Quad& quad) {
 		}
 	}
 	for (int elevator = 0; elevator < 2; elevator++) {
-		AssignElevatorCabin(elevator, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(elevator, -basements, layers - 1, "", "", { "elevator_basic" });
 	}
 }
 
@@ -234,7 +234,7 @@ void ResidenceHighBuilding::LayoutNshape(int direction, const Quad& quad) {
 		}
 	}
 	for (int elevator = 0; elevator < 2; elevator++) {
-		AssignElevatorCabin(elevator, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(elevator, -basements, layers - 1, "", "", { "elevator_basic" });
 	}
 }
 

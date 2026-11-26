@@ -55,7 +55,7 @@ struct ScriptContext {
 `self`/`system`都是`Container*`（`common/utility.h`已有的键值接口），`Script`类本身实现
 `Container`，因此`self`直接指向当前Script、`system`指向`Story`挂载的一个"无逻辑只有变量表"的
 `Script`（见`Core/story/story.md`）。`local`不是`Container*`——local变量来自触发这次匹配的
-运行时`Event`实例自己的字段，通过`Event::GetLocalValue(name)`虚方法暴露（见`event.md`），没有
+运行时`Event`实例自己的字段，通过`Event::GetLocalValue(name, receive)`虚方法暴露（见`event.md`），没有
 用`Container*`是因为不是每个`Event`都需要维护一份独立的键值表，让每个`Event`子类按需重载自己
 的字段更轻量。三个槽位任意一个为`nullptr`（或前缀路由不到）时，对应的`$$xxx`求值到默认值（0），
 不额外报错。

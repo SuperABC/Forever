@@ -89,9 +89,12 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
 | VehicleMovement → Engine Setup → Max Torque | 基类默认 500（按轿车调）；重车往上加，货车 1800 |
 | Class Defaults → Wheels → **Wheel Radius** | 轮子半径，取脚本输出的半径（前后不同取平均）；0 = 沿用默认 35 |
 | Class Defaults → Mass → **Center Of Mass Offset** | 重心偏移（车身局部）；高车 Z 取负下移防侧翻，公交 `(0,0,-60)`；全 0 = 不动 |
+| Class Defaults → Line → **Line Controller Class** | 这种车跑线路时用的控制器，每种载具选自己的；公交选 `BusController`。留空 = 线路上的这种车不切物理、也不能"按线路运行"（轿车、货车留空） |
 | CameraBoom | Z 偏移按车高调（轿车 100、货车 130）、Target Arm Length（货车 800） |
 
 `Wheel Radius` 和 `Center Of Mass Offset` 在基类 `BeginPlay` 里应用（用 `SetWheelRadius` 按轮位覆盖，不用为每种车型建轮子蓝图子类）。基类里没有任何车型特判。
+
+父类要**直接**选 `VehicleElement`，不要从别的载具蓝图派生：子蓝图会继承父蓝图上填的所有值（轮骨名、`Line Controller Class` 等），以后在父蓝图上调任何值都会连带影响它。`BP_BusElement` 目前是从 `BP_VehicleElement` 派生的（建得比这份说明早），所以 `Line Controller Class` 只能设在 `BP_BusElement` 上，不要设在 `BP_VehicleElement` 上。
 
 ## 六、在 Basic 里注册车型（C++）
 
@@ -99,7 +102,7 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
 
 1. 在 `Source/Basic/traffic/` 新建 `vehicle_xxx.h/.cpp/.md`(每个 mod 一组以 id 命名的文件，照 `vehicle_sedan.*` 写，记得加进 `Basic.vcxproj` 和 `.filters`)，里面是 `XxxVehicle : VehicleMod`：
    - `GetId()`（如 `vehicle_xxx`；id 可以是任意字符串，`<concept>_<name>` 只是习惯写法）、`GetCategory()`（种类，停车位按种类挑车型）、`GetType()`、`GetName()`（static 计数器 + id）。
-   - `SetProperty()` 里填：`blueprintPath`（`/Game/.../BP_XxxElement.BP_XxxElement_C`）、`sizeX/Y/Z`（包围盒）、`scriptModName="script_empty"` 和 `milestoneNames`（可驾驶的车复用 `vehicle_basic`，即靠近弹出"上车"）、`exitOffsetX/Y/Z`（下车点，车身局部坐标，Z 默认 100，站不下人会拒绝下车）、`drivable=true`。
+   - `SetProperty()` 里填：`blueprintPath`（`/Game/.../BP_XxxElement.BP_XxxElement_C`）、`sizeX/Y/Z`（包围盒）、`milestoneNames`(`scriptModName` 不用填)（可驾驶的车复用 `vehicle_basic`，即靠近弹出"上车"）、`exitOffsetX/Y/Z`（下车点，车身局部坐标，Z 默认 100，站不下人会拒绝下车）、`drivable=true`。
 2. `basic.cpp` 三处：依赖表里加 `{ XxxVehicle::GetId(), { kScriptEmpty } }`；`GetModVehicles` 的列表；`RegisterModVehicles` 里 `factory->RegisterVehicle(...)`。
 3. `Resource/Config/config.json` 的 `vehicle_mods` 里加 `"vehicle_xxx"`。
 4. 想让它在停车位刷出来：车位接受哪些种类由建筑 mod 在 `Layout()` 里用 `AssignParking(..., { 种类... })` 声明(如 `Source/Basic/map/building_industry_high.cpp`)；要开局就停着车，改用 `AssignParking(level, slot, spec)` 并把 `spec.stocked` 设为 true(如 `Source/Basic/map/building_port.cpp`)。`stocked` 的车位开局各预置一辆(种类里随机挑、再从该种类已启用的车型里随机挑，没有已启用车型就空着)；普通车位的车由 `Core/traffic/traffic.cpp` 的 `Traffic::AssignVehicles` 按人分配，目前只分配 `car`(市民)和 `truck`(组织)两个种类，别的种类不会被自动分配。

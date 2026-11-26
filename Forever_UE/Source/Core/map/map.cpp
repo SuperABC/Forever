@@ -643,6 +643,14 @@ bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent,
 	BuildingMod* mod = buildingFactory.CreateBuilding(id); // 到这里才真正创建，唯一一次
 	if (!mod) return false;
 	Building* building = new Building(&buildingFactory, mod);
+	// 重名要在布局之前查：Layout/MergeBuildingNavigation/BuildDoors这些会把building的指针登记进导航记录、
+	// 开口请求、门和电梯的表里，等到最后AddBuilding才发现重名再delete，那些地方就留下了悬空指针。
+	if (buildings.find(building->GetName()) != buildings.end()) {
+		debugf(DebugLevel::Warning, "Duplicate building name \"%s\", rejected.\n", building->GetName().data());
+		delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
+		if (created) *created = nullptr;
+		return true; // 和以前一样：这个id是能创建的，只是这一栋没放成，调用方不需要换别的id重试
+	}
 	building->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(),
 		placedQuad.GetSizeX(), placedQuad.GetSizeY());
 	building->SetParentLot(lot);
@@ -657,7 +665,7 @@ bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent,
 	building->BuildDoors(*this);
 	building->BuildCabins(*this);
 	BuildBuildingScripts(building);
-	if (!AddBuilding(building)) { delete building; building = nullptr; } // ~Building()里DestroyBuilding(mod)会跟着跑
+	AddBuilding(building); // 重名已经在上面查过，这里一定成功
 	if (created) *created = building;
 	return true;
 }
@@ -3885,7 +3893,7 @@ namespace {
 	Script* MakeEntityScript(ScriptFactory& factory, const string& modName, const vector<string>& milestoneNames,
 		const string& name, const string& address) {
 		if (milestoneNames.empty()) return nullptr;
-		Script* script = new Script(&factory, modName.empty() ? string(kDefaultScriptModId) : modName);
+		Script* script = new Script(&factory, modName); // modName为空=没有ScriptMod
 		for (const string& milestoneName : milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(milestoneName));
 		}

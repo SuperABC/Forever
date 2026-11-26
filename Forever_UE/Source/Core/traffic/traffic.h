@@ -12,6 +12,7 @@
 #include "common/handle.h"
 #include "common/utility.h"
 
+#include <unordered_set>
 #include <functional>
 #include <list>
 #include <string>
@@ -157,6 +158,7 @@ private:
 	ScriptFactory& scriptFactory;
 
 	std::unordered_map<std::string, Vehicle*> vehicles; // 持有所有权
+	std::unordered_set<std::string> warnedUnavailableVehicleMods; // 已经为"拿不到这个载具mod"打过警告的id，每个只报一次
 	std::vector<VehicleAsset*> vehicleAssets;           // 持有所有权，指向vehicles里的车，销毁车时同步删
 
 	struct PendingVehicleAsset {

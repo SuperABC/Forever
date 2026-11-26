@@ -240,7 +240,7 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 		}
 	}
 
-	// 每辆车独占持有一份Script(vehicle_basic.script)。
+	// 每辆车独占持有一份Script(读哪个脚本文件由它的VehicleMod决定)。
 	if (Traffic* traffic = (kinds & KindVehicle) ? (framework ? framework->GetTraffic() : nullptr) : nullptr) {
 		for (auto& [name, vehicle] : traffic->GetVehicles()) {
 			if (vehicle) broadcastOne(vehicle->GetScript());
@@ -540,13 +540,13 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	if (target && target->GetScheduler()) {
 		matchOne(target->GetScheduler()->GetScript());
 	}
-	// 岗位的Job脚本：工作中的市民在Job脚本里加选项(见job_factory_worker.script/job_shop_saler.script)，
+	// 岗位的Job脚本：工作中的市民可以在自己岗位的Job脚本里加选项，
 	// 点击事件也要发给它。
 	if (target && target->GetJob()) {
 		matchOne(target->GetJob()->GetScript());
 	}
 
-	// name也可能是一辆车(见vehicle_basic.script的"上车"选项)，额外匹配它自己的Script，和其它分支并列。
+	// name也可能是一辆车(车辆自己的脚本可以给自己加选项，比如"上车")，额外匹配它自己的Script，和其它分支并列。
 	Traffic* traffic = framework ? framework->GetTraffic() : nullptr;
 	Vehicle* targetVehicle = traffic ? traffic->FindVehicleByName(nameUtf8) : nullptr;
 	if (targetVehicle && targetVehicle->GetScript()) {

@@ -54,7 +54,7 @@ struct ElevatorCabinSpec {
 	int maxFloor = 0;  // 含
 	std::string cabinMeshPath; // 留空用组件默认Elevator mesh
 	// milestoneNames非空才创建Script,见Core/map/cabin.md。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
 	std::vector<std::string> milestoneNames;
 };
 
@@ -107,7 +107,7 @@ public:
 	std::string stationMod;
 
 	// 建筑的Script,milestoneNames非空才创建,见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=脚本没有ScriptMod(逻辑全在里程碑文件里)
 	std::vector<std::string> milestoneNames;
 
 	// 长短边朝向偏好的统一落点:preferred是偏好那条边(FACE_WEST/EAST或FACE_NORTH/SOUTH，成对)里随机抽到的一侧。
@@ -149,7 +149,7 @@ public:
 
 	// 声明一台电梯轿厢,同一口井可声明多台(楼层范围不能重叠,重叠的后一条被跳过)。
 	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",
-		std::string scriptModName = "script_empty", std::vector<std::string> milestoneNames = {});
+		std::string scriptModName = "", std::vector<std::string> milestoneNames = {});
 
 	// 子类还必须实现一组static方法(基类不声明),通过RegisterBuilding注册,见building_mod.md。
 

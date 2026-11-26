@@ -101,6 +101,12 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `Forever/Framework/ForeverFrameworkActor.cpp`（`ValidateMainStoryDependencies`调
   `GetModDependences`，`EnsurePlayerGenerated`调`GetGlobalSettings`）。
 
+## 没有ScriptMod的Script
+
+`Script`的内容有两个来源：`.script`文件里的里程碑(数据)，和`ScriptMod`(一段C++钩子，`WrapScript`在匹配出一批动作之后有机会改写它们)。钩子是可选的：`Script(factory, id)`的`id`为空时不创建mod，`mod`成员是空指针，`GetType()`是空串，`WrapScript`把动作原样放行，存档里这条脚本的类型记成空串、没有mod状态。`id`非空但那个mod没注册/没启用时仍然抛`DataException`——点了名的mod拿不到是配置错误，不会悄悄变成"没有mod"。
+
+所以Core不依赖任何具体的脚本mod：`Forever_Mod/Empty`的`script_empty`可以不启用。这是只对脚本这个concept做的决定——别的concept的mod就是那个东西的定义，必须存在；脚本的mod只是附加逻辑。(Core里另有两种对象也可以没有mod：内置物品`EstateAsset`/`VehicleAsset`、工坊内部的缓存`Storage`。)
+
 ## 待办/后续阶段
 
 - 其余尚未实现的event/change类型的JSON分发分支（未知`type`抛`DataException`）。
@@ -113,7 +119,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 `npc_revive`(name必填，health可选，缺省满血)；`create_timer`新增可选`mode`(absolute/relative/real/next)；`citizen_decease`触发条件见`Dependence/story/event.md`。
 
 ## MakeScript：script可为空
-`MakeScript(factory, scriptModName, milestoneNames)`：两者都空返回nullptr(这个实例没有脚本，`GetScript()==nullptr`，也不挂弹选项的触发盒)；`scriptModName`为空但有里程碑时按`"script_empty"`创建(空字符串等价script_empty，不需要在依赖里声明)。Vehicle/Job/Scheduler/Organization/Asset用它；`VehicleMod/JobMod/SchedulerMod/OrganizationMod/AssetMod::scriptModName`默认值是`""`。Room/Building/Zone的`MakeEntityScript`、Door/Cabin本来就是“没有里程碑/交互名则无脚本”。
+`MakeScript(factory, scriptModName, milestoneNames)`：两者都空返回nullptr(这个实例没有脚本，`GetScript()==nullptr`，也不挂弹选项的触发盒)；`scriptModName`为空但有里程碑时创建一个**没有ScriptMod的Script**(见下)。Vehicle/Job/Scheduler/Organization/Asset用它；`VehicleMod/JobMod/SchedulerMod/OrganizationMod/AssetMod::scriptModName`默认值是`""`。Room/Building/Zone的`MakeEntityScript`、Door/Cabin本来就是“没有里程碑/交互名则无脚本”。
 新增解析：Event `get_asset`/`lose_asset`(过滤字段`asset_type`、`result`，JSON的`type`已是事件类型)；Change `pick_asset`(asset，缺省=所属资产)、`grant_asset`/`deduct_asset`/`drop_asset`(asset_type、count缺省1)。
 
 ## 玩家与经济相关的事件/Change

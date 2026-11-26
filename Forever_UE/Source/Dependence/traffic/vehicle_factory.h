@@ -16,6 +16,7 @@ public:
 	// 载具种类("car"/"bus"/"plane"...)：每个具体VehicleMod子类的static const char* GetCategory()，
 	// 不需要实例——和OrganizationFactory::PowerFunc同一个模式。返回字面量指针而不是std::string，
 	// 避免跨DLL传std::string(SSO/分配器问题)；工厂在宿主侧(下面的virtual方法内)把它拷成自己的string。
+	// 种类必须非空：空着(没给函数或返回空串)注册时会打警告，这种车不匹配任何车位。
 	using CategoryFunc = const char*(*)();
 
 	VehicleFactory() = default;

@@ -311,3 +311,12 @@ void APlaneElement::UpdateHud(float speedCmPerSec)
 	GEngine->AddOnScreenDebugMessage(kHudKey, 0.1f, FColor::White,
 		FString::Printf(TEXT("动力 %.0f%%   速度 %.0f km/h   高度 %.0f m"), power, speedCmPerSec * kCmPerSecToKmh, altitudeMeters));
 }
+
+bool APlaneElement::GetSpinningBone(FName& outBoneName, FVector& outAxis, float& outAngleDegrees) const
+{
+	if (propellerBoneName.IsNone()) return false;
+	outBoneName = propellerBoneName;
+	outAxis = propellerAxis;
+	outAngleDegrees = propellerAngle;
+	return true;
+}

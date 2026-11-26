@@ -17,6 +17,10 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 要不要在手机桌面上放图标，默认放。不放图标的App(占位模板、以后只在后台跑的App)在自己的构造函数里设成false，
+	// Phone::BuildAppList据此跳过它。
+	bool showOnDesktop = true;
+
 	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
 	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 第一次打开时调用一次;canvas只用来读尺寸布局初始状态(分辨率动态),不持有所有权。

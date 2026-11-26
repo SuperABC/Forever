@@ -51,7 +51,4 @@ id、类型名或它的业务含义。
 - Core里还残留一些对具体mod的认识，应逐步改成"由mod声明、Core只读共性数据"的形式。已知位置：
   - `society/economy.cpp`：市民每日需求的服务类型`"food"`/`"video"`和视频需求的财富阈值是写死的。
   - `traffic/traffic.cpp`的`AssignVehicles`：市民分`"car"`、组织分`"truck"`两个载具种类写死，成年年龄用自己的
-    常量(`kAdultAge`)而不是`GovernmentPolicy::adultAge`；`traffic/vehicle.cpp`：查不到种类时兜底成`"car"`。
-  - 按名字特判占位mod：`station_empty`/`route_empty`(`traffic/traffic.cpp`)、`app_empty`(`player/phone.cpp`)；
-    实体脚本没指定ScriptMod时兜底用`script_empty`(`map/`下各实体、`story/script.cpp`的`MakeScript`)，因此
-    `script_empty`必须启用。
+    常量(`kAdultAge`)而不是`GovernmentPolicy::adultAge`。

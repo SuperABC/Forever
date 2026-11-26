@@ -85,7 +85,13 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   是纯文本文件)，扫到就收。`AddResourcePath`在同一次扫描里按后缀分流收集`.script`
   （`resourcePaths`）、`.uplugin`（`pluginPaths`）、`.pak`（`pakPaths`）、`.layout`
   （并入内部的`layoutPaths`，没有单独的`layout_paths`配置项——一个文件夹天然同时覆盖
-  `.layout`和`.script`）。`GetResourceFilePath(fileName)`按带扩展名的文件名在各根目录下现扫递归查找(不缓存)，
+  `.layout`和`.script`）。`GetResourceFilePath(fileName)`按带扩展名的文件名查找：查的是`AddResourcePath`扫描时建好的"文件名→完整路径"索引
+  (`resourceFilesByRoot`)，不碰磁盘；所以游戏进行中新放进资源目录的文件要等下一次`RescanFiles`(开始新游戏、读档)才找得到，
+  和`.script`/`.layout`一样。
+  **几个资源目录里有同名文件时，配置里排在前面的目录优先**：根目录的先后顺序记在`resourceRootOrder`
+  (`resourcePaths`是无序表，不能拿它的遍历顺序当顺序)，`GetScriptPath`、`GetResourceFilePath`、`GetLayouts`、
+  `GetResourceRootPaths`、写回`config.json`都按这个顺序；扫描时发现同名脚本、同名layout会打警告说明用了哪个。
+  这个函数
   给`PostImplement`的`"resource path"`查询用，让mod能读`.txt`等非`.script`/`.layout`数据文件。
   `GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
   扩展名）反查实际路径，供`JobMod`/`OrganizationMod`/`Story`这类只知道bare文件名、不应该
@@ -163,7 +169,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 `SetModEnabled`取消启用的script mod正是main_story时同时清空main_story。
 
 ## 种子
-- 顶层`"seed"`(数字或字符串)：Core各域(`core.map/populace/society/traffic/weather/story`)随机流的种子来源，每域按`hash(seed, 域名)`派生；不写=随机。
+- 顶层`"seed"`(数字或字符串，必须是0到2^64-1的整数；负数、超范围、不是数字的都打警告并当作没配置)：Core各域(`core.map/populace/society/traffic/weather/story`)随机流的种子来源，每域按`hash(seed, 域名)`派生；不写=随机。
 - `<concept>_mods`条目里的`--seed N`：该mod自己的随机流种子，如`"building_residence_high --seed 7"`；不写=随机。实际用到的种子在开局时打到日志(`Random: ...`)，想复现就把它填回去。
 
 ## 地图大小

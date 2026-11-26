@@ -3,25 +3,27 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "ChaosVehicleWheel.h"
 #include "GameFramework/Actor.h"
-#include "Element/PlaneElement.h"
+#include "Element/VehicleElement.h"
 
-void FVehicleWheelAnimInstanceProxy::SetPropellerOwner(const APlaneElement* InPlane)
+void FVehicleWheelAnimInstanceProxy::SetSpinOwner(const AVehicleElement* InVehicle)
 {
-	PropellerOwner = InPlane;
+	SpinOwner = InVehicle;
 }
 
 void FVehicleWheelAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds)
 {
 	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
 
-	if (const APlaneElement* Plane = PropellerOwner.Get()) {
-		const FName PropellerBoneName = Plane->GetPropellerBoneName();
-		if (PropellerBone.BoneName != PropellerBoneName) {
-			PropellerBone.BoneName = PropellerBoneName;
-			bBoneReferencesInitialized = false;
+	bHasSpinBone = false;
+	if (const AVehicleElement* Vehicle = SpinOwner.Get()) {
+		FName SpinBoneName;
+		if (Vehicle->GetSpinningBone(SpinBoneName, SpinAxis, SpinAngle)) {
+			if (SpinBone.BoneName != SpinBoneName) {
+				SpinBone.BoneName = SpinBoneName;
+				bBoneReferencesInitialized = false;
+			}
+			bHasSpinBone = true;
 		}
-		PropellerAngle = Plane->propellerAngle;
-		PropellerAxis = Plane->GetPropellerAxis();
 	}
 
 	const UChaosWheeledVehicleMovementComponent* Component = WheeledVehicleComponent.Get();
@@ -66,7 +68,7 @@ bool FVehicleWheelAnimInstanceProxy::Evaluate(FPoseContext& Output)
 		for (FVehicleWheelPose& Pose : WheelPoses) {
 			Pose.BoneReference.Initialize(BoneContainer);
 		}
-		PropellerBone.Initialize(BoneContainer);
+		SpinBone.Initialize(BoneContainer);
 		bBoneReferencesInitialized = true;
 	}
 
@@ -81,11 +83,11 @@ bool FVehicleWheelAnimInstanceProxy::Evaluate(FPoseContext& Output)
 		BoneTransform.SetRotation(BoneTransform.GetRotation() * RollSteerQuat);
 	}
 
-	// 螺旋桨：同样后乘，绕骨骼自己的局部轴转(原因同上面车轮的说明)。
-	if (PropellerOwner.IsValid() && PropellerBone.IsValidToEvaluate(BoneContainer)) {
-		const FCompactPoseBoneIndex BoneIndex = PropellerBone.GetCompactPoseIndex(BoneContainer);
+	// 一直转的骨骼(螺旋桨之类)：同样后乘，绕骨骼自己的局部轴转(原因同上面车轮的说明)。
+	if (bHasSpinBone && SpinBone.IsValidToEvaluate(BoneContainer)) {
+		const FCompactPoseBoneIndex BoneIndex = SpinBone.GetCompactPoseIndex(BoneContainer);
 		FTransform& BoneTransform = Output.Pose[BoneIndex];
-		const FQuat SpinQuat(PropellerAxis.GetSafeNormal(), FMath::DegreesToRadians(PropellerAngle));
+		const FQuat SpinQuat(SpinAxis.GetSafeNormal(), FMath::DegreesToRadians(SpinAngle));
 		BoneTransform.SetRotation(BoneTransform.GetRotation() * SpinQuat);
 	}
 
@@ -104,7 +106,6 @@ void UVehicleWheelAnimInstance::NativeInitializeAnimation()
 	}
 	AnimInstanceProxy.SetMaxWheelSpinDegreesPerSecond(MaxWheelSpinDegreesPerSecond);
 
-	if (const APlaneElement* Plane = Cast<APlaneElement>(GetOwningActor())) {
-		AnimInstanceProxy.SetPropellerOwner(Plane);
-	}
+	// owner是载具就让Proxy每帧问它有没有"一直转的骨骼"；不是载具(比如线路上的运动学车)就没有。
+	AnimInstanceProxy.SetSpinOwner(Cast<AVehicleElement>(GetOwningActor()));
 }

@@ -17,23 +17,26 @@ unordered_map<string, Script::FileCache> Script::caches = {};
 int Script::liveCount = 0;
 
 Script::Script(ScriptFactory* factory, const string& id) :
-	mod(factory->CreateScript(id)),
+	mod(nullptr),
 	factory(factory),
 	type(),
 	name(),
 	milestones(),
 	actives() {
-	if (!mod) {
-		THROW_EXCEPTION(DataException, "Script " + id + " mod is null.\n");
+	// id为空：没有ScriptMod的脚本，type/name留空。
+	if (!id.empty()) {
+		mod = factory->CreateScript(id);
+		if (!mod) {
+			THROW_EXCEPTION(DataException, "Script mod " + id + " is not registered or not enabled.\n");
+		}
+		type = mod->GetType();
+		name = mod->GetName();
 	}
-
-	type = mod->GetType();
-	name = mod->GetName();
 	liveCount++;
 }
 
 Script::~Script() {
-	factory->DestroyScript(mod);
+	if (mod) factory->DestroyScript(mod);
 	liveCount--;
 }
 
@@ -105,11 +108,19 @@ string Script::GetTask() const {
 
 vector<ScriptAction>& Script::WrapScript(const Event* event, const vector<ScriptAction>& actions,
 	const ScriptContext& context, PostHandle* post) {
+	if (!mod) {
+		passThrough = actions; // 没有钩子：原样放行
+		return passThrough;
+	}
 	MOD_CALL(mod, mod->WrapScript(event, actions, context, post));
 	return mod->actionStack.back();
 }
 
 void Script::AutoPop() {
+	if (!mod) {
+		passThrough.clear();
+		return;
+	}
 	MOD_CALL(mod, mod->AutoPop());
 }
 
@@ -939,7 +950,7 @@ vector<string> Script::BuildSubsequences(const JsonValue& root) {
 Script* MakeScript(ScriptFactory* factory, const string& scriptModName, const vector<string>& milestoneNames) {
 	if (!factory) return nullptr;
 	if (scriptModName.empty() && milestoneNames.empty()) return nullptr;
-	Script* script = new Script(factory, scriptModName.empty() ? string(kDefaultScriptModId) : scriptModName);
+	Script* script = new Script(factory, scriptModName); // scriptModName为空=没有ScriptMod
 	for (const string& milestoneName : milestoneNames) {
 		script->ReadMilestones(Config::GetScriptPath(milestoneName));
 	}
