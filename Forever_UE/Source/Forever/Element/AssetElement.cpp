@@ -46,6 +46,17 @@ UStaticMesh* AAssetElement::LoadAssetMesh(const std::string& meshPath) {
 	return LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 }
 
+void AAssetElement::SpawnWarmup(UWorld* world, UStaticMesh* staticMesh, const FVector& location) {
+	if (!world) return;
+	const FTransform transform(FRotator::ZeroRotator, location);
+	AAssetElement* element = world->SpawnActorDeferred<AAssetElement>(AAssetElement::StaticClass(), transform, nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!element) return;
+	if (staticMesh) element->mesh->SetStaticMesh(staticMesh);
+	element->FinishSpawning(transform);
+	element->Destroy(); // 同一帧销毁，不会Tick，也不会和任何东西重叠出游戏效果(生成在很高的地方)
+}
+
 void AAssetElement::Init(Asset* inAsset) {
 	asset = inAsset;
 	if (!asset) return;

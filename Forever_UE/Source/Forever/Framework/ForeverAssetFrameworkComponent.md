@@ -26,6 +26,7 @@
     且有实体就`WriteBackToCore`(把实际位置朝向写回`Asset`的地面摆位)再销毁。每帧最多`maxAssetOpsPerTick`(4)个生成+销毁，
     预算用完就停，下一帧从停下的下标(`streamCursor`)接着扫(一张256的地图大约4000条，扫一遍很便宜)。
     `minAssetLifetime`(2秒)内不销毁，这是Chaos物理代理的安全要求。
+- **预热(`WarmUpAssets`，加载界面"预热物品"阶段，在`RegisterGroundAssets`之后)**：收集网格路径——每种已启用物品mod的(`Asset::CollectRegisteredMeshes`，每种临时建一个mod实例，命名计数器跳一个号、不恢复)、房间里和室外现有物品的、房间家具的；物品网格用`AAssetElement::LoadAssetMesh`加载并存进`warmedMeshes`(UPROPERTY，防GC)，家具和固定物品的网格走建筑组件的`ResolveMesh`进它的缓存；编辑器里`FStaticMeshCompilingManager::FinishCompilation`等网格编译完；每种物品网格(含Cube占位)用`AAssetElement::SpawnWarmup`在高空临时生成一个实体、同一帧销毁(同`WarmVehicleClasses`)。
 - **`SpawnWorldAsset(asset, location, rotation)`**：把物品放到地上=登记 + 把落点写进Core + 立刻生成实体。丢弃、投掷、
   背包面板拖出来都走它(都发生在玩家身边)。**`DestroyWorldAsset(asset)`**：物品离开地面=取消登记 + 销毁实体(没有实体就只取消登记)。
   **任何会delete一件"在地上"的`Asset`的地方都必须先调`DestroyWorldAsset`**，否则登记表里留着悬空指针，Tick里会解引用它。

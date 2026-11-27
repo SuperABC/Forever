@@ -25,9 +25,9 @@ namespace {
 	constexpr float kSidewalkRatio = 0.25f;
 	// 模型原始尺寸太小，统一放大。
 	constexpr float kTrafficLightScale = 3.f;
-	// 从和树对齐的那点沿道路往路口外(背离路口中心)挪这么多(地图单位，0.05=0.5米)，完全放在道路单元上，
+	// 从和树对齐的那点沿道路往路口外(背离路口中心)挪这么多(地图单位，0.2=2米)，完全放在道路单元上，
 	// 不压在setback线上的人行横道上。
-	constexpr float kAwayFromJunction = 0.05f;
+	constexpr float kAwayFromJunction = 0.2f;
 }
 
 UForeverTrafficLightFrameworkComponent::UForeverTrafficLightFrameworkComponent() {

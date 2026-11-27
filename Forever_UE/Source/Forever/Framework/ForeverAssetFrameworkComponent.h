@@ -7,6 +7,7 @@
 #include "ForeverAssetFrameworkComponent.generated.h"
 
 class AAssetElement;
+class UStaticMesh;
 class Asset;
 class Room;
 class Script;
@@ -36,6 +37,12 @@ public:
 	// 开局和读档各调一次(世界里的物品都建好/恢复好之后)：把所有房间里的物品和室外的物品登记成"在地上"，只登记不生成，
 	// 实体由TickComponent按距离生成。
 	void RegisterGroundAssets();
+
+	// 加载界面的"预热物品"阶段(RegisterGroundAssets之后)：第一次生成某种物品要同步加载网格(编辑器里还要等网格编译)、
+	// 建物理体，走近商店时会卡一下。这里先把会用到的网格全部加载好并留着引用：
+	//   - 每种已启用的物品mod的网格(Asset::CollectRegisteredMeshes)、世界里现有物品的网格：加载后各临时生成一个实体再销毁；
+	//   - 房间家具和固定物品的网格：走建筑组件的ResolveMesh，进它的缓存，近处LOD建家具ISM时直接命中。
+	void WarmUpAssets();
 
 	// 可移动物品的流式距离(地图单位，1=10米)：玩家到物品的水平距离小于assetSpawnDistance就生成实体，大于assetDespawnDistance
 	// 就把位置写回Core再销毁实体。固定物品不走这个：显示跟房间家具一起建，弹选项的实体只在玩家进了它所在的房间时才有。
@@ -121,6 +128,9 @@ private:
 		double spawnedAt = 0.0;
 	};
 	TArray<FGroundEntry> groundEntries;
+	// 预热加载的物品网格：留着引用，免得还没用上就被GC回收。
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMesh>> warmedMeshes;
 	TMap<Asset*, int32> entryIndexByAsset;
 	TMap<FString, Asset*> assetByName;
 	bool bGroundRegistered = false;

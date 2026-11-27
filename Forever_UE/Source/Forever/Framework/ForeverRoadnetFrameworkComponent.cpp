@@ -129,6 +129,7 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	TArray<FVector> openingVertices;
 	TArray<int32> openingTriangles;
 	TArray<FVector2D> openingUvs;
+	junctionEdges.Reset();
 	for (Road* road : map->GetRoads()) {
 		float ts = trimAtStart.Contains(road) ? trimAtStart[road] : 0.f;
 		float te = trimAtEnd.Contains(road) ? trimAtEnd[road] : 0.f;
@@ -518,6 +519,25 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 			FVector2D dirXY(fwd.X, fwd.Y);
 			dirXY = dirXY.GetSafeNormal();
 			if (dirXY.IsNearlyZero()) dirXY = FVector2D(1.f, 0.f);
+			// 贴着路口的那一节：记下朝路口那条端边的两个角点(实例的真实端边，垂直于本节朝向)，路口多边形用它对齐。
+			{
+				const bool bAtStartJunction = k == 0 && trimStart > 1e-6f && rangeStart <= tLow + 1e-6f;
+				const bool bAtEndJunction = k == n - 1 && trimEnd > 1e-6f && rangeEnd >= tHigh - 1e-6f;
+				if (bAtStartJunction || bAtEndJunction) {
+					const FVector2D right(-dirXY.Y, dirXY.X); // side0方向(右手边，+Y=南，同Core的perp0)
+					const float halfW = road->GetTotalWidth() * 0.5f;
+					const FVector2D midMap(mid.X / ROAD_WORLD_SCALE, mid.Y / ROAD_WORLD_SCALE);
+					const FVector2D halfAlong = FVector2D(tiltedFwd.X, tiltedFwd.Y) * (tileLen * 0.5f);
+					if (bAtStartJunction) {
+						const FVector2D edge = midMap - halfAlong;
+						junctionEdges.Add({ road, true }, { edge + right * halfW, edge - right * halfW });
+					}
+					if (bAtEndJunction) {
+						const FVector2D edge = midMap + halfAlong;
+						junctionEdges.Add({ road, false }, { edge + right * halfW, edge - right * halfW });
+					}
+				}
+			}
 			ism->SetCustomDataValue(instanceIndex, 0, dirXY.X, false);
 			ism->SetCustomDataValue(instanceIndex, 1, dirXY.Y, false);
 			ism->SetCustomDataValue(instanceIndex, 2, twistK, false);
@@ -666,14 +686,25 @@ void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
 		TArray<int32> boundaryIdx;
 		for (const RoadJunctionApproach& ap : approaches) {
 			float curbWorldZ = ap.curbZ * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON;
+			// 开口边优先用贴着路口那一节路面的真实端边(BuildRoadInstances记录的)，曲线路上才不会和路面之间张开楔形缝；
+			// 没记录(这一端是开口/没铺出路面)就用Core算的curb点。顺序约定同Core：起点端curbLeft=side0、curbRight=side1，终点端相反。
+			std::pair<float, float> curbRight = ap.curbRight, curbLeft = ap.curbLeft;
+			if (const TPair<FVector2D, FVector2D>* edge = junctionEdges.Find({ ap.road, ap.isStart })) {
+				const FVector2D& side0 = edge->Key;
+				const FVector2D& side1 = edge->Value;
+				const FVector2D& leftPoint = ap.isStart ? side0 : side1;
+				const FVector2D& rightPoint = ap.isStart ? side1 : side0;
+				curbLeft = { static_cast<float>(leftPoint.X), static_cast<float>(leftPoint.Y) };
+				curbRight = { static_cast<float>(rightPoint.X), static_cast<float>(rightPoint.Y) };
+			}
 
 			int32 rightIdx = vertices.Num();
-			vertices.Add(FVector(ap.curbRight.first * ROAD_WORLD_SCALE, ap.curbRight.second * ROAD_WORLD_SCALE, curbWorldZ));
+			vertices.Add(FVector(curbRight.first * ROAD_WORLD_SCALE, curbRight.second * ROAD_WORLD_SCALE, curbWorldZ));
 			uvs.Add(FVector2D(0.f, 0.f));
 			boundaryIdx.Add(rightIdx);
 
 			int32 leftIdx = vertices.Num();
-			vertices.Add(FVector(ap.curbLeft.first * ROAD_WORLD_SCALE, ap.curbLeft.second * ROAD_WORLD_SCALE, curbWorldZ));
+			vertices.Add(FVector(curbLeft.first * ROAD_WORLD_SCALE, curbLeft.second * ROAD_WORLD_SCALE, curbWorldZ));
 			uvs.Add(FVector2D(1.f, 1.f));
 			boundaryIdx.Add(leftIdx);
 		}

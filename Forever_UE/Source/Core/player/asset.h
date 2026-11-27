@@ -50,6 +50,16 @@ public:
 	Asset(const AssetFixtureDesc& desc, const std::string& uniqueName);
 	virtual ~Asset(); // 递归delete contents，delete script；虚析构：EstateAsset/VehicleAsset按Asset*释放
 
+	// 每种已启用的物品mod在世界里显示的网格(UE加载界面预热用)。网格路径只有建了mod实例、调过SetProperty才有，
+	// 所以每个id临时建一个实例读完就销毁。mod的命名计数器会因此跳过一个号，不恢复：计数器只用来保证名字唯一，
+	// 跳号不影响唯一。meshPath为空(UE用Cube占位)的也列出来。
+	struct RegisteredMesh {
+		std::string id;
+		std::string meshPath;
+		float meshScale = 1.f;
+	};
+	static std::vector<RegisteredMesh> CollectRegisteredMeshes(AssetFactory& factory);
+
 	bool IsValid() const;
 
 	const std::string& GetName() const;

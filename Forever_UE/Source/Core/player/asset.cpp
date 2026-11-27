@@ -10,6 +10,18 @@
 
 using namespace std;
 
+vector<Asset::RegisteredMesh> Asset::CollectRegisteredMeshes(AssetFactory& factory) {
+	vector<RegisteredMesh> result;
+	for (const string& id : factory.GetRegisteredIds()) {
+		AssetMod* mod = factory.CreateAsset(id);
+		if (!mod) continue; // 没启用
+		MOD_CALL(mod, mod->SetProperty());
+		result.push_back({ id, mod->meshPath, mod->meshScale });
+		factory.DestroyAsset(mod);
+	}
+	return result;
+}
+
 Asset::Asset(AssetFactory* factory, const string& id) :
 	factory(factory), mod(nullptr) {
 	mod = factory->CreateAsset(id);

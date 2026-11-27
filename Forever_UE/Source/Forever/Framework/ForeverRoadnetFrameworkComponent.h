@@ -77,6 +77,11 @@ private:
 	// 加载失败的道路资产路径，只警告一次，之后直接返回空(开口会退回整条路宽的扁平cube)。
 	TSet<FString> failedRoadMeshes;
 
+	// 贴着路口的那一节路面(单元或退化的扁平cube)朝路口那条端边的两个角点(地图单位XY，side0角、side1角)，
+	// 键=(road, 是否起点端)。BuildRoadInstances记录，BuildJunctionMeshes用它代替approach的curb点做路口多边形的开口边：
+	// curb点是按缩进点处的切线取垂线，而刚性的路面单元端边垂直于这一节中点的切线，曲线路上两者差半节转角，会张开楔形缝。
+	TMap<TPair<const Road*, bool>, TPair<FVector2D, FVector2D>> junctionEdges;
+
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> junctionMesh;
 

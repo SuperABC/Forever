@@ -591,6 +591,20 @@ namespace {
 		}
 	}
 
+	// 加载界面预热用的Asset::CollectRegisteredMeshes：每个启用的物品mod都列出来，汉堡带网格。
+	void CheckRegisteredMeshes() {
+		TestRun& run = TestRun::Get();
+		AssetFactory& factory = Registry::Get().GetAssetFactory();
+		size_t enabled = 0;
+		for (const string& id : factory.GetRegisteredIds()) if (factory.CheckRegistered(id)) enabled++;
+		const vector<Asset::RegisteredMesh> meshes = Asset::CollectRegisteredMeshes(factory);
+		bool burgerHasMesh = false;
+		for (const Asset::RegisteredMesh& mesh : meshes) if (mesh.id == "asset_burger") burgerHasMesh = !mesh.meshPath.empty();
+		run.Metric("registered asset meshes", static_cast<double>(meshes.size()), "");
+		run.Check(meshes.size() == enabled, "CollectRegisteredMeshes lists every enabled asset mod", to_string(meshes.size()) + " of " + to_string(enabled));
+		if (factory.CheckRegistered("asset_burger")) run.Check(burgerHasMesh, "the burger asset mod reports its mesh path", "");
+	}
+
 	// 红绿灯分组(JunctionTraffic::BuildFromMap)：多于两条路的路口都有信号表、其余没有；每条有驶入车道的路恰好在一组里，
 	// 只出不进的路不分组；每组1~2条、单独一组的最多一个且只在路数为奇数时出现；全路口最接近180°的那两条一定配成一对(贪心第一步)。
 	// 激活前当作没有灯，激活后正好有一组是绿灯；横道只在横穿的那条路不是绿灯时放行人。
@@ -750,6 +764,7 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckPopulaceAndSociety(world);
 	CheckRoomAssetDuplicate(world);
 	CheckPlacedAssets(world);
+	CheckRegisteredMeshes();
 	CheckSignalGroups(world);
 	CheckClockRemainder(world);
 	CheckDestroyVehicle(world); // 会销毁一辆车，必须最后跑

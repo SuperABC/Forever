@@ -5,6 +5,7 @@
 #include "Framework/CoreGuard.h"
 
 #include "Framework/ForeverStoryFrameworkComponent.h"
+#include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Player/ForeverExplosionEffect.h"
 #include "Player/ForeverDamage.h"
 #include "Element/CitizenElement.h"
@@ -21,6 +22,8 @@
 #include "story/expression.h"
 #include "story/script.h"
 #include "common/utility.h"
+#include "common/registry.h"
+#include "map/general_geometry.h"
 
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
@@ -31,6 +34,9 @@
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/OverlapResult.h"
+#if WITH_EDITOR
+#include "StaticMeshCompiler.h"
+#endif
 #include "CollisionQueryParams.h"
 
 #define ASSET_WORLD_SCALE 1000.f
@@ -104,6 +110,61 @@ void UForeverAssetFrameworkComponent::RegisterGroundAssets() {
 	bGroundRegistered = true;
 	bRoomKnown = false; // 读档后按玩家当前房间重新挂固定物品的选项实体
 	UE_LOG(LogTemp, Log, TEXT("UForeverAssetFrameworkComponent: %d ground assets registered for streaming."), groundEntries.Num());
+}
+
+void UForeverAssetFrameworkComponent::WarmUpAssets() {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UWorld* world = GetWorld();
+	if (!framework || !world) return;
+	UForeverBuildingFrameworkComponent* buildingFramework = framework->GetBuildingFramework();
+
+	// 可移动物品的网格(生成AAssetElement用)和家具/固定物品的网格(建筑组件建家具ISM用)分开收集。
+	TSet<FString> assetMeshes, furnitureMeshes;
+	for (const Asset::RegisteredMesh& registered : Asset::CollectRegisteredMeshes(Registry::Get().GetAssetFactory())) {
+		assetMeshes.Add(UTF8_TO_TCHAR(registered.meshPath.c_str())); // 空串=Cube占位，也预热一次
+	}
+	if (Map* map = framework->GetMap()) {
+		for (const auto& [buildingName, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				if (!room) continue;
+				for (const DecorationInstance& item : room->GetFurniture()) {
+					if (!item.meshPath.empty()) furnitureMeshes.Add(UTF8_TO_TCHAR(item.meshPath.c_str()));
+				}
+				for (const auto& [name, asset] : room->GetAssets()) {
+					if (!asset) continue;
+					(asset->IsFixture() ? furnitureMeshes : assetMeshes).Add(UTF8_TO_TCHAR(asset->GetMeshPath().c_str()));
+				}
+			}
+		}
+	}
+	if (Player* player = framework->GetPlayer()) {
+		for (const auto& [name, entry] : player->GetWorldAssets()) {
+			if (entry.asset) assetMeshes.Add(UTF8_TO_TCHAR(entry.asset->GetMeshPath().c_str()));
+		}
+	}
+	furnitureMeshes.Remove(FString());
+
+	TArray<UStaticMesh*> loaded;
+	TArray<UStaticMesh*> assetLoaded;
+	for (const FString& path : furnitureMeshes) {
+		UStaticMesh* mesh = buildingFramework ? buildingFramework->ResolveMesh(TCHAR_TO_UTF8(*path), nullptr) : nullptr;
+		if (mesh) loaded.AddUnique(mesh);
+	}
+	for (const FString& path : assetMeshes) {
+		UStaticMesh* mesh = path.IsEmpty() ? nullptr : AAssetElement::LoadAssetMesh(TCHAR_TO_UTF8(*path));
+		if (path.IsEmpty() || mesh) assetLoaded.Add(mesh); // nullptr=Cube占位
+		if (mesh) loaded.AddUnique(mesh);
+	}
+	for (UStaticMesh* mesh : loaded) warmedMeshes.AddUnique(mesh);
+#if WITH_EDITOR
+	// 编辑器里网格是异步编译的：第一次用到时才等它编完，就是走近时那一下卡顿。打包后网格是烘焙好的，加载完就能用。
+	if (loaded.Num() > 0) FStaticMeshCompilingManager::Get().FinishCompilation(loaded);
+#endif
+	// 每种物品网格临时生成一个实体再销毁：物理体等一次性开销也摊到加载界面。放在地图中心很高的地方，同一帧销毁。
+	const FVector warmLocation(0.f, 0.f, 500000.f);
+	for (UStaticMesh* mesh : assetLoaded) AAssetElement::SpawnWarmup(world, mesh, warmLocation);
+	UE_LOG(LogTemp, Log, TEXT("UForeverAssetFrameworkComponent: warmed %d item meshes and %d furniture meshes."), assetLoaded.Num(), furnitureMeshes.Num());
 }
 
 AAssetElement* UForeverAssetFrameworkComponent::SpawnElementFor(Asset* asset) {

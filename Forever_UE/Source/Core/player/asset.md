@@ -59,6 +59,10 @@ N>0=这一件剩余次数-1，降到0才用完一件(`count--`，下一件剩余
 静态网格软路径，空=沿用Forever层默认的Cube占位；`meshScale`是整体缩放(100cm直径的球体当手雷要缩到0.1)。这些
 字段由`SetProperty()`填，不存档(读档时从mod重新派生)。**改`AssetMod`基类字段必须重编`Forever_Mod`下的外部Mod DLL。**
 
+## 各物品mod的网格：`CollectRegisteredMeshes`(2026-11-27)
+
+UE加载界面预热物品网格要知道每种已启用物品mod的`meshPath`/`meshScale`，但这两个字段只有建了mod实例、调过`SetProperty`才有，所以每个id临时建一个实例，读完就销毁。mod的命名计数器因此跳过一个号，**不恢复**：计数器只用来保证名字唯一，跳号不影响唯一(用户确认，2026-11-27)。CoreTest world套件检查每个启用的物品mod都列出来、汉堡带网格。
+
 ## 依赖关系
 
 - 依赖：`Dependence/player/asset_mod.h`/`asset_factory.h`（`AssetMod`/`AssetFactory`）。

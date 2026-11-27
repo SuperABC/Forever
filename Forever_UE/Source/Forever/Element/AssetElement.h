@@ -35,6 +35,10 @@ public:
 	// 用这个函数，保证和掉落物同一份网格。
 	static UStaticMesh* LoadAssetMesh(const std::string& meshPath);
 
+	// 加载界面预热：用这个网格临时生成一个物品实体(不Init，没有Asset)再立刻销毁，把组件注册/物理体创建的一次性开销
+	// 摊到加载界面(同UForeverTrafficFrameworkComponent::WarmVehicleClasses)。mesh为空用默认Cube。
+	static void SpawnWarmup(UWorld* world, UStaticMesh* mesh, const FVector& location);
+
 	// 投掷：给物理体一个初速度。thrower不为空时忽略与它的碰撞(起点在投掷者胶囊体附近，
 	// 不忽略会被顶开)；小而快的球体开连续碰撞检测，避免穿过薄墙/地面。
 	void Launch(const FVector& velocity, AActor* thrower);

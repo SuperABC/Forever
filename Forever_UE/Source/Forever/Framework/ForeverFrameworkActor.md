@@ -30,7 +30,7 @@
 
 阶段顺序(新游戏/读档同一套)：加载模组(`Registry::RefreshMods`+`Script::ClearCache`清脚本解析缓存+新开局`SaveGame::ResetInstanceCounters`把mod命名计数器清零+`ValidateMainStoryDependencies`) → 预热截屏(`UForeverWeaponComponent::WarmUpScreenshot`，相机拍照第一次GPU回读约0.5s卡顿，趁加载界面先偷偷截一张丢掉) → 构建地形 → 路网 → 园区 → 建筑 → 栽种植被 → 布置路灯 →
 构建交通 → 生成地形/道路/园区/建筑/植被/路灯模型 → 构建人口 → 构建社会与产业(Society+Player+Industry，最后`EnsureAssetsGenerated`：重建不动产资产+给政府；新游戏`Traffic::AssignVehicles`按人分配载具、读档`ResolveVehicleAssets`按存档恢复所有者) → 执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) →
-构建载具(读档：恢复载具与玩家，含`RestoreControlledPawn`/`RestoreWorldAssets`) → 预热车辆(`UForeverTrafficFrameworkComponent::WarmVehicleClasses`，停车位车辆蓝图提前加载并临时生成销毁一次，免得第一次走近船/飞机等大模型卡2-3秒) → 预热交通(`UForeverTrafficFrameworkComponent::GetJunctionTraffic`) → (进图后)构建场景。
+构建载具(读档：恢复载具与玩家，含`RestoreControlledPawn`/`RestoreWorldAssets`) → 预热物品(`UForeverAssetFrameworkComponent::WarmUpAssets`，所有已启用物品mod、世界里现有物品、房间家具和固定物品的网格提前加载(编辑器里等网格编译完)，物品各临时生成销毁一次，免得第一次走近商店时卡一下) → 预热车辆(`UForeverTrafficFrameworkComponent::WarmVehicleClasses`，停车位车辆蓝图提前加载并临时生成销毁一次，免得第一次走近船/飞机等大模型卡2-3秒) → 预热交通(`UForeverTrafficFrameworkComponent::GetJunctionTraffic`) → (进图后)构建场景。
 
 **路口通行表预热**：`JunctionTraffic`原来是懒构建的：第一个市民开始走路、`ACitizenController::GateCrosswalk`第一次调`GetJunctionTraffic()`才`BuildFromMap`(日志"junction traffic built (N connections)"出现在第一个市民走路那一刻，约2秒)，现在"预热交通"阶段提前建好。
 

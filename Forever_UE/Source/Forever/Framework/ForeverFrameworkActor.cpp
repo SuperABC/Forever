@@ -272,6 +272,11 @@ void AForeverFrameworkActor::BuildGenerationStages()
 		// 地上的物品(房间里的、室外的)：开局和读档都只登记，实体由物品组件的Tick按玩家距离生成/销毁。
 		if (assetFramework) assetFramework->RegisterGroundAssets();
 	});
+	// 物品/家具网格第一次用到要同步加载(编辑器里还要等网格编译)，走近商店时卡一下：这里先把所有已启用的物品mod、
+	// 世界里现有的物品、房间家具和固定物品的网格加载好，物品各临时生成销毁一次，见UForeverAssetFrameworkComponent::WarmUpAssets。
+	add(TEXT("预热物品"), [this]() {
+		if (assetFramework) assetFramework->WarmUpAssets();
+	});
 	// 停车位车辆蓝图(拖网渔船等大模型)第一次生成要同步加载+建物理，实测卡2-3秒：这里先加载并临时生成销毁一次。
 	add(TEXT("预热车辆"), [this]() {
 		if (trafficFramework) trafficFramework->WarmVehicleClasses();
