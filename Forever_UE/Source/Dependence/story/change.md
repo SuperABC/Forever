@@ -118,7 +118,7 @@ Core在瞌睡值掉到0时自己构造一条`hour=16`的发给UE(`Core/common/wo
 - `board_vehicle`(vehicle)：搭乘线路上的公交——不是驾驶：玩家Possess公交Pawn后只有鼠标视角、WASD无效，车自己跑。UE层执行
   （`UForeverTrafficFrameworkComponent::ApplyBoardVehicle`）。
 - `leave_vehicle`(vehicle)：玩家下车(驾驶和搭乘都行)；驾驶者要过下车点遮挡判定，搭乘者不判定。vehicle非空时只在玩家正在这辆里才执行。
-- `force_leave`(vehicle，可空)：强制下车(比如公交收班)，驾驶和搭乘都生效，不做遮挡判定；留空=玩家当前所在的任何载具。
+- `force_leave`(vehicle，可空)：强制下车(比如公交收班)，驾驶和搭乘都生效，不做遮挡判定(驾驶者在车周围找一个站得下人的空位落脚，和长按Q强制下车同一套)；留空=玩家当前所在的任何载具。
 - `vehicle_command`(vehicle, command)：`"run"`=随机选一条环线的随机站，先导航过去再沿环线循环；`"stop"`=刹停并保持，本来挂在线路上的载具同时退出
   时刻表（`StartVehicleLineRun`/`StopVehicleLineRun`）。
 - `vehicle_navigate`(vehicle, destination)：让载具由Controller开到`destination`（房间地址表达式；字面量`"random"`=随机一个有车行节点的地下室房间，目前只有工厂）。

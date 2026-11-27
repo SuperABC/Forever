@@ -15,7 +15,8 @@
 - **`VehicleMod::blueprintPath`** 指向某个蓝图子类(形如 `/Game/.../BP_X.BP_X_C`，生成类名固定带 `_C`)；`UForeverTrafficFrameworkComponent` 在 `SpawnActor` 之前用 `LoadClass<AVehicleElement>()` 取类，失败只打警告并销毁 `Vehicle`，不崩溃；生成用 `AlwaysSpawn`(车碰撞体与当前 pawn 必然重叠，默认碰撞检测会拒绝生成)。新增车型不需要改 `Forever` 模块，只需蓝图 + 在 `Basic.dll`/mod dll 里注册新的 `VehicleMod`。
 - **`bSimulatePhysics` 偏离原版**：构造函数里**直接写** `carMesh->BodyInstance.bSimulatePhysics = true`，不调 `SetSimulatePhysics()`(后者查物理材质，CDO 构造时 `GEngine` 未初始化会报错)。必须 true：底盘骨骼在物理资产里不一定是 Simulated，留 false 车能创建但不响应油门、不受重力(Chaos 发现刚体非 Dynamic 就跳过整个模拟)。
 - **预置车辆生成后 `Init()` 里 `WakeAllRigidBodies()`**：无人操控时刚体睡眠，会悬在半空直到第一次踩油门。
-- **输入**：`Move` 按 `movement.Y` 正负分别转成油门/刹车(`SetDriveInput`)，**不能把 S 当负油门**：`bReverseAsBrake=true` 下油门/刹车是两个独立踏板，车速高时 S 是刹车，刹停后继续按才挂倒挡。`StopMove` 绑 `Completed`/`Canceled` 归零(`Triggered` 在输入回到 0 后不再触发)。`Handbrake`/`StopHandbrake`(默认空格，与市民 `Jump` 共键，各自只在自己的 Pawn 绑定)绑 `Started`/`Completed`+`Canceled`；四个轮子只有后轮 `bAffectedByHandbrake`。`ExitVehicle`(Q)转发给 `UForeverTrafficFrameworkComponent::ExitVehicle`。玩家 WASD 与 AI Controller(`AVehicleCommandController`)共用 `SetDriveInput`/`SetHandbrake`。
+- **输入**：`Move` 按 `movement.Y` 正负分别转成油门/刹车(`SetDriveInput`)，**不能把 S 当负油门**：`bReverseAsBrake=true` 下油门/刹车是两个独立踏板，车速高时 S 是刹车，刹停后继续按才挂倒挡。`StopMove` 绑 `Completed`/`Canceled` 归零(`Triggered` 在输入回到 0 后不再触发)。`Handbrake`/`StopHandbrake`(默认空格，与市民 `Jump` 共键，各自只在自己的 Pawn 绑定)绑 `Started`/`Completed`+`Canceled`；四个轮子只有后轮 `bAffectedByHandbrake`。`ExitVehicle`(Q)转发给 `UForeverTrafficFrameworkComponent::ExitVehicle`。
+  - **长按Q强制下车**(2026-11-27)：Q由 `BindExitInput` 统一绑定(车/船/飞机的 `SetupPlayerInputComponent` 都调它)。Started 照旧立刻普通下车(`ExitKeyPressed`)，被挡住时继续按住，`Tick` 里 `UpdateExitHold` 按现实时间计时、屏幕显示进度，满 `forceExitHoldSeconds`(默认1秒，Input分类)调 `ForceExitVehicle` → `ExitVehicle(pc, true)`，在车周围找空位落脚(规则见 `ForeverTrafficFrameworkComponent.md`)。搭乘模式Q全部忽略；`PossessedBy`/`UnPossessed` 清掉按住状态。玩家 WASD 与 AI Controller(`AVehicleCommandController`)共用 `SetDriveInput`/`SetHandbrake`。
 - **相机**：`cameraBoom` 相对原点抬高 50cm(骨骼原点通常在轮子接地点，不抬镜头会缩进底盘；过大则翻车时相机钻进地里)，个别车型可在蓝图子类覆盖。
 - **下车姿态只继承 Yaw**：`ToggleVehicle` 下车分支用 `FRotator(0, yaw, 0)` 给 `previousPawn` 并显式 `SetControlRotation`(翻车后 Pitch/Roll 任意，人应站直；`ControlRotation` 存在 Controller 上，不随 Possess 清零)。
 - **`UnPossessed`**：玩家驾驶(非搭乘)失去控制时清零油门/转向并拉满刹车(油门是持久状态，不清零会一直冲)；AI Controller 换手不做，以免打断 AI。
@@ -30,6 +31,12 @@
 - **一直转的骨骼**(`virtual GetSpinningBone`，基类返回 false)：轮子之外还要一直转的骨骼(螺旋桨之类)由子类覆盖给出骨骼名/局部轴/累计角度，`UVehicleWheelAnimInstance` 每帧问一次并叠加到骨骼上，所以动画实例只认识本类、不认识具体子类。
 - **Core 位姿同步**：`Tick` 把位姿写回 `Vehicle::SetTransform`，有 `Route` 的车(线路公交)用地图单位，除以 1000。
 - **飞机子类**：`APlaneElement` 继承本类(复用 Chaos 轮子/骨骼网格/近身选项/上下机/存档位置)，换成 3 个轮子，不走本类 `SetupPlayerInputComponent`，见 `PlaneElement.md`。`ExitVehicle()`/`Handbrake()`/`StopHandbrake()` 和各输入成员都是 protected，供子类直接调用。
+- **水体受力**(`ApplyWaterForces`，2026-11-27)：所有模拟物理的载具(车、物理公交、飞机)入水都受浮力和水阻；`Tick` 里在 `!vehicle` 早返回之前调用(关卡里直接摆的车也受水)。运动学模式/没在模拟物理时跳过。
+  - 采样点：`BeginPlay` 取 `carMesh` 局部包围盒，底面4角(收到0.8倍)+底面中心共5点，每点代表一根高=包围盒高度的竖柱。
+  - 每点 `ForeverWater::QuerySurface` 查水面(含波浪)，没水格子跳过；`ForeverWater::IsBelowTerrain` 为真也跳过——海底/河底隧道里的车格子有水但在地面以下。
+  - 浮力：`没入比例=clamp((水面-点高)/柱高,0,1)`，每点向上力 `=max(0, 质量*g*waterBuoyancyRatio*没入比例 - 质量*waterVerticalDamping*点垂向速度)/N`，`AddForceAtLocation` 到该点(各点差异给俯仰/横滚恢复力矩)。全没入时合力=重力×`waterBuoyancyRatio`(默认0.7)，船以外的载具要<1，所以会慢慢沉底。
+  - 水阻：`入水程度`=各点没入比例平均，加速度 `-(waterLinearDrag*v + waterQuadDrag*|v|*v)*入水程度`(各方向同性，水静止)；角速度阻尼 `waterAngularDamping*入水程度`。引擎/轮子不改：沉底后轮子着地还能开，但被水阻拖慢。
+  - 参数都在蓝图 Details 的 Water 分类，按车型调。船(`ABoatElement`)有自己的浮力/推进，构造函数里把 `bApplyWaterPhysics` 关掉。
 
 ## 依赖关系
 

@@ -6,8 +6,9 @@
 
 ## 关键设计
 
-- **继承`AVehicleElement`**：复用骨骼网格+物理、`Init`、近身"驾驶"选项、`ExitVehicle`、`Tick`把位姿写回Core(存档/重生用)、`LoadClass<AVehicleElement>(blueprintPath)`的流式生成链路，`ForeverTrafficFrameworkComponent`一行没改。和飞机一样绕过基类输入。构造里把Chaos轮式载具的`WheelSetups`清空(船没有轮子)，`BeginPlay`里关掉该组件的Tick，`carMesh`的轮子动画类置空。**风险**：Chaos轮式载具0轮子是否报错/崩溃要进PIE验证；不行的话退路是让基类对`vehicleMovement`的调用全部判空(基类部分调用已经判了`WheelSetups.Num()`)。
+- **继承`AVehicleElement`**：复用骨骼网格+物理、`Init`、近身"驾驶"选项、`ExitVehicle`、`Tick`把位姿写回Core(存档/重生用)、`LoadClass<AVehicleElement>(blueprintPath)`的流式生成链路，`ForeverTrafficFrameworkComponent`一行没改。和飞机一样绕过基类输入(Q键仍用基类`BindExitInput`：短按下船、被挡时长按强制下船)。构造里把Chaos轮式载具的`WheelSetups`清空(船没有轮子)，`BeginPlay`里关掉该组件的Tick，`carMesh`的轮子动画类置空。**风险**：Chaos轮式载具0轮子是否报错/崩溃要进PIE验证；不行的话退路是让基类对`vehicleMovement`的调用全部判空(基类部分调用已经判了`WheelSetups.Num()`)。
 - **水面高度**：和人物游泳同一套——`ForeverWater::QuerySurface`(`Water/WaterQuery.h`，角色的`QueryWater`也走它)：世界坐标除以1000得地图格，`Map::GetWater`有没有水+水位，`+ForeverWater::WaveHeight`(波浪目前恒0)，水底取`Map::SampleHeight`。没水格子=没有水的作用(不浮、无阻力、推力为0)，船会落到地形上静止。
+- **不用基类的通用水体受力**：构造函数里 `bApplyWaterPhysics=false`(基类 `AVehicleElement::ApplyWaterForces` 给车/飞机用，浮力<重力，见 `VehicleElement.md`)，船用下面自己的一套；`GetCoreMap()` 用基类的。
 - **浮力**(`Tick`每帧，无论有没有人开，所以停着的船浮得住)：对每个浮点(`floatPoints`，船体局部cm；空=按骨骼网格包围盒在船底自动生成6个点：船头/船尾/左右各2)取世界位置查水面，`depth=水面-点高度`；每点加速度`=(g*clamp(depth/draft,0,maxSubmergeRatio) - floatDamping*点垂直速度)/N`(不为负)，乘质量后`AddForceAtLocation`向上。N个点都沉入`draft`时合力刚好=重力，所以平衡时浮点沉在水下`draft`(吃水)；多点之间的差给出俯仰/横滚恢复力矩。`floatDamping`小于临界值(≈2√(g/draft))船落水后会多弹几下。
 - **排水量**(`displacementMassKg`，2026-11-22)：浮力只跟排开的水的体积(沉入深度)有关，和船多重无关，所以浮力弹簧按排水量算：浮点都沉入`draft`时总浮力=`displacementMassKg`的重量，平衡吃水≈`draft×质量/排水量`——改轻船会浮得更高。0(默认)=取当前质量，即旧行为(吃水恒为`draft`，改质量不影响)。用法：先进PIE看日志`Boat mass: ... kg`得到当前质量，填进`displacementMassKg`，再把船质量(`CarMesh`的Mass Scale或物理资产)调轻。推力/阻力/转向仍是加速度制，和质量无关。
 - **输入**：`IA_Move`(WASD)→`MoveBoat`：W/S=油门(`Y`，前进/后退)，A/D=转向(`X`)；鼠标环视沿用基类`Look`(相机跟控制器旋转，不转船)；Q退出。没有手刹/滚轮油门，不需要新按键。

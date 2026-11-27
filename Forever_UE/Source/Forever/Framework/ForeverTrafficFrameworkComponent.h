@@ -97,9 +97,15 @@ public:
 	// enter_vehicle/读档恢复"正在开的车"指定的车不一定在玩家附近。找不到这辆车返回nullptr。
 	AVehicleElement* FindOrSpawnVehicle(const FString& vehicleName);
 
+	// 强制下车的落点：只用车身yaw(翻车的pitch/roll不管)，在车身包围盒外一圈取候选点(先下车点那侧、另一侧、车尾、车头、四角)，
+	// 每点向下贴地后要求胶囊体站得下(不忽略车本身)；第一轮还要求从车身中心扫过去不被挡(不隔墙)，第二轮不要求，最后试车顶。
+	// preferredSide=下车点在车身哪侧(exitOffsetY的符号)。都不行返回false。
+	bool FindForceExitLocation(AVehicleElement* vehicleElement, APawn* previousPawn, float preferredSide, FVector& outLocation);
+
 	// AVehicleElement::ExitVehicle按Q调用：按车身transform+VehicleMod的exitOffset算下车点，ECC_Pawn胶囊体
 	// sweep检测遮挡(坑见.cpp)，被挡住就打印拒绝提示、不下车；否则恢复previousPawn，车辆本身不销毁。
-	// 搭乘者(ATransitVehicleElement/搭乘模式的物理线路车)也走这条流程但不做遮挡判定；bForce=true时驾驶者也不做。
+	// 搭乘者(ATransitVehicleElement/搭乘模式的物理线路车)也走这条流程但不做遮挡判定；bForce=true(长按Q/force_leave)时
+	// 驾驶者也不做，改用FindForceExitLocation在车周围找一个站得下人的空位。
 	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
 	// ---- 玩家导航线（script的visualize_navigation Change / T键测试入口） ----

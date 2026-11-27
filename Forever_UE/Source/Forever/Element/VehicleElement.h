@@ -7,6 +7,8 @@
 
 class Vehicle;
 class Room;
+class Map;
+class AForeverFrameworkActor;
 class AVehicleCommandController;
 class UForeverTrafficFrameworkComponent;
 class USkeletalMeshComponent;
@@ -104,7 +106,33 @@ public:
 	// UVehicleWheelAnimInstance每帧在游戏线程问一次，和车轮一起叠加到骨骼上，所以它只需要认识本类。基类没有这样的骨骼。
 	virtual bool GetSpinningBone(FName& outBoneName, FVector& outAxis, float& outAngleDegrees) const { return false; }
 
+	// ---- 通用水体受力(浮力+水阻)，见VehicleElement.md"水体受力"。蓝图Details的Water分类里按车型调 ----
+
+	// 是否启用：船(ABoatElement)有自己的浮力/推进，构造函数里关掉。
+	UPROPERTY(EditDefaultsOnly, Category = "Water")
+	bool bApplyWaterPhysics = true;
+
+	// 整车(包围盒)全部没入水中时浮力/重力的比例。船以外的载具要<1(会慢慢沉底)。
+	UPROPERTY(EditDefaultsOnly, Category = "Water")
+	float waterBuoyancyRatio = 0.7f;
+
+	// 采样点垂向速度阻尼(1/s，加速度制)，防止落水瞬间被浮力弹起来。
+	UPROPERTY(EditDefaultsOnly, Category = "Water")
+	float waterVerticalDamping = 1.5f;
+
+	// 水阻：加速度=-(一次*v+二次*|v|*v)*入水程度，一次项1/s、二次项1/cm，各方向相同(水静止)。
+	UPROPERTY(EditDefaultsOnly, Category = "Water")
+	float waterLinearDrag = 1.0f;
+	UPROPERTY(EditDefaultsOnly, Category = "Water")
+	float waterQuadDrag = 0.001f;
+
+	// 入水时角速度阻尼(1/s)，免得在水里乱转。
+	UPROPERTY(EditDefaultsOnly, Category = "Water")
+	float waterAngularDamping = 2.f;
+
 protected:
+	// 取Core地图(缓存框架Actor)；没有返回nullptr(此时没有水体受力)。船的浮力也用它。
+	Map* GetCoreMap();
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
@@ -123,6 +151,14 @@ protected:
 
 	// Q键：转发给UForeverTrafficFrameworkComponent::ExitVehicle(带下车点碰撞检测)。
 	void ExitVehicle();
+	// 长按Q到forceExitHoldSeconds：强制下车(ExitVehicle(controller, true)，不做遮挡判定、在车周围找空位落脚)。
+	void ForceExitVehicle();
+	// 绑Q键(Started=按下即普通下车并开始计长按，Completed/Canceled=松开)。车/船/飞机各自的SetupPlayerInputComponent都调它。
+	void BindExitInput(class UEnhancedInputComponent* enhancedInput);
+
+	// 普通下车被挡住时继续按住Q多少秒(现实时间)强制下车。
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	float forceExitHoldSeconds = 1.0f;
 
 	// 空格手刹：绑在Started/Completed(两态开关，没有连续模拟量，不用Triggered)。
 	void Handbrake(const FInputActionValue& value);
@@ -169,6 +205,21 @@ private:
 	void HideOptions();
 	// 重新打开物理后把轮子骨骼的刚体再关回去(SetSimulatePhysics(true)会把它们重新打开)。
 	void DisableWheelBodies();
+
+	void ExitKeyPressed();
+	void ExitKeyReleased();
+	// Tick里调：按住Q期间显示进度，到时间强制下车。
+	void UpdateExitHold();
+	bool bExitKeyHeld = false;
+	double exitKeyPressTime = 0.0;
+
+	// 通用水体受力：每帧在Tick里调(bApplyWaterPhysics、在模拟物理时)，按采样点算浮力/水阻/角阻尼。
+	void ApplyWaterForces();
+
+	TWeakObjectPtr<AForeverFrameworkActor> cachedFramework;
+	// 水体受力采样点(车身局部坐标)：局部包围盒底面4角(0.8倍)+底面中心，BeginPlay生成；每点代表一根waterColumnHeight高的竖柱。
+	TArray<FVector> waterSamplePoints;
+	float waterColumnHeight = 150.f;
 
 	UFUNCTION()
 	void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

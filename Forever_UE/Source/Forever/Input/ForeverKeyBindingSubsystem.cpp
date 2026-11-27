@@ -16,7 +16,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// (ACitizenElement/AVehicleElement)上绑定消费，同一个键同时映射到多个动作在
 		// Enhanced Input里不冲突，见AVehicleElement::SetupPlayerInputComponent。
 		{ TEXT("Handbrake"), EKeys::SpaceBar },
-		// 载具系统：驾驶中按Q下车，只绑在AVehicleElement::SetupPlayerInputComponent上
+		// 载具系统：驾驶中按Q下车、下车点被挡时长按Q强制下车(AVehicleElement::BindExitInput)，只绑在载具Pawn上
 		// （车辆专属，不是全局/不在Controller上）——上车改成MeetOption选"上车"选项，不再
 		// 用热键，见ForeverTrafficFrameworkComponent::ApplyEnterVehicle/ExitVehicle。
 		{ TEXT("ExitVehicle"), EKeys::Q },

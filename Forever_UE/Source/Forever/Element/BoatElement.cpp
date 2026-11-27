@@ -43,6 +43,9 @@ ABoatElement::ABoatElement()
 	// 物理资产是包住船体的一个盒子，重心在盒子中央，比真实船高，高速转弯/被托起时容易侧翻。蓝图Details的Mass分类里可以改。
 	centerOfMassOffset = FVector(0.f, 0.f, -50.f);
 
+	// 船的浮力/阻力/推进在Tick里自己算，关掉基类的通用水体受力(否则两套浮力叠加)。
+	bApplyWaterPhysics = false;
+
 	// 追尾视角：弹簧臂跟鼠标环视(同车)，船大，臂长拉远。
 	cameraBoom->TargetArmLength = 1800.f;
 	cameraBoom->SetRelativeLocation(FVector(0.f, 0.f, 300.f));
@@ -112,11 +115,7 @@ void ABoatElement::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	enhancedInput->BindAction(lookAction, ETriggerEvent::Triggered, this, &ABoatElement::LookBoat);
 	enhancedInput->BindAction(mouseLookAction, ETriggerEvent::Triggered, this, &ABoatElement::LookBoat);
 
-	if (UGameInstance* gameInstance = GetGameInstance()) {
-		if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-			enhancedInput->BindAction(keyBindings->GetAction(TEXT("ExitVehicle")), ETriggerEvent::Started, this, &ABoatElement::BoatExit);
-		}
-	}
+	BindExitInput(enhancedInput); // Q：短按下船，被挡住时长按强制下船(基类)
 }
 
 void ABoatElement::MoveBoat(const FInputActionValue& value)
@@ -135,21 +134,6 @@ void ABoatElement::StopMoveBoat(const FInputActionValue& value)
 void ABoatElement::LookBoat(const FInputActionValue& value)
 {
 	Look(value); // 基类：只转相机(cameraBoom跟控制器旋转)，不转船
-}
-
-void ABoatElement::BoatExit()
-{
-	ExitVehicle();
-}
-
-Map* ABoatElement::GetCoreMap()
-{
-	AForeverFrameworkActor* framework = cachedFramework.Get();
-	if (!framework) {
-		framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
-		cachedFramework = framework;
-	}
-	return framework ? framework->GetMap() : nullptr;
 }
 
 void ABoatElement::BuildAutoPoints()

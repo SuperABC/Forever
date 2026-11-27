@@ -105,10 +105,10 @@ void APlaneElement::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	enhancedInput->BindAction(moveAction, ETriggerEvent::Canceled, this, &APlaneElement::StopMovePlane);
 	enhancedInput->BindAction(lookAction, ETriggerEvent::Triggered, this, &APlaneElement::LookPlane);
 	enhancedInput->BindAction(mouseLookAction, ETriggerEvent::Triggered, this, &APlaneElement::LookPlane);
+	BindExitInput(enhancedInput); // Q：短按下机，被挡住时长按强制下机(基类)
 
 	if (UGameInstance* gameInstance = GetGameInstance()) {
 		if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-			enhancedInput->BindAction(keyBindings->GetAction(TEXT("ExitVehicle")), ETriggerEvent::Started, this, &APlaneElement::PlaneExit);
 			enhancedInput->BindAction(keyBindings->GetAction(TEXT("FreeLook")), ETriggerEvent::Started, this, &APlaneElement::StartFreeLook);
 			enhancedInput->BindAction(keyBindings->GetAction(TEXT("FreeLook")), ETriggerEvent::Completed, this, &APlaneElement::StopFreeLook);
 			enhancedInput->BindAction(keyBindings->GetAction(TEXT("FreeLook")), ETriggerEvent::Canceled, this, &APlaneElement::StopFreeLook);
@@ -158,11 +158,6 @@ void APlaneElement::ThrottleUp()
 void APlaneElement::ThrottleDown()
 {
 	power = FMath::Clamp(power - powerStep, minPower, 100.f);
-}
-
-void APlaneElement::PlaneExit()
-{
-	ExitVehicle();
 }
 
 void APlaneElement::PlaneHandbrake(const FInputActionValue& value)

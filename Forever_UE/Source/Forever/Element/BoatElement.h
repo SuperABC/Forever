@@ -154,10 +154,6 @@ private:
 	void MoveBoat(const FInputActionValue& value);
 	void StopMoveBoat(const FInputActionValue& value);
 	void LookBoat(const FInputActionValue& value);
-	void BoatExit();
-
-	// 取Core地图(缓存框架Actor)；没有返回nullptr(此时没有浮力)。
-	Map* GetCoreMap();
 
 	// 按包围盒生成自动浮点/推力点(BeginPlay里floatPoints为空、没有自定义推力点时)。
 	void BuildAutoPoints();
@@ -176,8 +172,6 @@ private:
 	// 实际使用的浮点/推力点(局部坐标)：蓝图填了就用蓝图的，否则是BuildAutoPoints的结果。
 	TArray<FVector> activeFloatPoints;
 	FVector activeThrustPoint = FVector::ZeroVector;
-
-	TWeakObjectPtr<AForeverFrameworkActor> cachedFramework;
 
 	bool bWarnedNotSimulating = false;
 

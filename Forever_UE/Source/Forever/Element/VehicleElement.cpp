@@ -10,6 +10,7 @@
 #include "Player/ForeverPlayerController.h"
 #include "Player/ForeverCharacter.h"
 #include "UI/MeetOptionWidget.h"
+#include "Water/WaterQuery.h"
 
 #include "Element/VehicleWheelFront.h"
 #include "Element/VehicleWheelRear.h"
@@ -153,6 +154,75 @@ void AVehicleElement::BeginPlay()
 	if (vehicleMovement && wheelRadius > 0.f) {
 		for (int32 i = 0; i < vehicleMovement->WheelSetups.Num(); i++) vehicleMovement->SetWheelRadius(i, wheelRadius);
 	}
+
+	// 水体受力采样点：车身局部包围盒(和触发盒同一个来源)的底面4角(往里收到0.8倍)+底面中心。
+	waterSamplePoints.Reset();
+	if (carMesh && bApplyWaterPhysics) {
+		const FBoxSphereBounds localBounds = carMesh->CalcBounds(FTransform::Identity);
+		const FVector origin = localBounds.Origin;
+		const FVector extent = localBounds.BoxExtent;
+		const float bottomZ = origin.Z - extent.Z;
+		waterColumnHeight = FMath::Max(2.f * extent.Z, 10.f);
+		waterSamplePoints = {
+			FVector(origin.X + extent.X * 0.8f, origin.Y + extent.Y * 0.8f, bottomZ),
+			FVector(origin.X + extent.X * 0.8f, origin.Y - extent.Y * 0.8f, bottomZ),
+			FVector(origin.X - extent.X * 0.8f, origin.Y + extent.Y * 0.8f, bottomZ),
+			FVector(origin.X - extent.X * 0.8f, origin.Y - extent.Y * 0.8f, bottomZ),
+			FVector(origin.X, origin.Y, bottomZ),
+		};
+	}
+}
+
+Map* AVehicleElement::GetCoreMap()
+{
+	AForeverFrameworkActor* framework = cachedFramework.Get();
+	if (!framework) {
+		framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+		cachedFramework = framework;
+	}
+	return framework ? framework->GetMap() : nullptr;
+}
+
+void AVehicleElement::ApplyWaterForces()
+{
+	if (!bApplyWaterPhysics || bKinematicMode || !carMesh || waterSamplePoints.IsEmpty()) return;
+	// IsSimulatingPhysics()对骨骼网格按根骨查body，物理资产配置不同时可能误判，用IsAnySimulatingPhysics()(同ABoatElement)。
+	if (!carMesh->IsAnySimulatingPhysics()) return;
+	const float mass = carMesh->GetMass();
+	if (mass <= 0.f) return;
+	Map* map = GetCoreMap();
+	if (!map) return;
+
+	const double time = GetWorld()->GetTimeSeconds();
+	const FTransform transform = carMesh->GetComponentTransform();
+	const float gravity = FMath::Abs(GetWorld()->GetGravityZ());
+	const float pointCount = static_cast<float>(waterSamplePoints.Num());
+
+	// 浮力：每个采样点代表一根竖柱，按柱子没入水中的比例给向上的力；N个点全没入时合力=重力*waterBuoyancyRatio。
+	// 各点不同深度的差给出俯仰/横滚恢复力矩。阻尼项让车落水后不弹，水不往下拉车，所以每点的力不为负。
+	float wetness = 0.f;
+	for (const FVector& localPoint : waterSamplePoints) {
+		const FVector world = transform.TransformPosition(localPoint);
+		float surfaceZ = 0.f, bedZ = 0.f;
+		if (!ForeverWater::QuerySurface(map, world, time, surfaceZ, bedZ)) continue;
+		// 海底/河底隧道里的车：格子有水，但车在地面以下，不在水里(和玩家游泳同一条规则)。
+		if (ForeverWater::IsBelowTerrain(map, world)) continue;
+		const float submerged = FMath::Clamp((surfaceZ - world.Z) / waterColumnHeight, 0.f, 1.f);
+		if (submerged <= 0.f) continue;
+		wetness += submerged;
+		const float verticalSpeed = carMesh->GetPhysicsLinearVelocityAtPoint(world).Z;
+		const float force = FMath::Max(0.f, (mass * gravity * waterBuoyancyRatio * submerged - mass * waterVerticalDamping * verticalSpeed) / pointCount);
+		carMesh->AddForceAtLocation(FVector(0.f, 0.f, force), world);
+	}
+	wetness /= pointCount;
+	if (wetness <= 0.f) return;
+
+	// 水阻：各方向同性，按入水程度缩放(加速度制，乘质量)。
+	const FVector velocity = carMesh->GetPhysicsLinearVelocity();
+	const FVector decel = velocity * waterLinearDrag + velocity * (velocity.Size() * waterQuadDrag);
+	carMesh->AddForce(-decel * (mass * wetness));
+	// 角阻尼：角加速度制(bAccelChange)。
+	carMesh->AddTorqueInRadians(-carMesh->GetPhysicsAngularVelocityInRadians() * (waterAngularDamping * wetness), NAME_None, true);
 }
 
 void AVehicleElement::BuildProximityBox()
@@ -343,6 +413,7 @@ void AVehicleElement::HideOptions()
 void AVehicleElement::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
+	bExitKeyHeld = false; // 上一次下车时的松开事件不一定送到了这辆车
 
 	// 动态按键Context由AForeverPlayerController::BeginPlay常驻加载；这里只加跟本Pawn绑定的移动/视角Context。
 	if (APlayerController* playerController = Cast<APlayerController>(NewController)) {
@@ -377,6 +448,7 @@ void AVehicleElement::PawnClientRestart()
 void AVehicleElement::UnPossessed()
 {
 	APlayerController* playerController = Cast<APlayerController>(GetController());
+	bExitKeyHeld = false;
 
 	// 油门/刹车/转向是持久状态，玩家失去控制后没人再调Move()，车会按最后的油门一直冲，
 	// 所以这里清零油门/转向并拉满刹车。AI Controller换手(以及搭乘模式的玩家)不做：AI每帧自己写输入。
@@ -411,10 +483,10 @@ void AVehicleElement::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 		enhancedInput->BindAction(moveAction, ETriggerEvent::Canceled, this, &AVehicleElement::StopMove);
 		enhancedInput->BindAction(lookAction, ETriggerEvent::Triggered, this, &AVehicleElement::Look);
 		enhancedInput->BindAction(mouseLookAction, ETriggerEvent::Triggered, this, &AVehicleElement::Look);
+		BindExitInput(enhancedInput);
 
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ExitVehicle")), ETriggerEvent::Started, this, &AVehicleElement::ExitVehicle);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Started, this, &AVehicleElement::Handbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Completed, this, &AVehicleElement::StopHandbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Canceled, this, &AVehicleElement::StopHandbrake);
@@ -486,6 +558,65 @@ void AVehicleElement::ExitVehicle()
 	}
 }
 
+void AVehicleElement::ForceExitVehicle()
+{
+	if (bRideMode) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	if (framework && framework->GetTrafficFramework()) {
+		framework->GetTrafficFramework()->ExitVehicle(Cast<APlayerController>(GetController()), true);
+	}
+}
+
+void AVehicleElement::BindExitInput(UEnhancedInputComponent* enhancedInput)
+{
+	UGameInstance* gameInstance = GetGameInstance();
+	UForeverKeyBindingSubsystem* keyBindings = gameInstance ? gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>() : nullptr;
+	if (!enhancedInput || !keyBindings) return;
+	UInputAction* exitAction = keyBindings->GetAction(TEXT("ExitVehicle"));
+	enhancedInput->BindAction(exitAction, ETriggerEvent::Started, this, &AVehicleElement::ExitKeyPressed);
+	enhancedInput->BindAction(exitAction, ETriggerEvent::Completed, this, &AVehicleElement::ExitKeyReleased);
+	enhancedInput->BindAction(exitAction, ETriggerEvent::Canceled, this, &AVehicleElement::ExitKeyReleased);
+}
+
+void AVehicleElement::ExitKeyPressed()
+{
+	// 搭乘模式下车走公交自己的"下车"选项，Q键(短按/长按)都不处理。
+	if (bRideMode) return;
+	bExitKeyHeld = true;
+	exitKeyPressTime = GetWorld()->GetRealTimeSeconds();
+	// 短按照旧：能下就立刻下车(下车后这辆车不再被玩家控制，UpdateExitHold自然停掉)；被挡住就继续按住等强制下车。
+	ExitVehicle();
+}
+
+void AVehicleElement::ExitKeyReleased()
+{
+	bExitKeyHeld = false;
+}
+
+void AVehicleElement::UpdateExitHold()
+{
+	if (!bExitKeyHeld) return;
+	if (bRideMode || !IsPlayerControlled()) {
+		bExitKeyHeld = false;
+		return;
+	}
+	// 现实时间：和投掷物长按(AForeverCharacter)一样，不受游戏时间倍率影响。
+	const double held = GetWorld()->GetRealTimeSeconds() - exitKeyPressTime;
+	const float duration = FMath::Max(forceExitHoldSeconds, 0.1f);
+	constexpr int32 kForceExitHudKey = 212; // AddOnScreenDebugMessage的key，211是船速HUD(见BoatElement.cpp)
+	if (held < duration) {
+		if (GEngine) {
+			GEngine->AddOnScreenDebugMessage(kForceExitHudKey, 0.1f, FColor::Yellow,
+				FString::Printf(TEXT("继续按住Q强制下车 %.0f%%"), held / duration * 100.0));
+		}
+		return;
+	}
+	bExitKeyHeld = false;
+	if (GEngine) GEngine->RemoveOnScreenDebugMessage(kForceExitHudKey);
+	ForceExitVehicle();
+}
+
 void AVehicleElement::Handbrake(const FInputActionValue& value)
 {
 	if (!bRideMode) SetHandbrake(true);
@@ -532,6 +663,9 @@ void AVehicleElement::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	CORE_GUARD_BEGIN("AVehicleElement::Tick")
+
+	ApplyWaterForces(); // 放在!vehicle判断前：关卡里直接摆的车(没有Core Vehicle)也受水
+	UpdateExitHold();
 
 	if (!vehicle) return;
 

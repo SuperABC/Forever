@@ -130,7 +130,6 @@ private:
 	void LookPlane(const FInputActionValue& value);
 	void ThrottleUp();
 	void ThrottleDown();
-	void PlaneExit();
 	void PlaneHandbrake(const FInputActionValue& value);
 	void PlaneStopHandbrake(const FInputActionValue& value);
 	void StartFreeLook() { bFreeLook = true; }

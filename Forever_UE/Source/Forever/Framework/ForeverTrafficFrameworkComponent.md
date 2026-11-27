@@ -38,6 +38,7 @@
 - `ApplyBoardVehicle`（搭乘）：线路车用物理车`SetRideMode(true)`后Possess（`EnsureLinePhysicsElement`不看距离强制切换物理）；其余用`ATransitVehicleElement`（`CanBoard()`）。搭乘者只有鼠标视角，车自己跑。
 - `ApplyLeaveVehicle(name, controller, bForce)`（leave_vehicle / force_leave）：`name`非空时只在玩家正在这辆里才执行（公交收班不能把坐在别的车里的玩家踢下来）。
 - `ExitVehicle(controller, bForce)`：驾驶/搭乘共用，搭乘者不做遮挡判定，驾驶者除非`bForce`才判定。下车点 = `VehicleMod`的`exitOffsetX/Y/Z`经车身完整transform变换。
+  - `bForce`(长按Q / `force_leave`，2026-11-27)的驾驶者改用`FindForceExitLocation`：原下车点翻车时会滚到地下/车顶、贴墙时在墙里。只取车身yaw，在车身局部包围盒(X/Y半长)外扩胶囊半径+30cm取8个候选点(下车点那侧、另一侧、车尾、车头、四角)，中心/高度用世界包围盒；每点向下LineTrace(ECC_Visibility，600cm内)贴地，胶囊`OverlapBlockingTestByChannel(ECC_Pawn)`要空(不忽略车本身)。第一轮还要求从车身中心扫过去不被挡(`IsExitPathBlocked`，不隔墙)，第二轮只要空着，再不行站到车顶(世界包围盒顶上)；都不行退回原下车点并打警告。搭乘者不变。
   遮挡检测用`SweepSingleByChannel`+`ECC_Pawn`（胶囊42x96）从车身中心（Z对齐下车点，整体抬高`kExitSweepLift`避开路面ISM）扫到下车点，并忽略载具自己：
   - 不能用`ECC_Visibility`：这个项目的Pawn碰撞预设忽略它；
   - 不能用Overlap类查询：建筑/房间/园区/市民/车辆边界盒都是Trigger档案，会被误判成挡路；

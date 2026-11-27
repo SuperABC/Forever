@@ -799,6 +799,20 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	FVector localOffset(vehicle->GetExitOffsetX(), vehicle->GetExitOffsetY(), vehicle->GetExitOffsetZ());
 	FVector candidateLocation = vehicleElement->GetActorTransform().TransformPositionNoScale(localOffset);
 
+	// 强制下车(长按Q/force_leave)的驾驶者：上面的下车点跟着车身完整transform走，翻车时会滚到地下/车顶，
+	// 贴墙时在墙里，所以在车周围另找一个站得下人的空位；找不到才退回原下车点。
+	if (bForce && !bRide) {
+		AVehicleElement* driven = Cast<AVehicleElement>(vehicleElement);
+		FVector forcedLocation;
+		if (driven && FindForceExitLocation(driven, previousPawn, vehicle->GetExitOffsetY() < 0.f ? -1.f : 1.f, forcedLocation)) {
+			candidateLocation = forcedLocation;
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ExitVehicle: 强制下车找不到空位，退回原下车点(%.0f,%.0f,%.0f)"),
+				candidateLocation.X, candidateLocation.Y, candidateLocation.Z);
+		}
+	}
+
 	// 检测下车点站不站得下人:用ECC_Pawn通道(Pawn预设忽略ECC_Visibility)，胶囊体尺寸同AForeverCharacter的InitCapsuleSize(42, 96)。
 	// 必须忽略载具自己:carMesh的Vehicle档案对ECC_Pawn是Block，否则永远下不了车。
 	FCollisionQueryParams queryParams;
@@ -817,7 +831,7 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 		// 带上挡住的对象和命中点，方便定位是哪个东西挡了(而不是只知道"被挡住")；同时写日志，
 		// 屏幕消息不会进Forever.log。
 		FString blockedText = FString::Printf(
-			TEXT("下车位置被挡住，无法下车：%s / %s，起点(%.0f,%.0f,%.0f) 终点(%.0f,%.0f,%.0f) 命中(%.0f,%.0f,%.0f)"),
+			TEXT("下车位置被挡住，无法下车(长按Q强制下车)：%s / %s，起点(%.0f,%.0f,%.0f) 终点(%.0f,%.0f,%.0f) 命中(%.0f,%.0f,%.0f)"),
 			*GetNameSafe(blockHit.GetActor()), *GetNameSafe(blockHit.GetComponent()),
 			pathStart.X, pathStart.Y, pathStart.Z,
 			candidateLocation.X, candidateLocation.Y, candidateLocation.Z,
@@ -868,6 +882,87 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	}
 
 	// 车辆本身不销毁，下车后原地留着供下次再上车。
+}
+
+bool UForeverTrafficFrameworkComponent::FindForceExitLocation(AVehicleElement* vehicleElement, APawn* previousPawn,
+	float preferredSide, FVector& outLocation) {
+	UWorld* world = GetWorld();
+	USkeletalMeshComponent* carMesh = vehicleElement ? vehicleElement->GetCarMesh() : nullptr;
+	if (!world || !carMesh) return false;
+
+	// 人的胶囊体：有就取下车的那个人的，否则同AForeverCharacter的InitCapsuleSize(42, 96)。
+	float radius = 42.f, halfHeight = 96.f;
+	if (const ACharacter* character = Cast<ACharacter>(previousPawn)) {
+		if (const UCapsuleComponent* capsule = character->GetCapsuleComponent()) {
+			radius = capsule->GetScaledCapsuleRadius();
+			halfHeight = capsule->GetScaledCapsuleHalfHeight();
+		}
+	}
+	const FCollisionShape capsuleShape = FCollisionShape::MakeCapsule(radius, halfHeight);
+	constexpr float kForceExitMargin = 30.f;     // 候选点离车身包围盒的额外距离
+	constexpr float kGroundTraceUp = 200.f;      // 贴地射线起点在候选点上方多少
+	constexpr float kGroundTraceDown = 600.f;    // 往下找多远的地面，找不到保持原高度(空中跳机就直接掉下去)
+	constexpr float kExitSweepLift = 40.f;       // 同ExitVehicle：sweep抬高一点避开地面
+
+	// 车身足迹：局部包围盒的X/Y半长(和触发盒同一个来源)；中心和高度用世界包围盒(翻车后局部Z没有意义)。
+	const FBoxSphereBounds localBounds = carMesh->CalcBounds(FTransform::Identity);
+	const FBox worldBox = carMesh->Bounds.GetBox();
+	const FVector center = worldBox.GetCenter();
+	const float alongX = localBounds.BoxExtent.X + radius + kForceExitMargin;
+	const float alongY = localBounds.BoxExtent.Y + radius + kForceExitMargin;
+	const FRotator yawOnly(0.f, vehicleElement->GetActorRotation().Yaw, 0.f);
+	const FVector forward = yawOnly.RotateVector(FVector::ForwardVector);
+	const FVector right = yawOnly.RotateVector(FVector::RightVector);
+	const float side = preferredSide < 0.f ? -1.f : 1.f;
+	const FVector offsets[] = {
+		right * (side * alongY),
+		right * (-side * alongY),
+		forward * -alongX,
+		forward * alongX,
+		forward * -alongX + right * (side * alongY),
+		forward * -alongX + right * (-side * alongY),
+		forward * alongX + right * (side * alongY),
+		forward * alongX + right * (-side * alongY),
+	};
+
+	// 贴地/重叠检测忽略下车的人(此时还隐藏着、关了碰撞)；重叠检测不忽略车本身，免得人卡进车里。
+	FCollisionQueryParams overlapParams(SCENE_QUERY_STAT(ForceExitOverlap), false);
+	if (previousPawn) overlapParams.AddIgnoredActor(previousPawn);
+	FCollisionQueryParams traceParams(SCENE_QUERY_STAT(ForceExitGround), false);
+	traceParams.AddIgnoredActor(vehicleElement);
+	if (previousPawn) traceParams.AddIgnoredActor(previousPawn);
+
+	TArray<FVector> freeSpots;
+	TArray<bool> reachable;
+	for (const FVector& offset : offsets) {
+		FVector spot = center + offset;
+		// 贴地：ECC_Visibility同市民生成贴地(ACitizenElement::Init)。
+		FHitResult groundHit;
+		if (world->LineTraceSingleByChannel(groundHit, spot + FVector(0.f, 0.f, kGroundTraceUp), spot - FVector(0.f, 0.f, kGroundTraceDown),
+			ECC_Visibility, traceParams)) {
+			spot.Z = groundHit.ImpactPoint.Z + halfHeight + 2.f;
+		}
+		if (world->OverlapBlockingTestByChannel(spot, FQuat::Identity, ECC_Pawn, capsuleShape, overlapParams)) continue;
+		FVector pathStart = center;
+		pathStart.Z = spot.Z;
+		FHitResult blockHit;
+		freeSpots.Add(spot);
+		reachable.Add(!IsExitPathBlocked(world, pathStart + FVector(0.f, 0.f, kExitSweepLift), spot + FVector(0.f, 0.f, kExitSweepLift), traceParams, blockHit));
+	}
+
+	// 第一轮：空着且从车身中心过去不被挡(不会隔着墙把人放进别的房间)；第二轮：只要空着。
+	for (int32 i = 0; i < freeSpots.Num(); i++) {
+		if (reachable[i]) { outLocation = freeSpots[i]; return true; }
+	}
+	if (freeSpots.Num() > 0) { outLocation = freeSpots[0]; return true; }
+
+	// 最后试车顶(四周都挤满时；翻车后车底朝上也站得住)。
+	const FVector roof(center.X, center.Y, worldBox.Max.Z + halfHeight + 5.f);
+	if (!world->OverlapBlockingTestByChannel(roof, FQuat::Identity, ECC_Pawn, capsuleShape, overlapParams)) {
+		outLocation = roof;
+		return true;
+	}
+	return false;
 }
 
 void UForeverTrafficFrameworkComponent::ParkPlayerVehicle(Vehicle* vehicle, const AActor* vehicleActor) {
