@@ -3,6 +3,8 @@
 #include "traffic/junction.h"
 #include "map/general_geometry.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -35,9 +37,10 @@ namespace {
 		Connection* crosswalkW;
 		JunctionTraffic jt;
 
-		Connection* Add(Node* a, Node* b, E::Kind kind = E::Kind::Vehicle) {
+		// approach=从第几条腿驶入(红绿灯分组用)：西0、北1、东2、南3。
+		Connection* Add(Node* a, Node* b, E::Kind kind = E::Kind::Vehicle, int approach = -1) {
 			conns.push_back(make_unique<Connection>(*a, *b));
-			jt.AddConnection(conns.back().get(), kind, 1);
+			jt.AddConnection(conns.back().get(), kind, 1, approach);
 			return conns.back().get();
 		}
 		static unique_ptr<Node> N(float x, float y) { return make_unique<Node>("t", x, y, 0.f); }
@@ -48,14 +51,14 @@ namespace {
 			inN = N(0.1f, -1.f); outN = N(-0.1f, -1.f);
 			inS = N(-0.1f, 1.f); outS = N(0.1f, 1.f);
 			pw0 = N(-1.f, -0.5f); pw1 = N(-1.f, 0.5f);
-			we = Add(inW.get(), outE.get());
-			ew = Add(inE.get(), outW.get());
-			ns = Add(inN.get(), outS.get());
-			wn = Add(inW.get(), outN.get());
-			wToS = Add(inW.get(), outS.get());
-			nToE = Add(inN.get(), outE.get());
-			swCross = Add(inS.get(), outN.get());
-			crosswalkW = Add(pw0.get(), pw1.get(), E::Kind::Crosswalk);
+			we = Add(inW.get(), outE.get(), E::Kind::Vehicle, 0);
+			ew = Add(inE.get(), outW.get(), E::Kind::Vehicle, 2);
+			ns = Add(inN.get(), outS.get(), E::Kind::Vehicle, 1);
+			wn = Add(inW.get(), outN.get(), E::Kind::Vehicle, 0);
+			wToS = Add(inW.get(), outS.get(), E::Kind::Vehicle, 0);
+			nToE = Add(inN.get(), outE.get(), E::Kind::Vehicle, 1);
+			swCross = Add(inS.get(), outN.get(), E::Kind::Vehicle, 3);
+			crosswalkW = Add(pw0.get(), pw1.get(), E::Kind::Crosswalk, 0); // 横穿西腿
 			jt.BuildConflicts();
 		}
 	};
@@ -190,6 +193,149 @@ namespace {
 		CHECK(stopped); // 超过2秒后不再放新车进we
 	}
 
+	// 红绿灯分组：每次挑夹角最接近180°的两条路成一组，剩一条单独一组；没有驶入车道的路不分组。
+	void TestSignalPairing() {
+		printf("signal pairing\n");
+		const float pi = 3.14159265f;
+		auto deg = [pi](float d) { return d * pi / 180.f; };
+		// 十字(离开路口方向：西pi、北-pi/2、东0、南pi/2)：西东一组、北南一组。
+		vector<int> cross = E::PairApproaches({ pi, -pi / 2, 0.f, pi / 2 }, { true, true, true, true });
+		CHECK(cross[0] == cross[2] && cross[1] == cross[3] && cross[0] != cross[1]);
+		// T字：西东直的两条一组，南单独一组。
+		vector<int> tee = E::PairApproaches({ pi, 0.f, pi / 2 }, { true, true, true });
+		CHECK(tee[0] == tee[1] && tee[2] != tee[0] && tee[2] >= 0);
+		// 五岔(每72°一条)：两对加一条单独，一共三组。
+		vector<int> five = E::PairApproaches({ deg(0), deg(72), deg(144), deg(216), deg(288) }, { true, true, true, true, true });
+		int groups = 0;
+		for (int g : five) groups = max(groups, g + 1);
+		vector<int> sizes(groups, 0);
+		for (int g : five) if (g >= 0) sizes[g]++;
+		CHECK(groups == 3);
+		CHECK(count(sizes.begin(), sizes.end(), 2) == 2 && count(sizes.begin(), sizes.end(), 1) == 1);
+		// 歪一点的十字(80°和100°)：仍然配成两条"最直"的。
+		vector<int> skew = E::PairApproaches({ deg(180), deg(-80), deg(0), deg(100) }, { true, true, true, true });
+		CHECK(skew[0] == skew[2] && skew[1] == skew[3]);
+		// 只出不进的单行道不分组。
+		vector<int> oneWay = E::PairApproaches({ pi, -pi / 2, 0.f, pi / 2 }, { true, false, true, true });
+		CHECK(oneWay[1] == -1 && oneWay[0] == oneWay[2] && oneWay[3] >= 0 && oneWay[3] != oneWay[0]);
+	}
+
+	// 红绿灯放行：激活后各组轮流绿灯(绿15秒、黄3秒)；红/黄灯不放新车、被拒的车不进排队；已放行的续租照常；
+	// 换组时上一组还在路口里的车挡住新组的冲突方；没激活=当作没有红绿灯。
+	void TestSignalRequest() {
+		printf("signal request\n");
+		const double G = E::kGreenSeconds, Y = E::kYellowSeconds;
+		Cross x;
+		x.jt.SetSignalGroups(1, { 0, 1, 0, 1 }); // 西东一组、北南一组
+		CHECK(x.jt.HasSignal(1) && !x.jt.IsSignalActive(1));
+		CHECK(x.jt.GetSignal(1, 0, 0.0) == E::Signal::None);
+		// 没激活：和没有红绿灯一样
+		CHECK(x.jt.Request(x.ns, Car(1), 0.0, 0.2f, 10.f));
+		x.jt.Leave(x.ns, Car(1));
+
+		x.jt.SetSignalActive(1, true, 100.0);
+		CHECK(x.jt.GetSignal(1, 0, 101.0) == E::Signal::Green && x.jt.GetSignal(1, 2, 101.0) == E::Signal::Green);
+		CHECK(x.jt.GetSignal(1, 1, 101.0) == E::Signal::Red && x.jt.GetSignal(1, 3, 101.0) == E::Signal::Red);
+		CHECK(x.jt.GetSignal(1, 0, 100.0 + G + 1.0) == E::Signal::Yellow);
+		CHECK(x.jt.GetSignal(1, 1, 100.0 + G + Y + 1.0) == E::Signal::Green && x.jt.GetSignal(1, 0, 100.0 + G + Y + 1.0) == E::Signal::Red);
+		CHECK(x.jt.GetSignal(1, 0, 100.0 + 2 * (G + Y) + 1.0) == E::Signal::Green); // 一个周期后回到第0组
+
+		double t = 101.0;
+		CHECK(!x.jt.Request(x.ns, Car(2), t, 0.2f, 10.f));         // 北是红灯
+		CHECK(x.jt.Request(x.we, Car(3), t + 0.1, 0.2f, 10.f));    // 西是绿灯
+		x.jt.Leave(x.we, Car(3));
+		// 红灯车没进排队：之后来的绿灯冲突车不会被它挡住
+		CHECK(x.jt.Request(x.we, Car(4), t + 0.2, 0.2f, 10.f));
+		CHECK(x.jt.Request(x.ew, Car(5), t + 0.2, 0.2f, 10.f));    // 同组对向直行，不冲突
+		// 黄灯：不放新车，已放行的续租(租约1秒，下面每0.5秒续一次)
+		t = 100.0 + G - 0.5;
+		CHECK(x.jt.Request(x.we, Car(4), t, 0.2f, 10.f));
+		CHECK(x.jt.Request(x.ew, Car(5), t, 0.2f, 10.f));
+		t = 100.0 + G + 0.3;
+		CHECK(x.jt.Request(x.we, Car(4), t, 0.2f, 10.f));
+		CHECK(!x.jt.Request(x.we, Car(6), t, 0.2f, 10.f));
+		// 换到北南组：上一组还在路口里的车(Car4续租着)挡住冲突的北进车；它走了才放
+		for (; t < 100.0 + G + Y + 0.5; t += 0.5) {
+			CHECK(x.jt.Request(x.we, Car(4), t, 0.2f, 10.f));
+			CHECK(x.jt.Request(x.ew, Car(5), t, 0.2f, 10.f));
+		}
+		CHECK(x.jt.Request(x.we, Car(4), t, 0.2f, 10.f));
+		CHECK(!x.jt.Request(x.ns, Car(2), t, 0.2f, 10.f));
+		CHECK(x.jt.CheckInvariant(t));
+		x.jt.Leave(x.we, Car(4));
+		x.jt.Leave(x.ew, Car(5));
+		CHECK(x.jt.Request(x.ns, Car(2), t + 0.1, 0.2f, 10.f));
+		CHECK(!x.jt.Request(x.we, Car(7), t + 0.1, 0.2f, 10.f));   // 西现在是红灯
+		// 西腿红灯：行人可以横穿西腿(细则见TestSignalPedestrian)
+		x.jt.Leave(x.ns, Car(2));
+		CHECK(x.jt.Request(x.crosswalkW, Ped(1), t + 0.2, 0.f, 1e9f));
+		x.jt.Leave(x.crosswalkW, Ped(1));
+		// 关掉：马上当作没有红绿灯；再激活从第0组重新开始
+		x.jt.SetSignalActive(1, false, t + 0.3);
+		CHECK(x.jt.Request(x.we, Car(7), t + 0.3, 0.2f, 10.f));
+		x.jt.Leave(x.we, Car(7));
+		x.jt.SetSignalActive(1, true, 500.0);
+		CHECK(x.jt.GetSignal(1, 0, 500.5) == E::Signal::Green && x.jt.GetSignal(1, 1, 500.5) == E::Signal::Red);
+		// 没给道路的连线(approach=-1)和没有信号表的路口不受影响
+		Cross y;
+		CHECK(!y.jt.HasSignal(1));
+		y.jt.SetSignalActive(1, true, 0.0);
+		CHECK(!y.jt.IsSignalActive(1) && y.jt.Request(y.ns, Car(1), 1.0, 0.2f, 10.f));
+	}
+
+	// 行人按灯：只有横穿的那条路是红灯才放；绿/黄灯被拒且不进排队(不挡车)；已经在横道上的人续租走完，
+	// 而且挡住刚变绿的那条路的车；转角和没激活的路口不受影响。
+	void TestSignalPedestrian() {
+		printf("signal pedestrian\n");
+		const double G = E::kGreenSeconds, Y = E::kYellowSeconds;
+		Cross x;
+		x.jt.SetSignalGroups(1, { 0, 1, 0, 1 }); // 西东一组、北南一组
+		// 没激活：和没有红绿灯一样
+		CHECK(x.jt.Request(x.crosswalkW, Ped(1), 0.0, 0.f, 1e9f));
+		x.jt.Leave(x.crosswalkW, Ped(1));
+
+		x.jt.SetSignalActive(1, true, 100.0);
+		double t = 101.0; // 西东绿
+		CHECK(!x.jt.Request(x.crosswalkW, Ped(1), t, 0.f, 1e9f));        // 西腿绿灯，人不能过
+		CHECK(x.jt.Request(x.we, Car(1), t + 0.1, 0.2f, 10.f));          // 被拒的人没进排队，不挡西进的车
+		x.jt.Leave(x.we, Car(1));
+		CHECK(!x.jt.Request(x.crosswalkW, Ped(1), 100.0 + G + 1.0, 0.f, 1e9f)); // 黄灯也不能过
+		t = 100.0 + G + Y + 1.0; // 北南绿，西腿红
+		CHECK(x.jt.Request(x.crosswalkW, Ped(1), t, 0.f, 1e9f));
+		// 已经在横道上：一直续租到西腿变回绿灯之后也照常
+		for (; t < 100.0 + 2 * (G + Y) + 1.0; t += 0.5) CHECK(x.jt.Request(x.crosswalkW, Ped(1), t, 0.f, 1e9f));
+		CHECK(x.jt.GetSignal(1, 0, t) == E::Signal::Green);
+		CHECK(!x.jt.Request(x.crosswalkW, Ped(2), t, 0.f, 1e9f));        // 新来的人不放
+		CHECK(!x.jt.Request(x.we, Car(2), t, 0.2f, 10.f));              // 西腿绿了，但人还在横道上，车等
+		x.jt.Leave(x.crosswalkW, Ped(1));
+		CHECK(x.jt.Request(x.we, Car(2), t + 0.1, 0.2f, 10.f));
+		CHECK(x.jt.CheckInvariant(t + 0.1));
+		// 转角不受红绿灯管(即使传了道路下标也忽略)
+		Cross y;
+		y.jt.SetSignalGroups(1, { 0, 1, 0, 1 });
+		y.jt.SetSignalActive(1, true, 0.0);
+		Connection* yCorner = y.Add(y.pw1.get(), y.pw0.get(), E::Kind::Corner, 0);
+		y.jt.BuildConflicts();
+		CHECK(y.jt.Request(yCorner, Ped(3), 1.0, 0.f, 1e9f)); // 西腿绿灯时转角照走
+	}
+
+	// 路径点找路口连线：起点(驶入锚点)和终点(驶出锚点)先后出现在路径里；同一驶入车道的几个转向按终点区分。
+	void TestFindVehicleSpans() {
+		printf("find vehicle spans\n");
+		Cross x;
+		vector<pair<float, float>> straight = { { -3.f, -0.1f }, { -2.f, -0.1f }, { -1.f, -0.1f }, { 0.f, -0.1f }, { 1.f, -0.1f }, { 2.f, -0.1f } };
+		vector<E::PathSpan> a = x.jt.FindVehicleSpans(straight);
+		CHECK(a.size() == 1 && a[0].connection == x.we && a[0].fromIndex == 2 && a[0].toIndex == 4);
+		vector<pair<float, float>> left = { { -2.f, -0.1f }, { -1.f, -0.1f }, { -0.5f, -0.5f }, { -0.1f, -1.f }, { -0.1f, -2.f } };
+		vector<E::PathSpan> b = x.jt.FindVehicleSpans(left);
+		CHECK(b.size() == 1 && b[0].connection == x.wn && b[0].fromIndex == 1 && b[0].toIndex == 3);
+		// 起点后面没出现任何终点(路径在路口里截断了)：不算
+		vector<pair<float, float>> cut = { { -2.f, -0.1f }, { -1.f, -0.1f }, { -0.5f, -0.1f } };
+		CHECK(x.jt.FindVehicleSpans(cut).empty());
+		// 不经过路口
+		CHECK(x.jt.FindVehicleSpans({ { 5.f, 5.f }, { 6.f, 6.f } }).empty());
+	}
+
 	// 随机压力：很多实体随机请求/离开/消失，每步检查不变量，最后停止请求看能否全部排空。
 	void TestRandomStress() {
 		printf("random stress\n");
@@ -235,6 +381,10 @@ int main() {
 	TestLease();
 	TestExitCheck();
 	TestMaxOpen();
+	TestSignalPairing();
+	TestSignalRequest();
+	TestSignalPedestrian();
+	TestFindVehicleSpans();
 	TestRandomStress();
 	printf("\n%d checks, %d failures\n", checks, failures);
 	return failures == 0 ? 0 : 1;

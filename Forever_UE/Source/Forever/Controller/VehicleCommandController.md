@@ -29,7 +29,8 @@
 - **前车**：`FindLeader` 遍历 `UForeverTrafficFrameworkComponent::GetDrivers()`（被驱动车辆登记表），把对方车心投影到**我的路径**上，横向在 `pathHalfWidth` 内且在前方、高差<400 的最近一辆就是前车（和车道/边无关，所以同车道排队、汇入、路口里交叉都覆盖）。用 Krauss 安全速度 `v=-bT+sqrt((bT)²+vl²+2b·gap)`（b=0.8×`maxBrakeDecel`，T=`followTimeGap`，gap 扣掉 `standstillGap`）。对方速度取沿我行进方向的分量（≥0）。
 - **障碍**：`ScanObstacles` 每 0.1s 沿路径向前每 250uu 做一个半径 170 的 `ECC_Pawn`+`ECC_Vehicle` 球形 overlap（忽略自己和已登记车辆；注意本项目 Pawn 预设忽略 Visibility，必须用对象类型），找到行人/玩家/无人驾驶车就当作前车并入 Krauss。人的胶囊对载具通道是 Overlap（车不会被挡），`AVehicleElement::PushNearbyCharacters` 只是最后兜底，所以靠这个扫描提前减速。
 - **路口**：`PlanAndFollow` 把 `Map::VehicleRoutePlan::edges` 里属于 `JunctionTraffic` 的连线转成 `FPath::junctions`（`FJunctionMarker`，弧长区间靠把规划折线端点投影到建好的路径上得到）。进入视距（刹停距离+速度×请求间隔+`junctionRequestMargin`）且是队头（我和入口之间没有前车）后，每 `junctionRequestInterval`（交通时钟秒）`Request` 一次；放行后继续请求续租，车尾出了连线终点 `Leave`；没放行就在入口前 `stopLineMargin` 处按 `sqrt(2·b·距离)` 限速停住。车头已经压进连线就当作持有，不再退回。出口检查把连线终点之后第一辆前车的车尾距离（地图单位）作为 `exitFree` 传给路口。
-- **对速度合成的影响**：物理模式限速到 <30 且速度低于 `kHandbrakeSpeed` 时松刹车拉手刹原地等；卡住计时在被前车/路口挡住时不累加；运动学的 60uu 最小蠕行在限速<60 时关闭。
+- **红绿灯**：不用另外处理。红灯/黄灯时 `JunctionTraffic::Request` 拒绝新请求，车就和"路口没放行"一样停在 `stopLineMargin` 处；已经放行的车续租照常，黄灯时开过去。
+- **对速度合成的影响**：物理模式限速到 <30 且速度低于 `kHandbrakeSpeed` 时松刹车拉手刹原地等；卡住计时在被前车/路口挡住时不累加；运动学的 60uu 最小蠕行在限速<60 时关闭。最近一帧是否被挡着要停（`bTrafficStoppingNow`）由 `IsTrafficStopping()` 给交通组件的脱困计时用。
 - **清理**：`ClearCommands`/`FinishCommand`/重新规划/`EndPlay` 都会 `ReleaseJunctions` 对所有请求过的连线 `Leave`；租约（1s）兜底。
 - **限制**：目前只有 `Controller` 驱动的车（公交、测试导航车）进登记表，没有"最多 16 辆"的强制上限（私家车实例化时再加）；停在路中的车（含停靠的公交）会挡住后车，不会变道超车。
 
@@ -45,7 +46,7 @@
 - **倒车阶段**(`TickReversing`)：直线退到`reverseTarget`，车头保持`reverseYaw`。运动学：按`kReverseSpeed`(250uu/s)+刹停曲线直接摆位置；
   物理：Chaos"倒车当刹车"——`SetDriveInput(0, brake, steer)`的刹车输入在低速/倒车时就是倒挡油门，倒车时打方向效果相反所以转向取负，横向偏差用≤20°小角度修正；
   退不动超过`kStuckSeconds`或剩余<40uu就放弃剩余倒车直接前进。物理↔运动学切换时`reverseTravelled`按位置重新投影。倒车阶段不做跟车/路口请求。
-- **`FollowPath`指令**(`FVehicleCommand::MakeFollowPath(node, waypoints, bReverseFirst)`)：沿给定折线开，不重新规划；Core推算的车在倒车出库途中生成Actor时用。到达后和`NavigateToNode`一样回调`navigateFinished`。
+- **`FollowPath`指令**(`FVehicleCommand::MakeFollowPath(node, waypoints, bReverseFirst)`)：沿给定折线开，不重新规划；Core推算的车(行驶中/倒车出库途中)被流式生成、读档恢复行驶中的车时用。折线不带连线信息，开始时用`JunctionTraffic::FindVehicleSpans`按路口连线的起终锚点在点列里找出经过的路口，转成`FEdgeSpan`，所以这些车也参与路口调度和红绿灯。到达后和`NavigateToNode`一样回调`navigateFinished`。
 - `GetRemainingWaypoints(out, &bReverseFirst)`：倒车阶段返回[当前位置, 倒车终点, 之后的点]且`bReverseFirst=true`，交还Core时保留倒车标志。
 
 - **圆角的`d`必须夹紧**：`d=R·tan(θ/2)`在θ→180°(路径顶点处原路折返，死胡同掉头边引入后会出现)时爆炸，float下θ恰为π还会算成很大的负数，把圆角控制点推到几百亿uu外，`BuildPath`细分上亿段卡死游戏线程。现在半角限制在85°内并把`d`夹到[0, 相邻两段各一半]；`BuildPath`发现圆角输入异常或单段细分>5000段会打Error并放弃，`PlanAndFollow`发现规划点非有限/离谱量级也会打现场并放弃。

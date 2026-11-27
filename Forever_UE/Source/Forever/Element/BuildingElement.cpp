@@ -1,7 +1,9 @@
 #include "Element/BuildingElement.h"
 
+#include "Element/AssetElement.h"
 #include "Element/FurnitureCollision.h"
 #include "Framework/CoreGuard.h"
+#include "Framework/ForeverAssetFrameworkComponent.h"
 
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -28,6 +30,7 @@
 #include "map/zone.h"
 #include "map/general_geometry.h"
 #include "player/player.h"
+#include "player/asset.h"
 #include "story/event.h"
 
 #include <algorithm>
@@ -51,6 +54,9 @@
 // Room碰撞盒在X/Y/Z三个方向各缩小的量(地图单位)，和上面BUILDING_COLLISION_MARGIN的+0.01配对
 // (原来在ForeverRoomFrameworkComponent.cpp里叫ROOM_COLLISION_MARGIN，同一个值挪过来)。
 #define ROOM_COLLISION_MARGIN 0.01f
+// Room碰撞盒底面只比地板高这么多(cm)，不缩ROOM_COLLISION_MARGIN那么多：放在地板上的小物品(汉堡)也要和盒子重叠，
+// 才能在被推出房间时收到EndOverlap。和下一层房间盒顶面(缩了ROOM_COLLISION_MARGIN)之间仍隔着11cm。
+#define ROOM_FLOOR_MARGIN_CM 1.f
 
 using namespace std;
 
@@ -358,7 +364,7 @@ void ABuildingElement::BuildRoomCollisionBoxes(int32 onlyLevel) {
 		float hx = room->GetSizeX() * 0.5f * BUILDING_WORLD_SCALE - margin;
 		float hy = room->GetSizeY() * 0.5f * BUILDING_WORLD_SCALE - margin;
 		float floorBaseZ = building->GetFloorWorldZ(level);
-		float zBottom = BUILDING_HEIGHT_EPSILON + floorBaseZ * BUILDING_WORLD_SCALE + margin;
+		float zBottom = BUILDING_HEIGHT_EPSILON + floorBaseZ * BUILDING_WORLD_SCALE + ROOM_FLOOR_MARGIN_CM;
 		float zTop = BUILDING_HEIGHT_EPSILON + (floorBaseZ + floorHeight) * BUILDING_WORLD_SCALE - margin;
 		if (hx <= 0.f || hy <= 0.f || zTop <= zBottom) continue; // 房间/楼层太薄，缩小后变成非法尺寸
 
@@ -380,7 +386,34 @@ void ABuildingElement::BuildRoomCollisionBoxes(int32 onlyLevel) {
 
 		roomBoxLabels.Add(box, room);
 		box->UpdateOverlaps(); // 同building盒：补发玩家已站在里面的BeginOverlap
+		DetachAssetsOutside(room, box);
 	}
+}
+
+bool ABuildingElement::IsInsideBox(const UBoxComponent* box, const FVector& point) {
+	const FVector local = box->GetComponentTransform().InverseTransformPosition(point);
+	const FVector extent = box->GetUnscaledBoxExtent();
+	return FMath::Abs(local.X) <= extent.X && FMath::Abs(local.Y) <= extent.Y && FMath::Abs(local.Z) <= extent.Z;
+}
+
+UForeverAssetFrameworkComponent* ABuildingElement::FindAssetFramework() const {
+	AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	return frameworkActor ? frameworkActor->GetAssetFramework() : nullptr;
+}
+
+void ABuildingElement::DetachAssetsOutside(Room* room, const UBoxComponent* box) {
+	// 盒子没建的时候被推出房间的物品收不到EndOverlap：盒子建好时按Core里这个房间持有的物品的位置补判一次，
+	// 不在盒子里的转成直接放在场景里的物品。位置向物品组件要(有实体取实体的实际位置，Core的摆位那时还没写回)。
+	UForeverAssetFrameworkComponent* assets = FindAssetFramework();
+	if (!assets || room->GetAssets().empty()) return;
+	TArray<Asset*> outside; // 先收集：转出去会改Room::assets
+	for (const auto& [name, asset] : room->GetAssets()) {
+		if (!asset || asset->IsFixture()) continue;
+		FVector location;
+		if (assets->GetCurrentLocation(asset, location) && !IsInsideBox(box, location)) outside.Add(asset);
+	}
+	for (Asset* asset : outside) assets->DetachFromRoom(asset, room);
 }
 
 void ABuildingElement::OnRoomOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -408,6 +441,18 @@ void ABuildingElement::OnRoomOverlapBegin(UPrimitiveComponent* OverlappedCompone
 
 void ABuildingElement::OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
+	// 物品被推/踢出了房间：所有权从Room::assets转给Player::worldAssets(直接放在场景里，不属于任何房间)。
+	if (AAssetElement* element = Cast<AAssetElement>(OtherActor)) {
+		// 只认物品本体(根网格)；它自己的选项触发盒也会和房间盒重叠。物品流式销毁时UE也补发EndOverlap，不算。
+		if (OtherComp != element->GetRootComponent() || element->IsActorBeingDestroyed()) return;
+		UBoxComponent* box = Cast<UBoxComponent>(OverlappedComponent);
+		Room** roomPtr = roomBoxLabels.Find(OverlappedComponent);
+		if (!box || !roomPtr || !*roomPtr || !element->GetAsset()) return;
+		// 房间盒随近处LOD销毁时UE也补发EndOverlap：物品原点还在盒子里就不是真的出去了。
+		if (IsInsideBox(box, element->GetActorLocation())) return;
+		if (UForeverAssetFrameworkComponent* assets = FindAssetFramework()) assets->DetachFromRoom(element->GetAsset(), *roomPtr);
+		return;
+	}
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
 	Room** roomPtr = roomBoxLabels.Find(OverlappedComponent);
@@ -1041,6 +1086,19 @@ void ABuildingElement::BuildRoomFurniture(int32 floorIndex) {
 					BUILDING_HEIGHT_EPSILON + item.z * BUILDING_WORLD_SCALE),
 				FVector(item.scaleX, item.scaleY, item.scaleZ)));
 		}
+		// 固定物品(床之类，没有AssetMod、不会被捡走/销毁)：显示和阻挡跟家具一起建，地面摆位是世界坐标(地图单位、度)。
+		// 弹选项的触发盒不在这里，进了这个房间才由物品组件挂上(UForeverAssetFrameworkComponent)。
+		for (const auto& [name, asset] : room->GetAssets()) {
+			if (!asset || !asset->IsFixture() || asset->GetMeshPath().empty()) continue;
+			const AssetGround& ground = asset->GetGround();
+			float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
+			asset->GetMeshScale3(scaleX, scaleY, scaleZ);
+			transformsByMesh.FindOrAdd(UTF8_TO_TCHAR(asset->GetMeshPath().c_str())).Add(FTransform(
+				FRotator(ground.pitch, ground.yaw, ground.roll),
+				FVector(ground.x * BUILDING_WORLD_SCALE, ground.y * BUILDING_WORLD_SCALE,
+					BUILDING_HEIGHT_EPSILON + ground.z * BUILDING_WORLD_SCALE),
+				FVector(scaleX, scaleY, scaleZ)));
+		}
 	}
 
 	TArray<FTransform> collisionBoxes; // 这一层所有家具的包围盒(世界变换，单位立方体缩放)
@@ -1218,9 +1276,14 @@ void ABuildingElement::Tick(float DeltaTime) {
 			// 自定义模型单独一条操作，不跟楼层/门一起建，但和楼层同一个优先级(楼层级队列)。
 			int32 decorationOps = building->GetDecorations().empty() ? 0 : 1;
 			if (decorationOps > 0) floorTierOpQueue.Enqueue({ ELodOpType::BuildDecorations, -1 });
-			// 房间家具按层建(每层一条，只排有家具的楼层)。
+			// 房间家具按层建(每层一条，只排有家具或固定物品的楼层)。
 			TSet<int32> levelsWithFurniture;
-			for (Room* room : building->GetRooms()) if (room && !room->GetFurniture().empty()) levelsWithFurniture.Add(room->GetLayer());
+			for (Room* room : building->GetRooms()) {
+				if (!room) continue;
+				bool hasFixture = false;
+				for (const auto& [name, asset] : room->GetAssets()) hasFixture |= asset && asset->IsFixture() && !asset->GetMeshPath().empty();
+				if (!room->GetFurniture().empty() || hasFixture) levelsWithFurniture.Add(room->GetLayer());
+			}
 			for (int32 i = 0; i < nearFloorCount; i++) {
 				if (levelsWithFurniture.Contains(i - building->GetBasementCount())) {
 					floorTierOpQueue.Enqueue({ ELodOpType::BuildRoomFurniture, i });

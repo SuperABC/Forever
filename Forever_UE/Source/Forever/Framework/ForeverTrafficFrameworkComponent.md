@@ -148,7 +148,7 @@
 
 ## 脱困(2026-11-16)
 
-被Controller驱动的物理车(`IsDrivenByController`，非玩家)位置超过`stuckTimeoutSeconds`(默认60，**现实时间**，暂停不计)没离开锚点`stuckMoveThreshold`(100UE单位)，就`HandBackDriveToCore`强制销毁Actor、剩余路径交回Core推算，并在`respawnBlockedUntil`(30游戏秒)内不在原地重新生成。公交等交不回去的失败后再等一个周期。日志`脱困：车辆 ...`。
+被Controller驱动的物理车(`IsDrivenByController`，非玩家)位置超过`stuckTimeoutSeconds`(默认60，**现实时间**，暂停不计)没离开锚点`stuckMoveThreshold`(100UE单位)，就`HandBackDriveToCore`强制销毁Actor、剩余路径交回Core推算，并在`respawnBlockedUntil`(30游戏秒)内不在原地重新生成。车正被前车/路口(含红灯)挡着(`FindActiveDriver(element)->IsTrafficStopping()`)时时限放宽到`stuckTimeoutSeconds×trafficWaitStuckFactor`(默认5倍=300秒)：排队等灯不该被交还Core(交回去就不守红绿灯了)，真堵死的路口还是能解开。公交等交不回去的失败后再等一个周期。日志`脱困：车辆 ...`。
 
 脱困补充：线路车(`bRouteVehicle`、没脱离时刻表)交不回Core导航，卡住后走`TeleportLineVehicleToNextStop`：读控制器`QueryLoopProgress`，`Route::SyncVehicleProgress(leg, 1.0)`把时刻表进度推到这一腿终点(下一站)，再`HandoffToKinematic(state, false)`收回物理Actor，之后`UpdatePhysicsHandoff`按时刻表位置重新切物理。停靠中/玩家在开的不处理。日志`脱困：公交 ...`。
 

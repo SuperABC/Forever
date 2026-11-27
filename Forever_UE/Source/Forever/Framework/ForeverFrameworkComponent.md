@@ -22,6 +22,7 @@ Core域(或一类表现)翻译成UE里的网格/Actor/效果：
 | `UForeverWeatherFrameworkComponent` | 天气表现(云/雨雪/地面湿润) |
 | `UForeverPopulaceFrameworkComponent` | 市民Actor的流式生成、走路/通勤/任务的执行 |
 | `UForeverTrafficFrameworkComponent` | 载具Actor、线路车辆、导航线、车位 |
+| `UForeverTrafficLightFrameworkComponent` | 路口红绿灯的流式生成和信号激活 |
 | `UForeverAssetFrameworkComponent` | 地上物品Actor、背包相关Change、伤害/特效/音效 |
 | `UForeverStoryFrameworkComponent` | 事件广播、对话/小游戏/商店界面、计时器、操控权切换 |
 

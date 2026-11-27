@@ -52,7 +52,7 @@ JunctionTraffic::EntityKind JunctionTraffic::GetEntityKind(int64_t entity) {
 	return ((entity >> 32) & 1) ? EntityKind::Pedestrian : EntityKind::Vehicle;
 }
 
-void JunctionTraffic::AddConnection(const Connection* connection, Kind kind, int junctionId) {
+void JunctionTraffic::AddConnection(const Connection* connection, Kind kind, int junctionId, int approach) {
 	if (!connection || index.count(connection)) return;
 	Entry entry;
 	entry.connection = connection;
@@ -60,6 +60,7 @@ void JunctionTraffic::AddConnection(const Connection* connection, Kind kind, int
 	entry.junctionId = junctionId;
 	entry.startId = connection->GetStart().GetId();
 	entry.endId = connection->GetEnd().GetId();
+	entry.approach = kind == Kind::Corner ? -1 : approach; // 转角不横穿任何道路，不受红绿灯管
 	for (int i = 0; i <= kPolylineSteps; i++) {
 		Node p = connection->GetPoint(static_cast<float>(i) / kPolylineSteps);
 		entry.polyline.push_back({ p.GetX(), p.GetY() });
@@ -71,12 +72,17 @@ void JunctionTraffic::AddConnection(const Connection* connection, Kind kind, int
 void JunctionTraffic::BuildConflicts() {
 	entriesByExit.clear();
 	crosswalkGrid.clear();
+	vehicleStartGrid.clear();
 	for (Entry& entry : entries) entry.conflicts.clear();
 
 	unordered_map<int, vector<int>> byJunction;
 	for (int i = 0; i < static_cast<int>(entries.size()); i++) {
 		byJunction[entries[i].junctionId].push_back(i);
-		if (entries[i].kind == Kind::Vehicle) entriesByExit[entries[i].endId].push_back(i);
+		if (entries[i].kind == Kind::Vehicle) {
+			entriesByExit[entries[i].endId].push_back(i);
+			const Point& start = entries[i].polyline.front();
+			vehicleStartGrid[CellKey(static_cast<int>(floorf(start.x)), static_cast<int>(floorf(start.y)))].push_back(i);
+		}
 		if (entries[i].kind == Kind::Crosswalk) {
 			const Point& a = entries[i].polyline.front();
 			const Point& b = entries[i].polyline.back();
@@ -137,14 +143,25 @@ void JunctionTraffic::BuildFromMap(const Map& map) {
 		for (const RoadJunctionApproach& approach : junction->GetApproaches()) {
 			for (const Node* node : approach.vehicleOutbound) outboundIds.insert(node->GetId());
 		}
-		for (const RoadJunctionApproach& approach : junction->GetApproaches()) {
-			for (const Node* inbound : approach.vehicleInbound) {
+		const auto& approachList = junction->GetApproaches();
+		for (size_t approachIndex = 0; approachIndex < approachList.size(); approachIndex++) {
+			for (const Node* inbound : approachList[approachIndex].vehicleInbound) {
 				auto it = vehicleGraph.find(inbound->GetId());
 				if (it == vehicleGraph.end()) continue;
 				for (const auto& [neighborId, connection] : it->second) {
-					if (outboundIds.count(neighborId)) AddConnection(connection, Kind::Vehicle, junctionId);
+					if (outboundIds.count(neighborId)) AddConnection(connection, Kind::Vehicle, junctionId, static_cast<int>(approachIndex));
 				}
 			}
+		}
+		// 红绿灯：只有多于两条路的路口才有。
+		if (approachList.size() > 2) {
+			vector<float> angles;
+			vector<bool> hasInbound;
+			for (const RoadJunctionApproach& approach : approachList) {
+				angles.push_back(approach.angle);
+				hasInbound.push_back(!approach.vehicleInbound.empty());
+			}
+			SetSignalGroups(junctionId, PairApproaches(angles, hasInbound));
 		}
 
 		unordered_map<int, int> approachOfAnchor; // 行人锚点id -> 所属approach下标
@@ -161,11 +178,93 @@ void JunctionTraffic::BuildFromMap(const Map& map) {
 				auto other = approachOfAnchor.find(neighborId);
 				if (other == approachOfAnchor.end()) continue;
 				if (connection->CalcDistance() > kMaxPedestrianJunctionEdge) continue;
-				AddConnection(connection, other->second == approachIndex ? Kind::Crosswalk : Kind::Corner, junctionId);
+				// 横道两端在同一条道路的两侧：横穿的就是这条路，红绿灯看它的灯色。
+				if (other->second == approachIndex) AddConnection(connection, Kind::Crosswalk, junctionId, approachIndex);
+				else AddConnection(connection, Kind::Corner, junctionId);
 			}
 		}
 	}
 	BuildConflicts();
+}
+
+vector<int> JunctionTraffic::PairApproaches(const vector<float>& angles, const vector<bool>& hasInbound) {
+	vector<int> group(angles.size(), -1);
+	vector<int> left;
+	for (size_t i = 0; i < angles.size(); i++) {
+		if (i < hasInbound.size() && hasInbound[i]) left.push_back(static_cast<int>(i));
+	}
+	constexpr float kPi = 3.14159265358979f;
+	auto straightness = [&](int a, int b) { // 两条路夹角离180°差多少(弧度，0=正好一条直线)
+		float diff = fabsf(angles[a] - angles[b]);
+		diff = fmodf(diff, 2.f * kPi);
+		if (diff > kPi) diff = 2.f * kPi - diff;
+		return kPi - diff;
+	};
+	int next = 0;
+	while (left.size() >= 2) {
+		size_t bestI = 0, bestJ = 1;
+		float best = FLT_MAX;
+		for (size_t i = 0; i < left.size(); i++) {
+			for (size_t j = i + 1; j < left.size(); j++) {
+				const float value = straightness(left[i], left[j]);
+				if (value < best - 1e-5f) { best = value; bestI = i; bestJ = j; }
+			}
+		}
+		group[left[bestI]] = next;
+		group[left[bestJ]] = next;
+		next++;
+		left.erase(left.begin() + bestJ); // 先删后面的，前面的下标不变
+		left.erase(left.begin() + bestI);
+	}
+	if (!left.empty()) group[left.front()] = next;
+	return group;
+}
+
+void JunctionTraffic::SetSignalGroups(int junctionId, const vector<int>& groupOfApproach) {
+	int count = 0;
+	for (int g : groupOfApproach) count = max(count, g + 1);
+	if (count <= 0) {
+		signals.erase(junctionId);
+		return;
+	}
+	SignalPlan& plan = signals[junctionId];
+	plan.groupOfApproach = groupOfApproach;
+	plan.groupCount = count;
+}
+
+bool JunctionTraffic::HasSignal(int junctionId) const {
+	return signals.count(junctionId) != 0;
+}
+
+void JunctionTraffic::SetSignalActive(int junctionId, bool active, double now) {
+	auto it = signals.find(junctionId);
+	if (it == signals.end()) return;
+	if (active && !it->second.active) it->second.cycleStart = now; // 每次激活从第0组绿灯开始
+	it->second.active = active;
+}
+
+bool JunctionTraffic::IsSignalActive(int junctionId) const {
+	auto it = signals.find(junctionId);
+	return it != signals.end() && it->second.active;
+}
+
+JunctionTraffic::Signal JunctionTraffic::GetSignal(int junctionId, int approach, double now) const {
+	auto it = signals.find(junctionId);
+	if (it == signals.end() || !it->second.active) return Signal::None;
+	const SignalPlan& plan = it->second;
+	if (approach < 0 || approach >= static_cast<int>(plan.groupOfApproach.size())) return Signal::None;
+	const int group = plan.groupOfApproach[approach];
+	if (group < 0) return Signal::None;
+	const double slot = kGreenSeconds + kYellowSeconds;
+	double t = fmod(max(0.0, now - plan.cycleStart), slot * plan.groupCount);
+	const int current = min(plan.groupCount - 1, static_cast<int>(t / slot));
+	if (current != group) return Signal::Red;
+	return t - current * slot < kGreenSeconds ? Signal::Green : Signal::Yellow;
+}
+
+const vector<int>* JunctionTraffic::GetSignalGroups(int junctionId) const {
+	auto it = signals.find(junctionId);
+	return it != signals.end() ? &it->second.groupOfApproach : nullptr;
 }
 
 bool JunctionTraffic::IsManaged(const Connection* connection) const {
@@ -212,6 +311,38 @@ const Connection* JunctionTraffic::FindCrosswalk(float ax, float ay, float bx, f
 		}
 	}
 	return nullptr;
+}
+
+vector<JunctionTraffic::PathSpan> JunctionTraffic::FindVehicleSpans(const vector<pair<float, float>>& points, float tolerance) const {
+	vector<PathSpan> spans;
+	const float tolSq = tolerance * tolerance;
+	auto closeTo = [tolSq](const pair<float, float>& p, const Point& q) {
+		return (p.first - q.x) * (p.first - q.x) + (p.second - q.y) * (p.second - q.y) <= tolSq;
+	};
+	constexpr int kMaxSpanPoints = 256; // 一条路口连线在路径里最多占这么多个点(实际2~64)
+	const int count = static_cast<int>(points.size());
+	for (int i = 0; i < count; i++) {
+		const int cx = static_cast<int>(floorf(points[i].first)), cy = static_cast<int>(floorf(points[i].second));
+		int bestEntry = -1, bestEnd = count;
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dy = -1; dy <= 1; dy++) {
+				auto it = vehicleStartGrid.find(CellKey(cx + dx, cy + dy));
+				if (it == vehicleStartGrid.end()) continue;
+				for (int e : it->second) {
+					if (!closeTo(points[i], entries[e].polyline.front())) continue;
+					// 同一条驶入车道有左转/直行/右转几条连线：看终点先在路径里出现的是哪一条。
+					const int limit = min(count, i + kMaxSpanPoints);
+					for (int j = i + 1; j < limit && j < bestEnd; j++) {
+						if (closeTo(points[j], entries[e].polyline.back())) { bestEntry = e; bestEnd = j; break; }
+					}
+				}
+			}
+		}
+		if (bestEntry < 0) continue;
+		spans.push_back({ entries[bestEntry].connection, i, bestEnd });
+		i = bestEnd - 1; // 连线终点(驶出锚点)之后的点从下一个开始找
+	}
+	return spans;
 }
 
 void JunctionTraffic::Purge(Entry& entry, double now) const {
@@ -268,6 +399,19 @@ bool JunctionTraffic::Request(const Connection* connection, int64_t entity, doub
 	}
 
 	const bool isVehicle = GetEntityKind(entity) == EntityKind::Vehicle;
+	// 红绿灯：已激活的路口里，自己那条道路不是绿灯就不放(黄灯也不放新车，已经放行的车上面续租照常走完)。
+	// 被拒的车不进排队：它的排队时间比绿灯方早，进了排队会让绿灯方一直等一辆走不了的车。
+	// 行人反过来：横穿的那条路是红灯(那条路的车停着)才放，绿灯/黄灯都不放；已经在横道上的人上面续租照常走完。
+	if (entry.approach >= 0) {
+		const Signal signal = GetSignal(entry.junctionId, entry.approach, now);
+		const bool blocked = entry.kind == Kind::Vehicle
+			? signal == Signal::Red || signal == Signal::Yellow
+			: signal == Signal::Green || signal == Signal::Yellow;
+		if (blocked) {
+			entry.waiters.erase(entity);
+			return false;
+		}
+	}
 	auto waiter = entry.waiters.find(entity);
 	const double t0 = waiter != entry.waiters.end() ? waiter->second.t0 : now;
 	const bool exitOk = !isVehicle || exitFree - ReservedLength(entry.endId, now) >= length;

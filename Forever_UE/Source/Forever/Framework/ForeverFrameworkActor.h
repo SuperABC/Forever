@@ -41,6 +41,7 @@ class UForeverStoryFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
 class UForeverWaterFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
+class UForeverTrafficLightFrameworkComponent;
 class UForeverVegetationFrameworkComponent;
 class UForeverLampFrameworkComponent;
 class UForeverWeatherFrameworkComponent;
@@ -262,6 +263,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverTrafficFrameworkComponent> trafficFramework;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverTrafficLightFrameworkComponent> trafficLightFramework;
+
 	// 全图植被(行道树/公园树)统一渲染，见Source/Forever/Framework/ForeverVegetationFrameworkComponent.md。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverVegetationFrameworkComponent> vegetationFramework;
@@ -318,6 +322,7 @@ public:
 	FORCEINLINE UForeverStoryFrameworkComponent* GetStoryFramework() const { return storyFramework; }
 	FORCEINLINE UForeverTerrainFrameworkComponent* GetTerrainFramework() const { return terrainFramework; }
 	FORCEINLINE UForeverTrafficFrameworkComponent* GetTrafficFramework() const { return trafficFramework; }
+	FORCEINLINE UForeverTrafficLightFrameworkComponent* GetTrafficLightFramework() const { return trafficLightFramework; }
 	FORCEINLINE UForeverZoneFrameworkComponent* GetZoneFramework() const { return zoneFramework; }
 	FORCEINLINE UForeverDoorFrameworkComponent* GetDoorFramework() const { return doorFramework; }
 };

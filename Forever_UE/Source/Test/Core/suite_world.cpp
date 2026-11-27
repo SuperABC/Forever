@@ -19,6 +19,7 @@
 #include "player/vehicle_asset.h"
 #include "player/asset.h"
 #include "traffic/route.h"
+#include "traffic/junction.h"
 #include "player/player.h"
 
 #include <algorithm>
@@ -590,6 +591,121 @@ namespace {
 		}
 	}
 
+	// 红绿灯分组(JunctionTraffic::BuildFromMap)：多于两条路的路口都有信号表、其余没有；每条有驶入车道的路恰好在一组里，
+	// 只出不进的路不分组；每组1~2条、单独一组的最多一个且只在路数为奇数时出现；全路口最接近180°的那两条一定配成一对(贪心第一步)。
+	// 激活前当作没有灯，激活后正好有一组是绿灯；横道只在横穿的那条路不是绿灯时放行人。
+	void CheckSignalGroups(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		JunctionTraffic traffic;
+		traffic.BuildFromMap(*world.map);
+		const float pi = 3.14159265f;
+		auto deviation = [pi](float a, float b) {
+			float d = std::fabs(std::remainder(a - b, 2.f * pi));
+			return pi - d;
+		};
+		size_t signalJunctions = 0, crosswalkChecks = 0, crosswalkCollisions = 0, bad = 0;
+		string firstBad, firstCollision;
+		auto fail = [&](const string& why) { bad++; if (firstBad.empty()) firstBad = why; };
+		for (const RoadJunction* junction : world.map->GetJunctions()) {
+			if (!junction || !junction->GetNode()) continue;
+			const int id = junction->GetNode()->GetId();
+			const auto& approaches = junction->GetApproaches();
+			const string where = "junction " + to_string(id);
+			if (approaches.size() <= 2) {
+				if (traffic.HasSignal(id)) fail(where + " has a signal with only " + to_string(approaches.size()) + " roads");
+				continue;
+			}
+			const vector<int>* groups = traffic.GetSignalGroups(id);
+			if (!groups || groups->size() != approaches.size()) { fail(where + " has no signal table"); continue; }
+			signalJunctions++;
+			vector<int> inbound;
+			map<int, vector<int>> members;
+			for (size_t i = 0; i < approaches.size(); i++) {
+				const bool hasInbound = !approaches[i].vehicleInbound.empty();
+				const int g = (*groups)[i];
+				if (hasInbound != (g >= 0)) fail(where + " approach " + to_string(i) + (hasInbound ? " has no group" : " is outbound-only but grouped"));
+				if (hasInbound) inbound.push_back(static_cast<int>(i));
+				if (g >= 0) members[g].push_back(static_cast<int>(i));
+			}
+			size_t singles = 0;
+			for (const auto& [g, list] : members) {
+				if (list.empty() || list.size() > 2) fail(where + " group " + to_string(g) + " has " + to_string(list.size()) + " roads");
+				if (list.size() == 1) singles++;
+			}
+			if (singles != inbound.size() % 2) fail(where + " has " + to_string(singles) + " single-road groups for " + to_string(inbound.size()) + " inbound roads");
+			if (inbound.size() >= 2) {
+				float best = 1e9f;
+				int bestA = -1, bestB = -1;
+				for (size_t a = 0; a < inbound.size(); a++) for (size_t b = a + 1; b < inbound.size(); b++) {
+					float dev = deviation(approaches[inbound[a]].angle, approaches[inbound[b]].angle);
+					if (dev < best - 1e-5f) { best = dev; bestA = inbound[a]; bestB = inbound[b]; }
+				}
+				if ((*groups)[bestA] != (*groups)[bestB]) {
+					// 并列最直的情况允许任选其一：只要bestA的搭档同样直就行
+					bool tie = false;
+					for (int other : members[(*groups)[bestA]]) {
+						if (other != bestA && deviation(approaches[bestA].angle, approaches[other].angle) <= best + 1e-4f) tie = true;
+					}
+					for (int other : members[(*groups)[bestB]]) {
+						if (other != bestB && deviation(approaches[bestB].angle, approaches[other].angle) <= best + 1e-4f) tie = true;
+					}
+					if (!tie) fail(where + " does not pair its straightest two roads " + to_string(bestA) + "," + to_string(bestB));
+				}
+			}
+			if (!inbound.empty()) {
+				if (traffic.GetSignal(id, inbound[0], 1.0) != JunctionTraffic::Signal::None) fail(where + " shows a light before activation");
+				traffic.SetSignalActive(id, true, 0.0);
+				size_t green = 0;
+				for (int i : inbound) if (traffic.GetSignal(id, i, 1.0) == JunctionTraffic::Signal::Green) green++;
+				const size_t firstGroupSize = members.empty() ? 0 : members.begin()->second.size();
+				if (green == 0 || green != firstGroupSize) fail(where + " has " + to_string(green) + " green roads right after activation");
+				// 行人横道跟着横穿的那条路的灯：那条路绿灯时不放，红灯(或那条路不分组)时放。
+				for (size_t i = 0; i < approaches.size(); i++) {
+					const Node* p0 = approaches[i].pedestrianSide[0];
+					const Node* p1 = approaches[i].pedestrianSide[1];
+					if (!p0 || !p1) continue;
+					const Connection* crosswalk = traffic.FindCrosswalk(p0->GetX(), p0->GetY(), p1->GetX(), p1->GetY());
+					if (!crosswalk) continue;
+					// FindCrosswalk按位置找：别的路口如果有一条两端恰好在同一位置的横道，会先找到那条。只检查本路口这条。
+					const bool same = (crosswalk->GetStart().GetId() == p0->GetId() && crosswalk->GetEnd().GetId() == p1->GetId())
+						|| (crosswalk->GetStart().GetId() == p1->GetId() && crosswalk->GetEnd().GetId() == p0->GetId());
+					if (!same) {
+						crosswalkCollisions++;
+						string owner = "?";
+						for (const RoadJunction* other : world.map->GetJunctions()) {
+							if (!other || !other->GetNode()) continue;
+							for (const RoadJunctionApproach& a : other->GetApproaches()) {
+								if (a.pedestrianSide[0] && a.pedestrianSide[0]->GetId() == crosswalk->GetStart().GetId()) owner = to_string(other->GetNode()->GetId())
+									+ "@(" + to_string(other->GetNode()->GetX()) + "," + to_string(other->GetNode()->GetY()) + ")";
+								if (a.pedestrianSide[1] && a.pedestrianSide[1]->GetId() == crosswalk->GetStart().GetId()) owner = to_string(other->GetNode()->GetId())
+									+ "@(" + to_string(other->GetNode()->GetX()) + "," + to_string(other->GetNode()->GetY()) + ")";
+							}
+						}
+						if (firstCollision.empty()) firstCollision = where + "@(" + to_string(junction->GetNode()->GetX()) + "," + to_string(junction->GetNode()->GetY())
+							+ ") road " + to_string(i) + " crosswalk position also matches junction " + owner;
+						continue;
+					}
+					crosswalkChecks++;
+					const JunctionTraffic::Signal signal = traffic.GetSignal(id, static_cast<int>(i), 1.0);
+					const bool expected = signal != JunctionTraffic::Signal::Green && signal != JunctionTraffic::Signal::Yellow;
+					const int64_t ped = JunctionTraffic::MakeEntity(JunctionTraffic::EntityKind::Pedestrian, static_cast<int>(crosswalkChecks));
+					if (traffic.Request(crosswalk, ped, 1.0, 0.f, 1e9f) != expected) {
+						fail(where + " crosswalk over road " + to_string(i) + (expected ? " refused on red" : " granted on green"));
+					}
+					traffic.Leave(crosswalk, ped);
+				}
+				traffic.SetSignalActive(id, false, 2.0);
+			}
+		}
+		run.Metric("signal junctions", static_cast<double>(signalJunctions), "");
+		run.Metric("signal crosswalks", static_cast<double>(crosswalkChecks), "");
+		run.Metric("crosswalk position collisions", static_cast<double>(crosswalkCollisions), "");
+		if (!firstCollision.empty()) run.Note(firstCollision);
+		if (signalJunctions > 0 && crosswalkChecks == 0) fail("no crosswalk found at any signal junction");
+		run.Check(bad == 0, "junctions with more than two roads get signal groups that pair the straightest roads and cover every inbound road", firstBad);
+		if (signalJunctions == 0) run.Note("no junction with more than two roads in this seed's world, signal grouping not exercised");
+	}
+
 	// 销毁线路上的车(公交/火车/飞机)：线路不再认识它，之后交通照常能走一步(线路里不留它的指针)。必须在最后跑。
 	void CheckDestroyLineVehicle(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -634,6 +750,7 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckPopulaceAndSociety(world);
 	CheckRoomAssetDuplicate(world);
 	CheckPlacedAssets(world);
+	CheckSignalGroups(world);
 	CheckClockRemainder(world);
 	CheckDestroyVehicle(world); // 会销毁一辆车，必须最后跑
 	CheckDestroyLineVehicle(world);

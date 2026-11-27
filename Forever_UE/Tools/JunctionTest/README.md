@@ -9,4 +9,4 @@ MSBuild Tools/JunctionTest/JunctionTest.vcxproj -p:Configuration=Release -p:Plat
 x64/Release/JunctionTest.exe
 ```
 
-返回值 = 失败检查数。用例：冲突表（交叉/平行/分叉/汇入/横道/FindCrosswalk）、互斥+粘性+饿死、先来先走、人优先于更晚的车、租约过期、出口检查与预留、最长连续开放、随机压力（每步检查不变量并排空）。
+返回值 = 失败检查数。用例：冲突表（交叉/平行/分叉/汇入/横道/FindCrosswalk）、互斥+粘性+饿死、先来先走、人优先于更晚的车、租约过期、出口检查与预留、最长连续开放、红绿灯分组/车按灯/行人按灯（横穿的路红灯才放，已上横道的走完，转角不管）、路径点找路口连线、随机压力（每步检查不变量并排空）。

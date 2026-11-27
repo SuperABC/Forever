@@ -213,6 +213,10 @@ public:
 	// 脱困：物理车(被Controller驱动)超过这么多现实秒没前进就强制流式销毁，剩余路径交回Core推算；<=0关闭。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float stuckTimeoutSeconds = 60.f;
+	// 排队等灯/被前车挡着(控制器IsTrafficStopping)时脱困时限放宽到 stuckTimeoutSeconds×这个倍数：
+	// 红灯和长队不该被当成卡住交还Core(交回去就不守红绿灯了)，但真堵死的路口还是要能解开。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float trafficWaitStuckFactor = 5.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float stuckMoveThreshold = 100.f; // UE单位：离锚点超过这么远才算前进
 
@@ -265,6 +269,8 @@ private:
 	FLineVehicleState* FindOrAddLineVehicleState(const FString& vehicleName);
 	// 停着的车/已脱离时刻表的线路车是否正被线路控制器持续驱动（流式销毁时不能销毁）。
 	bool IsDrivenByController(const AVehicleElement* element) const;
+	// 正在驱动这辆车(有指令)的控制器(普通车的司机或线路控制器)，没有返回空。
+	const AVehicleCommandController* FindActiveDriver(const AVehicleElement* element) const;
 	// 收集使用这种载具(vehicleType = VehicleMod id)的线路的环线：每条 line 的站序节点 id。
 	void CollectLineLoops(const std::string& vehicleType, TArray<TArray<int32>>& outLoops) const;
 

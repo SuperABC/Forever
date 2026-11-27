@@ -13,11 +13,19 @@
 - **`RegisterGroundAssets()`**：开局和读档各调一次(`AForeverFrameworkActor`的"构建载具/恢复载具与玩家"阶段)，
   扫所有房间的`Room::assets`和`Player::worldAssets`，只登记不生成。房间mod布局时放的物品(床、仓库里的汉堡)、
   读档恢复的室内外物品都从这里进表——读档后室内物品看不见的问题就是这样解决的。
-- **`TickComponent`**(世界生成完之前不动，因为楼层地板要等那时才有碰撞)：以玩家Pawn为参考点，**水平距离**(不看高度，
-  和建筑近处细节的加载一致，站在楼下时整栋楼各层的物品都在范围内)小于`assetSpawnDistance`(16地图单位=160米)且没有实体就生成；
-  大于`assetDespawnDistance`(32=320米)且有实体就`WriteBackToCore`(把实际位置朝向写回`Asset`的地面摆位)再销毁。
-  每帧把整张表扫一遍(一张256的地图大约4000条)。**没有数量上限、没有每帧生成上限**(用户要求先不加，性能实测后再说)；
-  只保留`minAssetLifetime`(2秒)内不销毁，这是Chaos物理代理的安全要求。
+- **归属**：登记项记着物品归哪个房间(`FGroundEntry::room`，`Room::assets`里的)，`nullptr`=`Player::worldAssets`(室外的、扔出去的)。
+  `SpawnWorldAsset`按"是不是在玩家当前房间的`Room::assets`里"判断(在房间里丢下/拖出来的都进当前房间)。
+- **离开房间就不再属于房间**(`DetachFromRoom`，判断在`ABuildingElement`)：两种情况——可移动物品的实体出了它所在房间的触发盒(`OnRoomOverlapEnd`，物品网格开了重叠事件；物品自己的选项触发盒、物品流式销毁、房间盒随近处LOD销毁补发的EndOverlap都不算，最后一种靠"物品原点还在盒子里"排除)；或者房间盒刚建好时，这个房间在Core里持有的物品此刻位置已经不在盒子里(盒子没建时被推出去的，`DetachAssetsOutside`，位置用`GetCurrentLocation`：有实体取实体位置，没有取Core摆位，布局后还没生成过的不判断)。转的时候`Room::RemoveAsset`→`Player::AddWorldAsset`(有实体先把这一刻的实际位置写回Core)，登记项`room`置空、选项总能弹、进背包"附近"列表。被推进隔壁房间也一样变成室外物品，不会转进那个房间。室外已有同名物品时留在原房间。
+- **`TickComponent`**(世界生成完之前不动，因为楼层地板要等那时才有碰撞)，以玩家Pawn为参考点：
+  - **玩家换房间**(轮询`Player::currentRoom`，它由房间触发盒设置；读档后无条件重做一次)→`OnPlayerRoomChanged`：
+    离开的房间的固定物品撤掉实体，进入的房间里**有脚本的**固定物品生成实体(只有弹选项的触发盒，第一次生成时补发`game_start`)；
+    所有可移动物品的实体重设`SetOptionsAllowed`——房间里的物品只在玩家就在那个房间里时弹选项，触发盒伸过墙也不会在隔壁房间弹。
+  - **固定物品不按距离流式**：显示和阻挡跟房间家具一起由`ABuildingElement::BuildRoomFurniture`建进ISM，随建筑近处LOD和楼层预算加载/拆掉；
+    没有脚本的固定物品从来没有实体。
+  - **可移动物品按水平距离流式**：小于`assetSpawnDistance`(4地图单位=40米)且没有实体就生成，大于`assetDespawnDistance`(8=80米)
+    且有实体就`WriteBackToCore`(把实际位置朝向写回`Asset`的地面摆位)再销毁。每帧最多`maxAssetOpsPerTick`(4)个生成+销毁，
+    预算用完就停，下一帧从停下的下标(`streamCursor`)接着扫(一张256的地图大约4000条，扫一遍很便宜)。
+    `minAssetLifetime`(2秒)内不销毁，这是Chaos物理代理的安全要求。
 - **`SpawnWorldAsset(asset, location, rotation)`**：把物品放到地上=登记 + 把落点写进Core + 立刻生成实体。丢弃、投掷、
   背包面板拖出来都走它(都发生在玩家身边)。**`DestroyWorldAsset(asset)`**：物品离开地面=取消登记 + 销毁实体(没有实体就只取消登记)。
   **任何会delete一件"在地上"的`Asset`的地方都必须先调`DestroyWorldAsset`**，否则登记表里留着悬空指针，Tick里会解引用它。

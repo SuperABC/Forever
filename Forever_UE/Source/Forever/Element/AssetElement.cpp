@@ -1,6 +1,5 @@
 #include "Element/AssetElement.h"
 
-#include "Element/FurnitureCollision.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -24,6 +23,8 @@ AAssetElement::AAssetElement() {
 	mesh->SetCollisionProfileName(TEXT("PhysicsActor"));
 	mesh->SetSimulatePhysics(true);
 	mesh->SetEnableGravity(true);
+	// 要和房间触发盒产生重叠事件：被推出房间时(EndOverlap)转成不属于任何房间的物品，见ABuildingElement::OnRoomOverlapEnd。
+	mesh->SetGenerateOverlapEvents(true);
 	// 球体(投掷物)落地后会一直滚：Chaos里球体的滚动阻力几乎为0，角速度默认不衰减。加角阻尼让
 	// 滚动逐渐停下来；不加线性阻尼，免得飞行弧线和预览曲线差得更远。
 	mesh->SetAngularDamping(3.f);
@@ -61,33 +62,16 @@ void AAssetElement::Init(Asset* inAsset) {
 }
 
 void AAssetElement::SetupFixture() {
-	// 固定物品不动：不模拟物理、不受重力，网格只负责显示(家具网格没有自带的碰撞体)。
+	// 固定物品不动：不模拟物理、不受重力。显示和阻挡已经在房间家具的ISM里(ABuildingElement::BuildRoomFurniture)，
+	// 这里的网格只用来给触发盒量包围盒，隐藏且不碰撞。
 	mesh->SetSimulatePhysics(false);
 	mesh->SetEnableGravity(false);
 	mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mesh->SetGenerateOverlapEvents(false);
-	mesh->SetCastShadow(false); // 和房间家具一致：室内小件不投影
+	mesh->SetCastShadow(false);
+	mesh->SetVisibility(false);
+	mesh->SetHiddenInGame(true);
 	mesh->SetMobility(EComponentMobility::Static);
-
-	UStaticMesh* staticMesh = mesh->GetStaticMesh();
-	if (!staticMesh) return;
-	// 阻挡：和房间家具同一套分块盒子(网格局部系)。盒子挂在根下面，根的缩放自动作用到盒子的位置和尺寸上。
-	const FBoxSphereBounds bounds = staticMesh->GetBounds();
-	const FVector boundsMin = bounds.Origin - bounds.BoxExtent, boundsMax = bounds.Origin + bounds.BoxExtent;
-	if ((boundsMax.Z - boundsMin.Z) * GetActorScale3D().Z < FurnitureCollision::kMinBlockingHeight) return; // 薄片不挡路
-	TArray<FBox> boxes;
-	FurnitureCollision::GetBoxes(UTF8_TO_TCHAR(asset->GetMeshPath().c_str()), boundsMin, boundsMax, boxes);
-	for (const FBox& part : boxes) {
-		UBoxComponent* blocker = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
-		blocker->SetMobility(EComponentMobility::Static);
-		blocker->SetBoxExtent(part.GetExtent());
-		blocker->SetupAttachment(RootComponent);
-		blocker->SetRelativeLocation(part.GetCenter());
-		blocker->SetGenerateOverlapEvents(false);
-		blocker->SetCanEverAffectNavigation(false);
-		FurnitureCollision::ApplyBlockingResponse(blocker);
-		blocker->RegisterComponent();
-	}
 }
 
 void AAssetElement::BuildProximityBox() {
@@ -155,7 +139,14 @@ void AAssetElement::HideOptions() {
 void AAssetElement::RefreshOptions() {
 	if (!proximityBox || !asset) return;
 	BakeOptions();
-	if (bPlayerInBox) ShowOptions();
+	if (bPlayerInBox && bOptionsAllowed) ShowOptions();
+}
+
+void AAssetElement::SetOptionsAllowed(bool bAllowed) {
+	if (bOptionsAllowed == bAllowed) return;
+	bOptionsAllowed = bAllowed;
+	if (!bPlayerInBox) return;
+	if (bOptionsAllowed) ShowOptions(); else HideOptions();
 }
 
 void AAssetElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -164,7 +155,7 @@ void AAssetElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AAc
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn || !Cast<AForeverCharacter>(OtherActor)) return;
 	bPlayerInBox = true;
-	ShowOptions();
+	if (bOptionsAllowed) ShowOptions();
 }
 
 void AAssetElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

@@ -73,6 +73,7 @@
 #include "HAL/PlatformTime.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
+#include "Framework/ForeverTrafficLightFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverRoadnetFrameworkComponent.h"
@@ -109,6 +110,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	terrainFramework = CreateDefaultSubobject<UForeverTerrainFrameworkComponent>(TEXT("TerrainFramework"));
 	waterFramework = CreateDefaultSubobject<UForeverWaterFrameworkComponent>(TEXT("WaterFramework"));
 	trafficFramework = CreateDefaultSubobject<UForeverTrafficFrameworkComponent>(TEXT("TrafficFramework"));
+	trafficLightFramework = CreateDefaultSubobject<UForeverTrafficLightFrameworkComponent>(TEXT("TrafficLightFramework"));
 	vegetationFramework = CreateDefaultSubobject<UForeverVegetationFrameworkComponent>(TEXT("VegetationFramework"));
 	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
 	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));

@@ -8,6 +8,7 @@
 
 class AAssetElement;
 class Asset;
+class Room;
 class Script;
 class PickAssetChange;
 class GrantAssetChange;
@@ -36,12 +37,15 @@ public:
 	// 实体由TickComponent按距离生成。
 	void RegisterGroundAssets();
 
-	// 流式距离(地图单位，1=10米)：玩家到物品的水平距离小于assetSpawnDistance就生成实体，大于assetDespawnDistance就把位置
-	// 写回Core再销毁实体。和建筑近处细节(家具等)的加载距离是同一组数。没有数量上限和每帧生成上限。
+	// 可移动物品的流式距离(地图单位，1=10米)：玩家到物品的水平距离小于assetSpawnDistance就生成实体，大于assetDespawnDistance
+	// 就把位置写回Core再销毁实体。固定物品不走这个：显示跟房间家具一起建，弹选项的实体只在玩家进了它所在的房间时才有。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
-	float assetSpawnDistance = 16.f;
+	float assetSpawnDistance = 4.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
-	float assetDespawnDistance = 32.f;
+	float assetDespawnDistance = 8.f;
+	// 可移动物品每帧最多生成+销毁这么多个，剩下的下一帧接着做(从上次停下的地方往后扫)。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
+	int32 maxAssetOpsPerTick = 4;
 	// 实体生成后至少存在这么久(秒)才允许流式销毁：Chaos物理代理没建好就销毁会出问题，不是性能限制。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Asset|Streaming")
 	float minAssetLifetime = 2.f;
@@ -67,6 +71,15 @@ public:
 	// 物品离开地面(被捡走/要销毁)：取消登记并销毁实体(没有实体就只取消登记)——不delete Asset本身，调用方负责它的生命周期。
 	// 任何会delete一件"在地上"的Asset的地方都必须先调它，否则登记表里留着悬空指针。
 	void DestroyWorldAsset(Asset* asset);
+
+	// 物品此刻的世界位置(UE坐标)：有实体取实体位置(Core里的地面摆位只在实体销毁/存档时才写回)，没有就取Core的地面摆位。
+	// 房间mod布局后还没生成过的(restOnBottom：z是底面该落的高度，不是原点)返回false——它没动过，不用判断出没出房间。
+	bool GetCurrentLocation(Asset* asset, FVector& out) const;
+
+	// 可移动物品出了它所在的房间(ABuildingElement判断：房间盒的EndOverlap，或者房间盒建好时它已经不在盒子里)：
+	// 所有权从Room::assets转给Player::worldAssets(有实体就先把实际位置写回Core)，之后不属于任何房间
+	// (选项总能弹，背包"附近"列表里有它)。不在这个房间里、固定物品、室外已有同名物品时什么都不做。
+	void DetachFromRoom(Asset* asset, Room* room);
 
 	// 按资产名字找场景里的实体(在地上、并且当前在流式范围内已经生成的才有)，找不到返回nullptr。
 	AAssetElement* FindElementByName(const FString& name) const;
@@ -100,6 +113,7 @@ private:
 	// 被引擎销毁(掉出世界等)后自动失效，下次进入范围会按最后已知位置重新生成。
 	struct FGroundEntry {
 		Asset* asset = nullptr;
+		Room* room = nullptr;                      // 归哪个房间(Room::assets)；nullptr=Player::worldAssets(室外/扔出去的)
 		FString name;                              // 登记时拷一份，取消登记时不用再碰asset
 		FVector location = FVector::ZeroVector;     // 最后已知位置(UE单位)，没有实体时按它算距离
 		FRotator rotation = FRotator::ZeroRotator;
@@ -110,8 +124,16 @@ private:
 	TMap<Asset*, int32> entryIndexByAsset;
 	TMap<FString, Asset*> assetByName;
 	bool bGroundRegistered = false;
+	int32 streamCursor = 0;               // 可移动物品流式扫描上一帧停在哪个下标
+	// 上一次处理过的玩家所在房间(只比较，不解引用)；bRoomKnown=false时下一帧无条件按当前房间重新处理一遍。
+	Room* optionRoom = nullptr;
+	bool bRoomKnown = false;
 
-	int32 AddGroundEntry(Asset* asset);   // 已登记的返回原下标
+	int32 AddGroundEntry(Asset* asset, Room* room = nullptr);   // 已登记的返回原下标(room以第一次登记为准)
+	// 玩家换了房间：撤掉旧房间固定物品的选项实体、给新房间有脚本的固定物品生成选项实体，并重设所有可移动物品能不能弹选项。
+	void OnPlayerRoomChanged(Room* current);
+	// 物品实体此刻能不能弹选项：室外的物品总能；房间里的只在玩家就在那个房间里时能。
+	bool CanShowOptions(const FGroundEntry& entry) const { return !entry.room || entry.room == optionRoom; }
 	void RemoveGroundEntry(Asset* asset);
 	// 生成实体(先补发脚本的game_start)；脚本把这件物品弄走了就返回nullptr。会改动groundEntries，调用后别再用旧的引用。
 	AAssetElement* SpawnElementFor(Asset* asset);

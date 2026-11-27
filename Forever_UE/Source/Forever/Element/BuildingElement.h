@@ -155,6 +155,11 @@ private:
 
 	// 某一层所有Room的进入/离开检测碰撞盒，随这一层的BuildFloorExtras创建，离开近处时统一销毁。
 	void BuildRoomCollisionBoxes(int32 level);
+	// 房间盒刚建好：Core里这个房间持有的可移动物品，此刻位置不在盒子里的(盒子没建时被推出去的)转成直接放在场景里的物品。
+	void DetachAssetsOutside(Room* room, const UBoxComponent* box);
+	// 世界坐标点在不在盒子里(盒子局部坐标和未缩放的半尺寸比)。
+	static bool IsInsideBox(const UBoxComponent* box, const FVector& point);
+	class UForeverAssetFrameworkComponent* FindAssetFramework() const;
 
 	UFUNCTION()
 	void OnRoomOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

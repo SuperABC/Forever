@@ -97,6 +97,8 @@ public:
 	// 倒车出库阶段：waypoints = 车当前位置、倒车终点、之后的路径点，outReverseFirst=true(第一段是倒车)。
 	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, bool* outReverseFirst = nullptr) const;
 	bool IsReversing() const { return bReversing; }
+	// 正在开、但被前车/路口(含红灯)挡着要停住。交通组件的脱困计时用它区分"排队等灯"和"真卡住"。
+	bool IsTrafficStopping() const { return state == EState::Driving && bTrafficStoppingNow; }
 
 	// NavigateToNode指令结束时回调(bArrived=false表示规划不到)，在指令已出队、控制器回到Idle之后调用，
 	// 所以回调里可以直接PushCommand。LoopNodes不回调。
@@ -293,6 +295,7 @@ private:
 	float dwellRemaining = 0.f;
 	float dwellTotal = 0.f;
 	float stuckSeconds = 0.f;
+	bool bTrafficStoppingNow = false; // 最近一帧ComputeTrafficLimit是否要求停住(IsTrafficStopping)
 	float halfLength = 0.f;     // 车身半长（UE单位），第一次用到时从骨骼网格取
 	FLeader obstacle;           // ScanObstacles的缓存结果(rearS在路径弧长上)
 	bool bObstacle = false;

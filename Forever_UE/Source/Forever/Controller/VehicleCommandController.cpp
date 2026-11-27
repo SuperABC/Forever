@@ -206,7 +206,20 @@ void AVehicleCommandController::StartNextCommand()
 		targetNode = command->node;
 		const TArray<FVector> waypoints = command->waypoints;
 		const bool bReverseFirst = command->bReverseFirst;
-		if (!FollowPoints(waypoints, bReverseFirst, TArray<FEdgeSpan>())) {
+		// 这串点是Core推算的剩余路线(流式接手、读档恢复的车)，不带路口信息：按路口连线的起终锚点在点列里找出
+		// 经过的路口，这些车也参与路口调度和红绿灯。
+		TArray<FEdgeSpan> spans;
+		if (ownerFramework.IsValid()) {
+			if (JunctionTraffic* junctionTraffic = ownerFramework->GetJunctionTraffic()) {
+				std::vector<std::pair<float, float>> points;
+				points.reserve(waypoints.Num());
+				for (const FVector& p : waypoints) points.emplace_back(p.X / kVehicleControllerWorldScale, p.Y / kVehicleControllerWorldScale);
+				for (const JunctionTraffic::PathSpan& span : junctionTraffic->FindVehicleSpans(points)) {
+					spans.Add({ span.connection, waypoints[span.fromIndex], waypoints[span.toIndex] });
+				}
+			}
+		}
+		if (!FollowPoints(waypoints, bReverseFirst, spans)) {
 			const int32 failedNode = command->node;
 			FinishCommand();
 			if (navigateFinished) navigateFinished(this, failedNode, false);
@@ -1034,6 +1047,7 @@ void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, flo
 	const float remain = path.total - pathS;
 	bool bTrafficStopping = false;
 	const float trafficLimit = ComputeTrafficLimit(vehicle, speed, bTrafficStopping);
+	bTrafficStoppingNow = bTrafficStopping;
 
 	// 到站判定：够近且够慢；或者非常近；或者在终点附近卡住不动。
 	if (remain < 40.f || (remain <= arriveDistance && FMath::Abs(speed) < arriveSpeed)) {
@@ -1099,6 +1113,7 @@ void AVehicleCommandController::TickDrivingKinematic(AVehicleElement* vehicle, f
 {
 	bool bTrafficStopping = false;
 	const float trafficLimit = ComputeTrafficLimit(vehicle, kinSpeed, bTrafficStopping);
+	bTrafficStoppingNow = bTrafficStopping;
 	const float targetSpeed = FMath::Min(path.SpeedAt(pathS), trafficLimit);
 	if (kinSpeed < targetSpeed) kinSpeed = FMath::Min(targetSpeed, kinSpeed + maxAccel * deltaTime);
 	else kinSpeed = FMath::Max(targetSpeed, kinSpeed - maxBrakeDecel * deltaTime);

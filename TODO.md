@@ -80,12 +80,14 @@
 - [ ] **站点挂载方式**只有"挂建筑"和"贴路"两种（`station_mod.md`）。
 - [ ] **线路车不能驾驶**（`VehicleMod::drivable` 预留）（`TransitVehicleElement.md`）。
 - [ ] **车辆控制器**：起步朝向和首段路径差很大时靠打满方向盘宽转弯，可能蹭墙；不处理倒车掉头；不做避障（`VehicleCommandController.md`）。
+- [ ] **红绿灯**：行人只在横穿的那条路红灯时过横道，但没有单独的行人灯模型；哪些路口放灯不能在地图编辑器里配置（现在多于两条路的路口全放）；灯位按行道树对齐，但比例 0.25 是从 Basic 路网 mod 的 `TREE_SIDEWALK_RATIO` 抄到 UE 里写死的（Core/UE 本不该知道 mod 的摆放规则，应改成路网 mod 提供灯位或比例），不能调；绿15秒/黄3秒写死在 `junction.h`（`junction.md`、`ForeverTrafficLightFrameworkComponent.md`）。
 - [ ] **园区车行门**按玩家距离加载，不按车辆的流式距离，车在范围外撞门时门可能还没生成（`ForeverDoorFrameworkComponent.md`）。
 - [ ] **飞机**：起落架收放、襟翼、油量、碰撞损毁没做；轮子没刷权重时不随转动画（`PlaneElement.md`）。
 
 ### 物品、武器、战斗
 
 - [ ] **烟雾弹落地效果**没做（`asset_smoke_grenade.md`、`ForeverThrowableComponent.md`）。
+- [ ] **房间物品的选项按归属房间算**：固定物品（床）的 `game_start` 推迟到玩家第一次进它所在的房间才发，房间物品的脚本不能指望开局就跑；可移动物品是按"出了房间触发盒"判断离开房间的，盒子四周比墙缩了10cm，贴墙不到10cm的物品也会被当成出了房间（`ForeverAssetFrameworkComponent.md`）。
 - [ ] **物品网格**：除手雷、烟雾弹、汉堡外，其余物品掉在地上仍是 Cube 占位，等美术资产到了在各自的 `AssetMod` 里填 `meshPath`（`ForeverAssetFrameworkComponent.md`）。
 - [ ] **伤害**：攻击者那边没有"造成伤害"事件；载具不受伤害；`area_damage` 只测中心到中心一条线的遮挡，没有部分遮挡比例，也没有 `ignore` 字段（手雷会炸到自己）；爆炸没有冲击力（`ForeverDamage.md`、`asset_grenade.md`、`ForeverRocketProjectile.md`）。
 - [ ] **火箭弹**弹道沿镜头方向、从枪口出发，没有向瞄准点修正（`ForeverRocketProjectile.md`、`weapon_rpg.md`）。

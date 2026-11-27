@@ -575,12 +575,16 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 			// 脱困：在开却长时间没前进(现实时间)，强制交回Core推算。暂停时不计。
 			if (stuckTimeoutSeconds > 0.f && DeltaTime > 0.f && !GetWorld()->IsPaused()) {
 				const double realNow = FPlatformTime::Seconds();
+				// 等红灯/排队(被路口或前车挡着)时限放宽，免得排长队的车被交还Core后无视红灯。
+				const AVehicleCommandController* activeDriver = FindActiveDriver(element);
+				const float timeout = activeDriver && activeDriver->IsTrafficStopping() ?
+					stuckTimeoutSeconds * FMath::Max(1.f, trafficWaitStuckFactor) : stuckTimeoutSeconds;
 				if (entry.stuckSinceReal == 0.0 || FVector::Dist(entry.location, entry.stuckAnchor) > stuckMoveThreshold) {
 					entry.stuckAnchor = entry.location;
 					entry.stuckSinceReal = realNow;
 				}
-				else if (realNow - entry.stuckSinceReal >= stuckTimeoutSeconds) {
-					UE_LOG(LogTemp, Warning, TEXT("脱困：车辆 %s 超过%.0f秒没有前进，强制流式销毁并交回Core推算。"), *entry.name, stuckTimeoutSeconds);
+				else if (realNow - entry.stuckSinceReal >= timeout) {
+					UE_LOG(LogTemp, Warning, TEXT("脱困：车辆 %s 超过%.0f秒没有前进，强制流式销毁并交回Core推算。"), *entry.name, timeout);
 					entry.stuckSinceReal = realNow; // 交不回去(线路车等)就再等一个周期
 					if (HandBackDriveToCore(entry)) {
 						entry.respawnBlockedUntil = GetWorld()->GetTimeSeconds() + 30.0;
@@ -1405,15 +1409,19 @@ UForeverTrafficFrameworkComponent::FLineVehicleState* UForeverTrafficFrameworkCo
 }
 
 bool UForeverTrafficFrameworkComponent::IsDrivenByController(const AVehicleElement* element) const {
-	if (!element || !element->GetVehicle()) return false;
+	return FindActiveDriver(element) != nullptr;
+}
+
+const AVehicleCommandController* UForeverTrafficFrameworkComponent::FindActiveDriver(const AVehicleElement* element) const {
+	if (!element || !element->GetVehicle()) return nullptr;
 	const FString elementName = UTF8_TO_TCHAR(element->GetVehicle()->GetName().c_str());
 	if (const TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(elementName)) {
-		if (driver->IsValid() && (*driver)->HasCommands()) return true;
+		if (driver->IsValid() && (*driver)->HasCommands()) return driver->Get();
 	}
 	const FLineVehicleState* state = lineVehicleStates.Find(elementName);
-	if (!state) return false;
+	if (!state) return nullptr;
 	const AVehicleCommandController* controller = state->controller.Get();
-	return controller && controller->HasCommands();
+	return controller && controller->HasCommands() ? controller : nullptr;
 }
 
 AVehicleElement* UForeverTrafficFrameworkComponent::FindLinePhysicsElement(const FString& vehicleName) const {

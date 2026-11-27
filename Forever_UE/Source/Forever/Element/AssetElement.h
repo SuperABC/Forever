@@ -15,7 +15,8 @@ class Asset;
 
 // 物品/资产在世界里的可视化表示，不持有Asset的所有权，见AssetElement.md。两种形态：
 //   普通物品(有AssetMod)：物理体(Cube占位或mod指定的网格)，能被推动、捡走。
-//   固定物品(Asset::IsFixture()，没有AssetMod)：静止不动、不模拟物理，网格本身不碰撞，阻挡用和家具同一套的分块盒子。
+//   固定物品(Asset::IsFixture()，没有AssetMod)：显示和阻挡跟房间家具一起由ABuildingElement建(ISM)，这个Actor只剩
+//   弹选项的触发盒(网格隐藏、不碰撞)，玩家进了这件物品所在的房间才生成。
 UCLASS()
 class FOREVER_API AAssetElement : public AActor
 {
@@ -42,11 +43,15 @@ public:
 	// 调用)：重新烘焙快照；玩家站在触发盒里时同步换掉屏幕上的选项。没有触发盒(资产没有脚本)时空操作。
 	void RefreshOptions();
 
+	// 允不允许弹选项：房间里的物品只在玩家就在这个房间里时才弹(隔着墙站在隔壁房间不弹)，由物品组件在玩家换房间时设置。
+	// 玩家正站在触发盒里时立刻显示/撤掉屏幕上的选项。默认允许。
+	void SetOptionsAllowed(bool bAllowed);
+
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	// 固定物品：关掉物理和网格碰撞，按FurnitureCollision::GetBoxes建若干阻挡盒(挡人/物理物体/射线/相机)。
+	// 固定物品：关掉物理和网格碰撞、隐藏网格(显示和阻挡在房间家具的ISM里)，只留触发盒。
 	void SetupFixture();
 
 	// 资产带脚本(asset->GetScript()非空)才建：只overlap的触发盒(普通物品是原点周围120x120x80cm；固定物品是网格包围盒
@@ -72,6 +77,7 @@ private:
 	FString assetNameOnly;
 	TArray<FString> cachedOptions;
 	bool bPlayerInBox = false;
+	bool bOptionsAllowed = true;
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> mesh;

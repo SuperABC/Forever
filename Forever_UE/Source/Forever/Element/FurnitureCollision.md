@@ -3,7 +3,7 @@
 ## 职责
 
 家具的阻挡碰撞。家具网格(`Tools/Furniture/make_furniture.py`生成)本身不带碰撞体，阻挡用若干个盒子拼出来。
-房间家具(`ABuildingElement::BuildRoomFurniture`的碰撞ISM)和固定物品的场景实体(`AAssetElement::SetupFixture`)共用这一份。
+房间家具和固定物品(床之类，2026-11-27起也在`ABuildingElement::BuildRoomFurniture`里)共用这一份，都进那里的碰撞ISM。
 
 ## 关键设计
 
