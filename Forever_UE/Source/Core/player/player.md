@@ -11,7 +11,7 @@
 
 ## 时钟行为
 
-- `Init()`：创建`Time`，默认设为8点（年份等其余字段是`Time()`默认构造的"无效时间"）。
+- `Init()`：创建`Time`，默认设为`kStartHour`(7)点（年份等其余字段是`Time()`默认构造的"无效时间"）。
   紧接着`AForeverFrameworkActor::EnsurePlayerGenerated()`会调用一次`SetTime`把年份改成
   市民繁衍模拟算出来的年份，见下"开局时间=人口模拟结束年份"一节——`Init()`本身不处理
   这件事，只负责先把时钟建好。
@@ -44,7 +44,7 @@ EnsurePlayerGenerated()`在`player->Init()`之后把这个年份喂回`Player`�
 player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 ```
 
-开局时间固定是模拟结束那一年的**1月1日8点**。
+开局时间固定是模拟结束那一年的**1月1日7点**(`Player::kStartHour`，UE建世界和CoreTest共用)。2026-11-27从8点改成7点：`next`计时器在钟点正好等于现在时排到明天(见`story.md`)，开局正好8点的话8点上班的人当天不出门；提前一小时开局，第一天的上班照常。
 
 ## 生命值
 

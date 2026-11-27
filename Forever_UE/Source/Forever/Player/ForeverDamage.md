@@ -16,6 +16,9 @@
 - `ClassifyPart`：命中点在胶囊体上的相对高度，顶部20%=head、40%以下=legs、其余=body。`ParseVec3`：解析脚本里`"(x, y, z)"`字符串，`spawn_effect`/`area_damage`的`position`/`normal`共用。
 - 为什么用`ECC_Visibility`做遮挡而命中判定用`ECC_Pawn`：命中射线要打到市民胶囊体(Pawn预设忽略Visibility，用Visibility会穿过去)；遮挡射线找的是墙/地形，市民本来就不该挡，用Visibility正好。
 
+- **玩家被打死**(2026-11-27)：发完`citizen_decease`后先问`UForeverDeathFrameworkComponent::HandlePlayerDeath`，死的是玩家扮演的市民就由它接管(慢镜头/结算界面/复活)并直接返回，
+  不调`HandleCitizenDeath`(尸体留着演慢镜头，继续游戏时它再撤)；其余市民照旧。
+
 ## 依赖关系
 
 - 依赖：`Element/CitizenElement`、`Framework/ForeverFrameworkActor`/`ForeverStoryFrameworkComponent`/`ForeverPopulaceFrameworkComponent`、`story/event.h`、`populace/*`。

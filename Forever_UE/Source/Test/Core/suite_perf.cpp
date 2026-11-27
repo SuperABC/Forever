@@ -10,6 +10,7 @@
 #include "map/room.h"
 #include "populace/populace.h"
 #include "player/player.h"
+#include "society/society.h"
 
 #include <algorithm>
 #include <chrono>
@@ -116,6 +117,65 @@ namespace {
 		const double citizens = static_cast<double>(world.populace->GetCitizens().size());
 		if (citizens > 0) TestRun::Get().Metric("daily tick per 1000 citizens", Summarize(seconds).p50 / citizens * 1000.0, "s");
 	}
+
+	// 跳时间15天(死亡复活用的天数)的Core部分，步法同AForeverFrameworkActor::RunTimeSkipBudget：每步最多1小时、0点单独成站，
+	// 每步Step之后同一时刻反复TickPopulace/TickSociety排空到期项。不含UE层(应用Change、Actor、渲染)。分域耗时见WorldStepProfile。
+	void MeasureTimeSkip(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		WorldDomains domains;
+		domains.map = world.map;
+		domains.populace = world.populace;
+		domains.society = world.society;
+		domains.industry = world.industry;
+		domains.traffic = world.traffic;
+		domains.story = world.story;
+		domains.player = world.player;
+		domains.polit = world.polit;
+		WorldStepProfile profile;
+		WorldStepHooks hooks;
+		hooks.profile = &profile;
+		Time target = *world.player->GetTime();
+		target.AddDays(15);
+		int drainRounds = 0;
+		const auto begin = chrono::steady_clock::now();
+		while (*world.player->GetTime() < target) {
+			Time next = *world.player->GetTime();
+			next.AddHours(1);
+			Time midnight = *world.player->GetTime();
+			midnight.SetTime(0, 0, 0, 0);
+			midnight.AddDays(1);
+			if (midnight < next) next = midnight;
+			if (target < next) next = target;
+			world.player->SetTime(next);
+			WorldStep::Step(domains, world.player->CrossDay(), hooks);
+			PostImplement post(world.map, world.populace, world.society, world.story, world.industry, world.traffic, world.player);
+			for (int round = 0; round < 256; round++) {
+				const bool populaceDue = world.populace->HasDueTimers(*world.player->GetTime());
+				const bool societyDue = world.society->HasDueTimers(*world.player->GetTime());
+				if (!populaceDue && !societyDue) break;
+				drainRounds++;
+				if (populaceDue) WorldStep::TickPopulace(domains, false, post, hooks);
+				if (societyDue) WorldStep::TickSociety(domains, false, post, hooks);
+			}
+		}
+		const double total = chrono::duration<double>(chrono::steady_clock::now() - begin).count();
+		run.Metric("skip15.total", total, "s");
+		run.Metric("skip15.steps", profile.steps, "");
+		run.Metric("skip15.drain rounds", drainRounds, "");
+		run.Metric("skip15.populace ticks", profile.populaceTicks, "");
+		run.Metric("skip15.society ticks", profile.societyTicks, "");
+		run.Metric("skip15.map", profile.map, "s");
+		run.Metric("skip15.populace", profile.populace, "s");
+		run.Metric("skip15.society", profile.society, "s");
+		run.Metric("skip15.industry", profile.industry, "s");
+		run.Metric("skip15.economy", profile.economy, "s");
+		run.Metric("skip15.demography", profile.demography, "s");
+		run.Metric("skip15.immigration", profile.immigration, "s");
+		run.Metric("skip15.polit", profile.polit, "s");
+		run.Metric("skip15.traffic", profile.traffic, "s");
+		run.Metric("skip15.story", profile.story, "s");
+		run.Metric("skip15.citizens", static_cast<double>(world.populace->GetCitizens().size()), "");
+	}
 }
 
 void PerfSuiteBody(TestWorld& world, const TestOptions& options) {
@@ -131,6 +191,7 @@ void PerfSuiteBody(TestWorld& world, const TestOptions& options) {
 	RecordMemory("perform: after routing");
 	MeasureDailyTick(world, options);
 	RecordMemory("perform: after daily ticks");
+	MeasureTimeSkip(world);
 }
 
 void RunPerfSuite(const TestOptions& options) {

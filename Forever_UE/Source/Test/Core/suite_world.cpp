@@ -21,6 +21,7 @@
 #include "traffic/route.h"
 #include "traffic/junction.h"
 #include "player/player.h"
+#include "story/event.h"
 
 #include <algorithm>
 #include <cmath>
@@ -605,6 +606,51 @@ namespace {
 		if (factory.CheckRegistered("asset_burger")) run.Check(burgerHasMesh, "the burger asset mod reports its mesh path", "");
 	}
 
+	// 死亡复活点(Map::PickJunctionRespawn)：有路口时总能挑到，且挑到的一定是某个路口的行人锚点坐标。
+	// 顺带验player_decease/player_revive事件：name留空=不限，填了只匹配同名，local字段读得到。
+	void CheckJunctionRespawn(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		vector<const Node*> anchors;
+		for (const RoadJunction* junction : world.map->GetJunctions()) {
+			if (!junction) continue;
+			for (const RoadJunctionApproach& approach : junction->GetApproaches()) {
+				for (const Node* anchor : approach.pedestrianSide) if (anchor) anchors.push_back(anchor);
+			}
+		}
+		float x = 0.f, y = 0.f, z = 0.f;
+		const bool picked = world.map->PickJunctionRespawn(x, y, z);
+		run.Check(picked == !anchors.empty(), "PickJunctionRespawn succeeds exactly when some junction has a pedestrian anchor",
+			to_string(anchors.size()) + " anchors");
+		if (picked) {
+			size_t misses = 0;
+			for (int i = 0; i < 20; i++) {
+				if (!world.map->PickJunctionRespawn(x, y, z)) { misses++; continue; }
+				bool onAnchor = false;
+				for (const Node* anchor : anchors) {
+					if (anchor->GetX() == x && anchor->GetY() == y && anchor->GetZ() == z) { onAnchor = true; break; }
+				}
+				if (!onAnchor) misses++;
+			}
+			run.Check(misses == 0, "every respawn point is a junction pedestrian anchor", to_string(misses) + " of 20 off-anchor");
+		}
+
+		ScriptContext context;
+		PlayerDeceaseEvent decease("someone", "killer", "pistol", "head", "here");
+		PlayerDeceaseEvent anyDecease;
+		PlayerDeceaseEvent namedDecease("\"someone\"");
+		PlayerDeceaseEvent otherDecease("\"nobody\"");
+		run.Check(anyDecease.Match(&decease, context) && namedDecease.Match(&decease, context) && !otherDecease.Match(&decease, context),
+			"player_decease matches any name when empty and only the same name otherwise", "");
+		string killer;
+		decease.GetLocalValue("killer", [&](const ValueType& value) { killer = ToString(value); });
+		run.Check(killer == "killer", "player_decease exposes $$local.killer", killer);
+		PlayerReviveEvent revive("someone", "street");
+		PlayerReviveEvent anyRevive;
+		string location;
+		revive.GetLocalValue("location", [&](const ValueType& value) { location = ToString(value); });
+		run.Check(anyRevive.Match(&revive, context) && location == "street", "player_revive matches and exposes $$local.location", location);
+	}
+
 	// 红绿灯分组(JunctionTraffic::BuildFromMap)：多于两条路的路口都有信号表、其余没有；每条有驶入车道的路恰好在一组里，
 	// 只出不进的路不分组；每组1~2条、单独一组的最多一个且只在路数为奇数时出现；全路口最接近180°的那两条一定配成一对(贪心第一步)。
 	// 激活前当作没有灯，激活后正好有一组是绿灯；横道只在横穿的那条路不是绿灯时放行人。
@@ -766,6 +812,7 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckPlacedAssets(world);
 	CheckRegisteredMeshes();
 	CheckSignalGroups(world);
+	CheckJunctionRespawn(world);
 	CheckClockRemainder(world);
 	CheckDestroyVehicle(world); // 会销毁一辆车，必须最后跑
 	CheckDestroyLineVehicle(world);

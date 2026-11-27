@@ -14,6 +14,8 @@
   只有玩家正在操控的市民扣瞌睡值(`Populace::Tick`收`hooks.controlledCitizen`)，所以名单里最多就他一个，世界要跟着跳过这16小时：Core现场构造一条`PlayerSleepChange("16")`交给`hooks.onCitizenChanges`，
   UE层执行它时跳时间。这条逻辑不经过任何脚本。
 
+- **分段计时**(2026-11-27)：`hooks.profile`(`WorldStepProfile*`)非空时，各域耗时(墙钟秒)累加进去，populace/society含调用方应用Change的时间；还计Step/TickPopulace/TickSociety次数和跑了几次每日经济链。UE跳时间和CoreTest perform套件(`skip15.*`)用它。
+
 ## 依赖关系
 - 依赖：Map/Populace/Society/Polit/Industry/Traffic/Story/Player各域、Economy、Immigration、PostImplement。
 - 被谁用：`Source/Forever/Framework/ForeverFrameworkActor.cpp`、`Source/Test/Core`。

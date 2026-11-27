@@ -1092,3 +1092,49 @@ private:
 	std::string address;
 	std::string home;
 };
+
+// 玩家操控的市民死亡(死亡结算界面出现之前、跳时间之前)，发给全部脚本(含主线)，见event.md。
+// 字段同citizen_decease的运行时部分：name可以做过滤(留空=不限)，其余只能在脚本里读$$local.xxx。
+class PlayerDeceaseEvent : public Event {
+public:
+	PlayerDeceaseEvent(std::string name = std::string(), std::string killer = std::string(), std::string weapon = std::string(),
+		std::string part = std::string(), std::string location = std::string());
+
+	virtual ~PlayerDeceaseEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
+
+	const std::string& GetName() const;
+	const std::string& GetKiller() const;
+	const std::string& GetWeapon() const;
+	const std::string& GetPart() const;
+	const std::string& GetLocation() const;
+
+private:
+	std::string name;     // 死者(玩家操控的市民)姓名
+	std::string killer;   // 凶手姓名，没有/不在场景里为空
+	std::string weapon;   // 武器种类
+	std::string part;     // 致死部位 head/body/legs
+	std::string location; // 死亡地址(AForeverFrameworkActor::DescribeLocation)
+};
+
+// 玩家复活(继续游戏跳完时间、在复活点重新操控之后)，发给全部脚本(含主线)。name可以做过滤(留空=不限)。
+class PlayerReviveEvent : public Event {
+public:
+	PlayerReviveEvent(std::string name = std::string(), std::string location = std::string());
+
+	virtual ~PlayerReviveEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual bool GetLocalValue(const std::string& name, const ValueReceiver& receive) const override;
+
+	const std::string& GetName() const;
+	const std::string& GetLocation() const;
+
+private:
+	std::string name;     // 复活的市民姓名
+	std::string location; // 复活地址
+};

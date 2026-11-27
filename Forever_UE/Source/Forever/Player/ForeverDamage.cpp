@@ -4,6 +4,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
+#include "Framework/ForeverDeathFrameworkComponent.h"
 
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
@@ -60,16 +61,19 @@ void FForeverDamage::DamageCitizen(UWorld* world, ACitizenElement* target, float
 		return;
 	}
 
-	if (framework->GetStoryFramework()) {
-		// 击杀信息：凶手(source姓名)、武器种类、命中部位、致死伤害、凶手是否可见、死亡地址。
-		// 凶手可以为空或不在场景里(没实例化/已经销毁)，此时没有"是否可见"(false)。
-		ACitizenElement* killerElement = nullptr;
-		Citizen* killer = nullptr;
-		if (!source.empty() && framework->GetPopulace()) {
-			killer = framework->GetPopulace()->FindCitizenByName(source);
-			if (killer && framework->GetPopulaceFramework()) killerElement = framework->GetPopulaceFramework()->FindActiveCitizen(killer);
-		}
+	// 击杀信息：凶手(source姓名)、武器种类、命中部位、致死伤害、凶手是否可见、死亡地址。
+	// 凶手可以为空或不在场景里(没实例化/已经销毁)，此时没有"是否可见"(false)。
+	ACitizenElement* killerElement = nullptr;
+	Citizen* killer = nullptr;
+	if (!source.empty() && framework->GetPopulace()) {
+		killer = framework->GetPopulace()->FindCitizenByName(source);
+		if (killer && framework->GetPopulaceFramework()) killerElement = framework->GetPopulaceFramework()->FindActiveCitizen(killer);
+	}
+	const string killerName = killer ? killer->GetName() : string();
+	const string hitPart = part.empty() ? string("body") : part;
+	const string location = framework->DescribeLocation(target->GetActorLocation());
 
+	if (framework->GetStoryFramework()) {
 		// 凶手是否可见：连接死者和凶手中心点的线段有没有被遮挡物(墙等)挡住，两人自己不算遮挡。
 		bool visible = false;
 		if (killerElement) {
@@ -80,9 +84,12 @@ void FForeverDamage::DamageCitizen(UWorld* world, ACitizenElement* target, float
 				killerElement->GetActorLocation(), ECC_Visibility, sightParams);
 		}
 
-		CitizenDeceaseEvent event(citizen->GetName(), "player", killer ? killer->GetName() : string(), weapon,
-			part.empty() ? string("body") : part, damage, visible, framework->DescribeLocation(target->GetActorLocation()));
+		CitizenDeceaseEvent event(citizen->GetName(), "player", killerName, weapon, hitPart, damage, visible, location);
 		framework->GetStoryFramework()->BroadcastCitizenDecease(event);
+	}
+	// 死的是玩家扮演的市民：交给死亡流程(慢镜头/结算界面/复活)，尸体先留着，到继续游戏时才撤。
+	if (UForeverDeathFrameworkComponent* death = framework->GetDeathFramework()) {
+		if (death->HandlePlayerDeath(target, citizen, killerName, weapon, hitPart, location)) return;
 	}
 	if (framework->GetPopulaceFramework()) {
 		framework->GetPopulaceFramework()->HandleCitizenDeath(citizen);

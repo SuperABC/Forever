@@ -45,6 +45,8 @@
 - [ ] **武器状态不按角色持久化**（`ForeverWeaponComponent.md`）。
 - [ ] **玩家在餐厅购买 food 服务**（Core 接口和界面），玩家家庭按钱选超市汉堡或餐厅（`organization_restaurant.md`）。
 - [ ] **全局设置字典**（`GetGlobalSettings` 一类）还没实现（`Core/common/config.md`）。
+- [ ] **死亡复活改成医院**（用户 2026-11-27 要求记下）：现在还没有医院，"继续游戏"跳 15 天后在随机一个路口（人行道转角，`Map::PickJunctionRespawn`）复活。有医院以后改成：城里没有医院就不能复活（结算界面只剩退出游戏），有医院就在医院门口复活（`ForeverDeathFrameworkComponent.md`）。
+- [ ] **死亡流程的边角情况**（`ForeverDeathFrameworkComponent.md`）：开车时被打死，车留在原地没人开；死亡时正开着的剧情对话、商店界面不会被关掉。
 
 ### 剧情脚本
 

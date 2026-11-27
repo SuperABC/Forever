@@ -13,6 +13,8 @@
 - `TogglePause`:地图/手机/背包/谜题/商店/剧情对话/投掷物列表任何一个可见时不打开暂停界面(它们各自占着UI Only输入和键盘焦点);暂停界面打开后的关闭由`UPausePanelWidget`自己的`NativeOnKeyDown`处理,见`UI/PausePanelWidget.md`。
 - **投掷物选择列表**(`throwListWidget`,长按3):由`AForeverCharacter`在长按时`Open`,见`UI/ThrowListWidget.md`。
 - **开局黑屏**:控件由`UFadeSubsystem`持有(跨关卡),Controller只在`InitializeOnce`最后把`fadeWidgetClass`(`WBP_Fade`)登记给它并`EnsureBlack()`;没指定会警告。见`UI/FadeWidget.md`。
+- **死亡界面**(`deathWidget`,`deathWidgetClass`=WBP_Death,ZOrder 9):由`UForeverDeathFrameworkComponent`驱动,见`UI/DeathWidget.md`。玩家死亡流程中(`IsPlayerDead()`)手机/背包/地图/暂停/识别热键都不响应;
+  死亡时`CloseGameplayPanels()`关掉开着的手机/背包/地图/投掷物列表/识别模式。
 - **识别模式**(`identifyComponent`,按住鼠标中键):`Identify`热键的`Started`/`Completed`绑在这里转给`UForeverIdentifyComponent`(挂在Controller上)。Controller因此有构造函数(`CreateDefaultSubobject`)。见`ForeverIdentifyComponent.md`。
 - **不在这个Controller的热键**:滚轮上下(`MeetOptionUp/Down`)+`F`(`MeetOptionSelect`)对话选项,由`AForeverCharacter::SetupPlayerInputComponent`转发给这里持有的`MeetOptionWidget`;`Q`下车是`AVehicleElement`自己的`ExitVehicle`。
 

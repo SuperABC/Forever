@@ -26,6 +26,7 @@ class Time;
 class PostImplement;
 struct WorldStepHooks;
 struct WorldDomains;
+struct WorldStepProfile;
 class SpawnNpcChange;
 class NPCReviveChange;
 struct ScriptContext;
@@ -39,6 +40,7 @@ class UForeverRoomFrameworkComponent;
 class UForeverSkyFrameworkComponent;
 class UForeverStoryFrameworkComponent;
 class UForeverMusicFrameworkComponent;
+class UForeverDeathFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
 class UForeverWaterFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
@@ -95,7 +97,7 @@ public:
 	// 政治域:假定map/populace/society已生成;新开局建党派/抽党员/选会议室,读档按polit段恢复。并把政策绑给Society,见Core/polit/polit.md。
 	void EnsurePolitGenerated();
 
-	// 玩家:假定populace已生成(开局时间=populace当前年份1月1日8点,见populace.md"生日换算")。
+	// 玩家:假定populace已生成(开局时间=populace当前年份1月1日7点(Player::kStartHour),见populace.md"生日换算")。
 	void EnsureAssetsGenerated(); // 不动产/载具资产：归属和人口/社会就绪后建，见ForeverFrameworkActor.md
 	void EnsurePlayerGenerated();
 
@@ -121,7 +123,7 @@ public:
 	// 玩家的钱就是它在Ledger里的账户，物品在Player上，见Core/society/economy.md"玩家参与经济"。
 	Citizen* GetControlledCitizen() const;
 	// 玩家所扮演的市民：Pawn是市民时同GetControlledCitizen；开车/坐公交时取载具记的下车后回到的那个市民
-	// (同ForeverSaveSubsystem存档的做法)。传给Core做"玩家的人不离城/不自然死亡/不搬家"的保护。
+	// (同ForeverSaveSubsystem存档的做法)；死亡后等复活期间(没有Pawn)取死掉的那个市民。传给Core做"玩家的人不离城/不自然死亡/不搬家"的保护。
 	Citizen* GetPlayerCitizen() const;
 
 	// 统一的Change消费入口:任何地方产出的Change都通过它消费。先处理需要UE层能力的类型,
@@ -232,6 +234,14 @@ protected:
 	Time* skipTarget = nullptr;
 	double skipTotalSeconds = 0.0;
 	double skipDoneSeconds = 0.0;
+	TFunction<void()> skipFinished; // BeginTimeSkip的onFinished，FinishTimeSkip里黑屏渐隐之前调
+	// 跳时间分段计时(墙钟秒)，FinishTimeSkip里写日志并留给测试读，见.md"跳时间耗时统计"。
+	WorldStepProfile* skipProfile = nullptr; // Core各域，BeginTimeSkip里new
+	double skipBeginWall = 0.0, skipFirstWorkWall = 0.0, skipWorkSeconds = 0.0;
+	double skipStepWorldSeconds = 0.0, skipTripsSeconds = 0.0, skipDrainSeconds = 0.0, skipTimerSeconds = 0.0, skipChangeSeconds = 0.0;
+	int32 skipFrames = 0, skipChanges = 0;
+	TMap<FString, double> lastSkipMetrics;
+	void ReportTimeSkipStats();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;
@@ -286,6 +296,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverMusicFrameworkComponent> musicFramework;
 
+	// 玩家死亡：慢镜头+渐暗+结算界面、继续游戏跳时间后在复活点复活，见Source/Forever/Framework/ForeverDeathFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverDeathFrameworkComponent> deathFramework;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverZoneFrameworkComponent> zoneFramework;
 
@@ -300,7 +314,8 @@ protected:
 public:
 	// jump_time：把游戏时钟快进到target(必须晚于现在)，期间的计时器/经济/事件都照常发生。画面渐黑并显示进度，
 	// 每帧在预算内推进若干小步，完成后渐隐。跳的过程中再次调用被忽略。
-	void BeginTimeSkip(const Time& target);
+	// onFinished(可选)在跳完、黑屏渐隐之前调用一次。返回false=没开始(正在跳/世界没生成完/target不晚于现在)，onFinished不会被调。
+	bool BeginTimeSkip(const Time& target, TFunction<void()> onFinished = nullptr);
 	FORCEINLINE bool IsTimeSkipping() const { return bTimeSkipping; }
 	// 跳时间虚拟时钟：一条行程腿(步行/开车)在本步里提前走完后多出来的游戏秒，接着开始的下一条腿从中扣掉，
 	// 这样同一步内可以连续走完多条腿。只在腿完成的到达回调期间非零。
@@ -308,6 +323,8 @@ public:
 	FORCEINLINE void SetSkipCreditSeconds(double seconds) { skipCreditSeconds = seconds; }
 	// 跳时间进度(0..1)和说明文字，供黑屏进度条用；没在跳返回false。
 	bool GetTimeSkipProgress(float& outFraction, FText& outLabel) const;
+	// 上一次跳时间的分段耗时(名字->秒/次数)，跳完才有；UE测试的skip套件读它。
+	const TMap<FString, double>& GetLastTimeSkipMetrics() const { return lastSkipMetrics; }
 
 	FORCEINLINE UForeverAssetFrameworkComponent* GetAssetFramework() const { return assetFramework; }
 	FORCEINLINE UForeverBuildingFrameworkComponent* GetBuildingFramework() const { return buildingFramework; }
@@ -329,6 +346,7 @@ public:
 	FORCEINLINE UForeverSkyFrameworkComponent* GetSkyFramework() const { return skyFramework; }
 	FORCEINLINE UForeverStoryFrameworkComponent* GetStoryFramework() const { return storyFramework; }
 	FORCEINLINE UForeverMusicFrameworkComponent* GetMusicFramework() const { return musicFramework; }
+	FORCEINLINE UForeverDeathFrameworkComponent* GetDeathFramework() const { return deathFramework; }
 	FORCEINLINE UForeverTerrainFrameworkComponent* GetTerrainFramework() const { return terrainFramework; }
 	FORCEINLINE UForeverTrafficFrameworkComponent* GetTrafficFramework() const { return trafficFramework; }
 	FORCEINLINE UForeverTrafficLightFrameworkComponent* GetTrafficLightFramework() const { return trafficLightFramework; }

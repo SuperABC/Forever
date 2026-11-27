@@ -438,6 +438,13 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 		else if (type == "flee_end") {
 			event = new FleeEndEvent(obj["name"].AsString(), obj["from"].AsString(), obj["reason"].AsString());
 		}
+		else if (type == "player_decease") {
+			// name可以省略(留空=不限)；killer/weapon/part/location只在运行时事件里有，不能做过滤。
+			event = new PlayerDeceaseEvent(obj["name"].AsString());
+		}
+		else if (type == "player_revive") {
+			event = new PlayerReviveEvent(obj["name"].AsString());
+		}
 		else {
 			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Core/story/script.md。
 			THROW_EXCEPTION(DataException, "Event type not implemented yet: " + type + ".\n");

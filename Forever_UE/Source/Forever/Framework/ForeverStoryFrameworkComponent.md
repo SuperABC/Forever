@@ -51,7 +51,9 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 
 - **`ApplyControlChange`**：求值目标市民姓名，`UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName`（找不到则强制生成，不看距离），`APlayerController::Possess`切换操控权，
   移动模式/Input Mapping切换由`ACitizenElement::PossessedBy`自动完成；`Citizen::ActivateStats`实例化被操控市民的动态属性（饱食度）；
-  最后`UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled()`冻结世界直到建筑近处LOD队列清空，避免玩家先掉到没有细节的地面上。玩家操控权切换只有这一条路径，由剧情脚本触发。
+  最后`UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled()`冻结世界直到建筑近处LOD队列清空，避免玩家先掉到没有细节的地面上。
+  这一套在公开的`PossessCitizenByName(name)`里，剧情脚本的change_control和死亡复活(`UForeverDeathFrameworkComponent::Revive`)共用。
+- **`BroadcastToEveryone(event)`**：已经填好字段的事件发给全部Script(含主线)，`player_decease`/`player_revive`用。
 - **`ApplyStartPuzzle`**：求值小游戏id和可选`param`（没写就是空串，不求值），转给`AForeverPlayerController::GetPuzzleWidget()->StartPuzzle(id, param)`，记下启动脚本的稳定键。
   `param`是每次启动由剧情传入的动态参数（经`Puzzle::SetParam`→`PuzzleMod::SetParam`），跟`config.json` `puzzle_mods`的静态args是两回事，也不进存档（谜题进行中不能存档）。
 - **`ApplyEnterVehicle` / `ApplyBoardVehicle` / `ApplyLeaveVehicle` / `ApplyForceLeave`**：求值载具名后转发给`UForeverTrafficFrameworkComponent`的同名方法（`ApplyForceLeave`的载具名可为空，`bForce=true`）。

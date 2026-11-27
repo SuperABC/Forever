@@ -18,7 +18,7 @@
   没卸载干净时下一次`LoadLibrary`拿到旧dll镜像，表现为"代码改了、编译成功、PIE里跑的还是旧逻辑"。`EndPlay`/析构里都要**先`WaitForPendingPathfinding()`**
   等异步寻路任务跑完(后台线程还持有`map`/`populace`裸指针；不能用"派发GameThread任务再等"，会在GameThread上死锁)。
 - **每个`Ensure*Generated()`幂等，只保证自己那个域，不调别的域/步骤**，依赖顺序由`BuildGenerationStages`显式列出：人口要用`map`(`ComputeAccommodationTarget`/`Checkin`)；
-  社会要用`map`/`populace`；玩家要用`populace->GetCurrentYear()`(开局时间=那一年1月1日8点，让生日/年龄与时钟自洽，见`populace.md`"生日换算")；
+  社会要用`map`/`populace`；玩家要用`populace->GetCurrentYear()`(开局时间=那一年1月1日7点(`Player::kStartHour`)，让生日/年龄与时钟自洽，见`populace.md`"生日换算")；
   产业/交通按地图生成；剧情独立。
 - **载具在剧情之后生成**：`AVehicleElement::Init`会立刻烘焙`vehicle->GetOptions()`快照，而"上车"选项要等`game_start`广播后才被加上，所以`EnsureTrafficGenerated`只建Core对象，
   `GenerateVehicles`放在"构建载具"阶段(`ACitizenElement`同理等`game_start`后才流式生成)。
@@ -118,6 +118,9 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
    (`HasDueTimers`)→`DrainExpiredTimers`(story计时器)。
 3. `FinishTimeSkip`：结束跳时间模式、`ResyncLineVehiclesAfterTimeSkip`(线路车的物理车收回，以时刻表为准)、解锁输入、`ReleaseHold`渐隐。
 进度：`GetTimeSkipProgress`(已推进游戏秒/总秒)，黑屏进度条直接用。跳期间再触发jump_time被忽略。
+`BeginTimeSkip(target, onFinished)`：返回是否真的开始了；可选的`onFinished`在`FinishTimeSkip`里`UpdateSystemTime`之后、解锁输入和黑屏渐隐之前调一次(死亡复活用它在黑屏下重新操控，见`ForeverDeathFrameworkComponent.md`)。
+跳时间耗时统计(2026-11-27)：每次跳完`ReportTimeSkipStats`往日志写一行`跳时间耗时: ...`并存进`GetLastTimeSkipMetrics()`：总墙钟、等黑屏、预算内工作、预算外(渲染+其它Tick，按帧平均)、帧数，`StepWorld`/行程腿/排空到期项/story计时器/应用Change(秒和条数)，以及Core各域(`WorldStepProfile`，经`MakeStepHooks`的`hooks.profile`)。分项有重叠(应用Change也算在StepWorld和core.populace里)。
+玩家死亡：`deathFramework`(`UForeverDeathFrameworkComponent`)；复活跳时间期间没有Pawn，`GetPlayerCitizen`退回它记的死者，Core照样保护玩家的人。
 局限：走路用瞬移代替；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
 `StepWorld`/`TickPopulaceDomain`/`TickSocietyDomain`是从原Tick里抽出来的，顺序不能变。
 

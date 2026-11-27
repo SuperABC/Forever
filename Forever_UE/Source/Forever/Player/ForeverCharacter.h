@@ -40,6 +40,11 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
 
+	// 玩家操控的这个角色死了(UForeverDeathFrameworkComponent调)：停火/退出瞄准、第一人称切回第三人称、身体变布娃娃(没有物理资产就保持原姿势)，
+	// 之后每帧按真实时间把镜头拉远、绕着尸体慢慢转、画面褪色。不可逆：这个Actor随后会被撤掉。见ForeverCharacter.md"死亡镜头"。
+	void BeginDeathPresentation();
+	FORCEINLINE bool IsInDeathPresentation() const { return bDeathPresentation; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
@@ -301,6 +306,34 @@ protected:
 
 	// 按是否冲刺/游泳刷新MaxWalkSpeed和MaxFlySpeed。
 	void UpdateMoveSpeeds();
+
+	// ---- 死亡镜头(BeginDeathPresentation) ----
+	// 镜头拉远到的臂长(厘米)。
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float deathArmLength = 550.f;
+
+	// 镜头俯视角(度，负=往下看)。
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float deathCameraPitch = -35.f;
+
+	// 绕尸体转的速度(度/真实秒)。
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float deathOrbitSpeed = 10.f;
+
+	// 臂长/俯仰插值速度(FInterpTo的InterpSpeed，按真实时间)。
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float deathCameraInterpSpeed = 1.5f;
+
+	// 褪色到的饱和度(1=原色，0=黑白)和用的真实秒数。
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float deathSaturation = 0.15f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float deathDesaturateDuration = 2.5f;
+
+	bool bDeathPresentation = false;
+	float deathElapsed = 0.f; // 真实秒
+	void TickDeathPresentation(float realDeltaSeconds);
 
 	// 自己的游泳状态：游泳借用MOVE_Flying实现(没有水体PhysicsVolume，引擎的MOVE_Swimming会立刻被踢回Falling)。
 	bool bSwimState = false;

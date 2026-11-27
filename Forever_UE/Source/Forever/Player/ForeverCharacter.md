@@ -69,4 +69,9 @@ Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块
 - 第一人称下网格OwnerNoSee，`ToggleCameraView`把`VisibilityBasedAnimTickOption`强制成`AlwaysTickPoseAndRefreshBones`：否则动画被当成"没渲染"而停更，第一人称相机(挂head骨骼)1~2秒后不再随步伐晃，瞄准的武器(挂胶囊体)与镜头就变成相对静止。
 - **相机**：第三人称弹簧臂连接点只在游泳/潜水时从胶囊体中心抬到头部(`cameraBoomHeight`默认70cm，`EnterSwimming`加上、`ExitSwimming`恢复到BeginPlay记下的原位置)。第一人称相机每帧在head骨骼上加`firstPersonCameraRaise`(默认15cm，世界向上，转成骨骼局部坐标)。
 - **游泳时缩短胶囊体**：竖直的站立胶囊体下端在水面下约`-swimFloatOffset+半高`(≈156cm)，比出水深度(0.6身高≈115cm)深，会在能出水之前就顶住岸坡。`EnterSwimming`把胶囊体缩成`swimCapsuleHalfHeight`(默认45，半径不变，以中心为基准，网格/相机/浮高不动)；`ExitSwimming`恢复站立尺寸并同时上移半高差值，保持下端位置不变，免得嵌进岸坡(出水时会有一点上移)。入水/出水阈值用BeginPlay缓存的站立身高，不读当前胶囊体。
+- **死亡镜头**(2026-11-27，`BeginDeathPresentation`，由`UForeverDeathFrameworkComponent`在玩家操控的这个角色被打死时调)：停火、退出瞄准/冲刺/游泳，第一人称切回第三人称；
+  移动关掉、胶囊体原地不动(碰撞不关，关了会发离开房间/建筑的重叠结束事件，只忽略`ECC_PhysicsBody`)；网格有物理资产就换`Ragdoll`碰撞预设全身模拟(带上死前速度)，没有就保持姿势。
+  之后`Tick`只跑`TickDeathPresentation`(真实时间`FApp::GetDeltaTime`，世界被慢放/停住)：弹簧臂连接点跟到`pelvis`骨骼，臂长插值到`deathArmLength`(550)，
+  控制旋转俯仰压到`deathCameraPitch`(-35°)、偏航按`deathOrbitSpeed`(10°/秒)绕圈，第三人称相机后处理饱和度在`deathDesaturateDuration`(2.5秒)内降到`deathSaturation`(0.15)。
+  不可逆，这个Actor随后被撤掉，所以不做还原。参数都在`Death`分类里。
 - **入水阻力**：引擎Flying模式摩擦很小，冲刺入水(速度可达几千厘米/秒)会滑很久。游泳状态下水平速度超过`MaxFlySpeed`的部分按`swimOverspeedDecay`(默认8/秒，指数衰减)快速衰减，约半秒回到游泳速度。

@@ -22,6 +22,16 @@ struct WorldDomains {
 	Polit* polit = nullptr;
 };
 
+// 可选的分段计时(墙钟秒，累加)：跳时间慢在哪里用。hooks.profile为空时不计时。
+// populace/society含onCitizenChanges/onOrganizationChanges里调用方应用Change的时间。
+struct WorldStepProfile {
+	double map = 0, populace = 0, society = 0, industry = 0, economy = 0, demography = 0, immigration = 0, polit = 0, traffic = 0, story = 0;
+	int steps = 0;     // Step调用次数
+	int days = 0;      // 其中跑了每日经济链的次数
+	int populaceTicks = 0, societyTicks = 0; // TickPopulace/TickSociety调用次数(含跳时间排空到期项的额外调用)
+	double Total() const { return map + populace + society + industry + economy + demography + immigration + polit + traffic + story; }
+};
+
 // 调用方(UE层/测试程序)注入的、Core看不到的那部分：怎么应用脚本产出的Change、离城/迁入的市民怎么处理。
 struct WorldStepHooks {
 	std::function<void(Citizen*, const std::vector<Change*>&)> onCitizenChanges;
@@ -41,6 +51,8 @@ struct WorldStepHooks {
 	std::function<void()> onTrafficTicked;
 	// Polit::Step之后：UE层在这里取党代会开始/结束通知(Polit::ConsumeMeetingNotices)，转发给党员的脚本。
 	std::function<void()> onPoliticsTicked;
+	// 非空就把各域耗时累加进去，见WorldStepProfile。
+	WorldStepProfile* profile = nullptr;
 };
 
 // 世界按时间推进一步的唯一实现，UE的AForeverFrameworkActor::StepWorld和测试程序共用，见world_step.md。

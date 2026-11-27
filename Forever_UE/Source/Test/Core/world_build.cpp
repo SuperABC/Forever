@@ -182,7 +182,7 @@ bool BuildWorld(TestWorld& world, int mapSize, string& error) {
 	if (!stage("society", [&] {
 		world.society = new Society();
 		world.society->Init(world.map->GetAllComponents());
-		const Time startTime(world.populace->GetCurrentYear(), 1, 1, 8);
+		const Time startTime(world.populace->GetCurrentYear(), 1, 1, Player::kStartHour);
 		world.society->RecruitCitizens(world.populace->GetCitizens(), startTime);
 		world.society->GenerateEmploymentHistory(world.populace->GetCitizens(), world.populace->GetCurrentYear());
 		world.society->AssignShareholders(world.populace->GetCitizens(), startTime);
@@ -191,7 +191,7 @@ bool BuildWorld(TestWorld& world, int mapSize, string& error) {
 	if (!stage("player", [&] {
 		world.player = new Player();
 		world.player->Init();
-		world.player->SetTime(Time(world.populace->GetCurrentYear(), 1, 1, 8));
+		world.player->SetTime(Time(world.populace->GetCurrentYear(), 1, 1, Player::kStartHour));
 	})) return false;
 	if (!stage("industry", [&] {
 		world.industry = new Industry();

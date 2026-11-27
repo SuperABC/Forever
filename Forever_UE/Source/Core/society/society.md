@@ -9,7 +9,7 @@
 1. **`Init(components)`**：按地图里所有`Component`加权随机分配`Organization`
    （每个`Organization`自己遍历claimed components设计Job），算法见
    `organization.md`"组织分配算法"一节。
-2. **`RecruitCitizens(citizens, now)`（now按生日算年龄；开局传1月1日8点）**：把成年市民随机匹配到还空缺的
+2. **`RecruitCitizens(citizens, now)`（now按生日算年龄；开局传1月1日7点(`Player::kStartHour`)）**：把成年市民随机匹配到还空缺的
    Job上，见`organization.md`"招聘"一节。
 3. **`GenerateEmploymentHistory(citizens, currentYear)`**：反推入职历史+生成
    同事关系，见下"四类人际关系生成：同事关系"一节。

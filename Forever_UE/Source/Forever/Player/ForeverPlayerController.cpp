@@ -19,6 +19,8 @@
 #include "UI/ThrowListWidget.h"
 #include "UI/FadeSubsystem.h"
 #include "UI/FadeWidget.h"
+#include "UI/DeathWidget.h"
+#include "Framework/ForeverDeathFrameworkComponent.h"
 #include "Player/ForeverIdentifyComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
@@ -175,6 +177,14 @@ void AForeverPlayerController::InitializeOnce() {
 		pauseWidget->AddToViewport(10);
 	}
 
+	if (deathWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: deathWidgetClass未设置,跳过DeathWidget创建(死亡后没有结算界面,慢镜头完直接复活)。"));
+	}
+	else if ((deathWidget = CreateWidget<UDeathWidget>(this, deathWidgetClass)) != nullptr) {
+		// 在暂停界面(10)之下、其它常驻界面之上。
+		deathWidget->AddToViewport(9);
+	}
+
 	if (throwListWidgetClass == nullptr) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: throwListWidgetClass未设置,跳过ThrowList创建(长按3不会弹出列表)。"));
 	}
@@ -213,7 +223,23 @@ void AForeverPlayerController::SetupInputComponent() {
 	}
 }
 
+bool AForeverPlayerController::IsPlayerDead() const {
+	const AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	const UForeverDeathFrameworkComponent* death = framework ? framework->GetDeathFramework() : nullptr;
+	return death && death->IsPlayerDead();
+}
+
+void AForeverPlayerController::CloseGameplayPanels() {
+	if (phoneWidget && phoneWidget->IsVisible()) phoneWidget->TogglePhone();
+	if (inventoryWidget && inventoryWidget->IsVisible()) inventoryWidget->TogglePanel();
+	if (mapWidget && mapWidget->IsVisible()) mapWidget->CloseMap();
+	if (throwListWidget && throwListWidget->IsOpen()) throwListWidget->Close();
+	if (identifyComponent && identifyComponent->IsActive()) identifyComponent->Exit();
+}
+
 void AForeverPlayerController::EnterIdentify() {
+	if (IsPlayerDead()) return;
 	if (identifyComponent) identifyComponent->Enter();
 }
 
@@ -222,14 +248,17 @@ void AForeverPlayerController::ExitIdentify() {
 }
 
 void AForeverPlayerController::TogglePhone() {
+	if (IsPlayerDead()) return;
 	if (phoneWidget) phoneWidget->TogglePhone();
 }
 
 void AForeverPlayerController::ToggleInventory() {
+	if (IsPlayerDead()) return;
 	if (inventoryWidget) inventoryWidget->TogglePanel();
 }
 
 void AForeverPlayerController::ToggleMap() {
+	if (IsPlayerDead()) return;
 	if (mapWidget) mapWidget->ToggleMap();
 }
 
@@ -238,7 +267,7 @@ void AForeverPlayerController::HandleCloseMap() {
 }
 
 void AForeverPlayerController::TogglePause() {
-	if (!pauseWidget) return;
+	if (!pauseWidget || IsPlayerDead()) return;
 	if (pauseWidget->IsOpen()) {
 		pauseWidget->ClosePanel();
 		return;

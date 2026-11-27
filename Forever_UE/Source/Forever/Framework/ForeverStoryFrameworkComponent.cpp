@@ -507,6 +507,23 @@ void UForeverStoryFrameworkComponent::BroadcastWeatherChange(const string& weath
 	CORE_GUARD_END
 }
 
+void UForeverStoryFrameworkComponent::BroadcastToEveryone(Event& event) {
+	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::BroadcastToEveryone")
+	if (!story) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+	CORE_GUARD_END
+}
+
 void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {
 	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::OptionDialog")
 	if (!story || !GEngine) return;
@@ -813,16 +830,19 @@ void UForeverStoryFrameworkComponent::BroadcastFleeEnd(const string& name, const
 void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context) {
 	CORE_GUARD_BEGIN("UForeverStoryFrameworkComponent::ApplyControlChange")
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetName(), context)).data());
+	if (!PossessCitizenByName(name)) {
+		debugf(DebugLevel::Warning, "ChangeControlChange target citizen not found: %s.\n", TCHAR_TO_UTF8(*name));
+	}
+	CORE_GUARD_END
+}
 
+ACitizenElement* UForeverStoryFrameworkComponent::PossessCitizenByName(const FString& name) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	UForeverPopulaceFrameworkComponent* populaceFramework = framework ? framework->GetPopulaceFramework() : nullptr;
-	if (!populaceFramework) return;
+	if (!populaceFramework) return nullptr;
 
 	ACitizenElement* target = populaceFramework->FindOrSpawnCitizenByName(name);
-	if (!target) {
-		debugf(DebugLevel::Warning, "ChangeControlChange target citizen not found: %s.\n", TCHAR_TO_UTF8(*name));
-		return;
-	}
+	if (!target) return nullptr;
 
 	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0)) {
 		playerController->Possess(target);
@@ -832,10 +852,10 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 
 	// 切换控制权时建筑近处LOD可能还没建完(如游戏刚开始)，玩家会先掉到没有细节的地面上：
 	// 请求冻结世界直到LOD切换队列清空，见UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled。
-	if (framework && framework->GetBuildingFramework()) {
+	if (framework->GetBuildingFramework()) {
 		framework->GetBuildingFramework()->RequestFreezeUntilLodSettled();
 	}
-	CORE_GUARD_END
+	return target;
 }
 
 void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context) {
@@ -1426,12 +1446,13 @@ namespace {
 			}
 			return TimerResolve::Real;
 		}
-		// next：日期是相对天数，时间是绝对钟点；钟点早于当前钟点就再晚一天。例：现在10点，1日8点=明天8点，
-		// 2日8点=后天8点，1日11点=当天11点。
+		// next：日期是相对天数，时间是绝对钟点；钟点不晚于当前钟点(早于或正好等于)就再晚一天，所以结果总在未来。例：现在10点，
+		// 1日8点=明天8点，2日8点=后天8点，1日11点=当天11点，1日10点=明天10点。
+		// 等于也要算明天：time_up里用next重设同一个钟点的计时器(上下班)时，跳时间每步正好落在整点，算成"此刻"会在同一时刻无限重复触发。
 		int days = offset.days;
 		auto timeOfDay = [](int h, int m, int s, int ms) { return ((h * 60 + m) * 60 + s) * 1000 + ms; };
 		if (timeOfDay(offset.hour, offset.minute, offset.second, offset.millisecond)
-			< timeOfDay(now.GetHour(), now.GetMinute(), now.GetSecond(), now.GetMillisecond())) {
+			<= timeOfDay(now.GetHour(), now.GetMinute(), now.GetSecond(), now.GetMillisecond())) {
 			days += 1;
 		}
 		target = now;

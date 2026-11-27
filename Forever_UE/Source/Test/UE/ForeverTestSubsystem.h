@@ -23,7 +23,7 @@ private:
 	struct FCheck { FString Name; bool bPassed; FString Detail; };
 	struct FMetric { FString Name; double Value; FString Unit; };
 
-	enum class EPhase : uint8 { WaitForWorld, RunBoot, SamplePerf, CommuteSkip, CommuteRun, CommuteDrain, TrafficRun, SaveLoadSave, SaveLoadWait, RideBoard, RideRun, Finish };
+	enum class EPhase : uint8 { WaitForWorld, RunBoot, SamplePerf, CommuteSkip, CommuteRun, CommuteDrain, TrafficRun, SaveLoadSave, SaveLoadWait, RideBoard, RideRun, SkipRun, Finish };
 
 	bool Tick(float DeltaTime);
 	void Check(bool bPassed, const FString& Name, const FString& Detail = FString());
@@ -36,6 +36,8 @@ private:
 	void BeginTraffic();
 	void TickTraffic(float DeltaTime);
 	void BeginCommute();
+	void BeginSkip();
+	void TickSkip();
 	void TickCommute(float DeltaTime);
 	void RunSaveLoadSave();
 	void RunSaveLoadVerify();
@@ -85,4 +87,7 @@ private:
 	int32 RideIndex = 0;
 	double RideStart = 0.0;
 	TArray<float> RideFrames;
+	// skip：跳SkipDays天(-ForeverTestSkipDays=，默认15，同死亡复活)，记录总耗时和跳时间的分段耗时(AForeverFrameworkActor::GetLastTimeSkipMetrics)。
+	int32 SkipDays = 15;
+	double SkipStart = 0.0;
 };

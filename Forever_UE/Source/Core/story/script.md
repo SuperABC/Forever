@@ -140,3 +140,4 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 `BuildEvent`新增`use_asset`(无过滤字段)，`BuildChanges`新增`add_satiety`(`target`省略=玩家当前操控的市民，`amount`)。详见`Dependence/story/event.md`、`change.md`。
 
 `BuildEvent`新增`citizen_injured`/`flee_start`/`flee_end`，`BuildChanges`新增`citizen_flee`(缺name/from抛异常)。
+2026-11-27：`BuildEvent`新增`player_decease`/`player_revive`(只有`name`过滤字段，可省略)，见`Dependence/story/event.md`。

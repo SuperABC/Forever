@@ -16,6 +16,7 @@ class UMapWidget;
 class UPausePanelWidget;
 class UThrowListWidget;
 class UFadeWidget;
+class UDeathWidget;
 class UForeverIdentifyComponent;
 class UInputComponent;
 
@@ -145,7 +146,20 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UFadeWidget> fadeWidgetClass;
 
+	// 死亡界面(渐暗+继续游戏/退出游戏)，由UForeverDeathFrameworkComponent驱动，自己默认不显示。WBP_Death在BP_ForeverPlayerController的类默认值里指定。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UDeathWidget> deathWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UDeathWidget> deathWidget;
+
+	// 玩家正处在死亡流程里(慢镜头/结算界面/复活跳时间)：手机/背包/地图/暂停/识别等热键都不响应。
+	bool IsPlayerDead() const;
+
 public:
+	// 关掉开着的手机/背包/地图/投掷物列表/识别模式(玩家死亡时调用)。
+	void CloseGameplayPanels();
+
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
 	FORCEINLINE UBackgroundSpeakingWidget* GetBackgroundSpeakingWidget() const { return backgroundSpeakingWidget; }
@@ -156,4 +170,6 @@ public:
 	FORCEINLINE UInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }
 	FORCEINLINE UPausePanelWidget* GetPauseWidget() const { return pauseWidget; }
-	FORCEINLINE UThrowListWidget* GetThrowListWidget() const { return throwListWidget; }};
+	FORCEINLINE UThrowListWidget* GetThrowListWidget() const { return throwListWidget; }
+	FORCEINLINE UDeathWidget* GetDeathWidget() const { return deathWidget; }
+};

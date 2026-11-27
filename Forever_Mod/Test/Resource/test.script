@@ -29,6 +29,38 @@
 			],
 			"dialogs": [],
 			"subsequences": []
+		},
+		{
+			// 玩家死亡：死亡计数器加一(没设过的变量读出来是0)。
+			"milestone": "test_player_decease",
+			"triggers": [ { "type": "player_decease" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.death_count", "value": "$$self.death_count + 1" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			// 玩家复活(继续游戏跳完时间之后)：后台对话报这是第几次死亡。
+			"milestone": "test_player_revive",
+			"triggers": [ { "type": "player_revive" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [],
+			"dialogs": [
+				{
+					"list": [
+						{ "speaker": "$$local.name", "content": "\"这是我第\" + $$self.death_count + \"次死亡\"", "label": "", "voice": "", "background": 4 }
+					]
+				}
+			],
+			"subsequences": []
 		}
 	]
 }

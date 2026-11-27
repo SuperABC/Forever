@@ -179,6 +179,9 @@ public:
 	const std::vector<Node*>& GetExterns() const;
 	const std::vector<Lot*>& GetLots() const;
 	const std::vector<RoadJunction*>& GetJunctions() const;
+	// 玩家复活点：随机一个路口(有行人锚点的)，再随机它的一个行人锚点(人行道转角，不站在车道上)，坐标是地图单位、z是地面高度。
+	// 没有任何带行人锚点的路口返回false。随机取"core.respawn"域流，不动其它域的流。见map.md"复活点"。
+	bool PickJunctionRespawn(float& outX, float& outY, float& outZ) const;
 	Lot* LocateLot(const std::string& road, int index) const;
 
 	// 在road的弧长比例t处为车行/行人图新增访问点(参数是Road*不是名字)，详见map.md"导航图与贯通线"

@@ -58,7 +58,7 @@ accommodation * exp(GetRandom(1000)/1000.0f - 0.5f)`），再取`min(target, wor
   年份用"2000+模拟内部年份"的换算；模拟结束时的年份（`year+2000`）存进
   `currentYear`，通过`GetCurrentYear()`供`Map::Checkin()`给`Citizen::GetAge()`用，
   也供`AForeverFrameworkActor::EnsurePlayerGenerated()`把开局游戏时钟设成这一年的
-  1月1日8点（`player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8))`），见
+  1月1日7点（`player->SetTime(Time(populace->GetCurrentYear(), 1, 1, Player::kStartHour))`），见
   `Core/player/player.md`"开局时间=人口模拟结束年份"一节。
 
 ### 姓名生成：`NameMod`/`NameFactory`/`ChineseName`

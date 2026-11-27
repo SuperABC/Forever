@@ -515,3 +515,48 @@ void UForeverTestSubsystem::TickTraffic(float DeltaTime)
 	WriteReport(TEXT("traffic"));
 	Phase = EPhase::Finish;
 }
+
+// skip：等建筑LOD收敛后跳SkipDays天(默认15，同死亡复活的"继续游戏")，记录总耗时和FrameworkActor统计的分段耗时，看跳时间慢在哪里。
+void UForeverTestSubsystem::BeginSkip()
+{
+	AForeverFrameworkActor* Actor = Framework.Get();
+	if (!Actor || !Actor->GetPlayer()) {
+		Check(false, TEXT("skip: framework available"));
+		WriteReport(TEXT("skip"));
+		Phase = EPhase::Finish;
+		return;
+	}
+	SkipStart = 0.0;
+	PerfSettleStart = FPlatformTime::Seconds();
+	Phase = EPhase::SkipRun;
+}
+
+void UForeverTestSubsystem::TickSkip()
+{
+	AForeverFrameworkActor* Actor = Framework.Get();
+	if (!Actor) { Phase = EPhase::Finish; return; }
+	const double Now = FPlatformTime::Seconds();
+	if (SkipStart <= 0.0) {
+		// 先等开局的建筑LOD切换做完(最多60秒)，免得把它算进跳时间。
+		if (Actor->GetBuildingFramework() && !Actor->GetBuildingFramework()->IsLodSettled() && Now - PerfSettleStart < 60.0) return;
+		Time Target = *Actor->GetPlayer()->GetTime();
+		Target.AddDays(SkipDays);
+		SkipStart = Now;
+		UE_LOG(LogTemp, Display, TEXT("ForeverTest skip: begin %d days from %s"), SkipDays, UTF8_TO_TCHAR(Actor->GetPlayer()->GetTime()->ToString(true, true).c_str()));
+		Check(Actor->BeginTimeSkip(Target), TEXT("skip: time skip started"));
+		return;
+	}
+	if (Actor->IsTimeSkipping()) {
+		if (Now - SkipStart > 1800.0) {
+			Check(false, TEXT("skip: finishes within 1800s"));
+			WriteReport(TEXT("skip"));
+			Phase = EPhase::Finish;
+		}
+		return;
+	}
+	Metric(TEXT("skip.total_seconds"), Now - SkipStart, TEXT("s"));
+	for (const TPair<FString, double>& Pair : Actor->GetLastTimeSkipMetrics()) Metric(Pair.Key, Pair.Value);
+	Check(Actor->GetLastTimeSkipMetrics().Num() > 0, TEXT("skip: time skip reported its stats"));
+	WriteReport(TEXT("skip"));
+	Phase = EPhase::Finish;
+}

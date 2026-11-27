@@ -26,8 +26,11 @@ public:
 	Player();
 	~Player();
 
-	// 初始化玩家时钟：创建Time，默认设为8点（真正的起始日期由脚本后续SetTime/change_time
-	// 决定）。
+	// 开局钟点：新开局的时钟是populace当前年份1月1日的这个钟点(UE和测试建世界共用)。定在7点而不是正好上班的整点：
+	// next模式计时器在"钟点等于现在"时排到明天，开局正好8点的话8点上班的人当天就不出门了，见player.md。
+	static constexpr int kStartHour = 7;
+
+	// 初始化玩家时钟：创建Time，默认设为kStartHour点（真正的起始日期由调用方随后SetTime决定）。
 	void Init();
 
 	// 时钟周期更新：按真实帧时长推进游戏时钟。time_flow_ratio默认10.0(1真实秒=10游戏分钟)，可以被主线剧情

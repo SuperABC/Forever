@@ -20,6 +20,9 @@ public:
 	void ClosePanel();
 	bool IsOpen() const { return GetVisibility() == ESlateVisibility::Visible; }
 
+	// 退出这一局、回主菜单(暂停界面的退出按钮、死亡界面的退出游戏共用)：时间缩放还原成1再OpenLevel(Menu)，不存档。
+	static void ExitToMainMenu(UObject* worldContext);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;

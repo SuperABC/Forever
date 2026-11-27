@@ -155,7 +155,14 @@ void UPausePanelWidget::HandleExitClicked() {
 	// map/populace/society等对象，新关卡(菜单)的AForeverMenuController会重新接管输入。
 	// 没有存档确认：和Tab关掉界面一样，没保存的进度直接丢弃。
 	ClosePanel();
-	UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/Levels/Menu")));
+	ExitToMainMenu(this);
+}
+
+void UPausePanelWidget::ExitToMainMenu(UObject* worldContext) {
+	if (!worldContext) return;
+	// 时间缩放挂在关卡的WorldSettings上，切关卡本来就会丢；这里还原只是防止切关卡这一帧里还有东西按0缩放跑。
+	UGameplayStatics::SetGlobalTimeDilation(worldContext, 1.f);
+	UGameplayStatics::OpenLevel(worldContext, FName(TEXT("/Game/Levels/Menu")));
 }
 
 void UPausePanelWidget::ShowMessage(const FString& message, bool bError) {

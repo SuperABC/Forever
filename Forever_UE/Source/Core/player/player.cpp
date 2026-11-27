@@ -47,7 +47,7 @@ Player::~Player() {
 
 void Player::Init() {
 	time = new Time();
-	time->SetHour(8);
+	time->SetHour(kStartHour);
 }
 
 void Player::Tick(float delta) {

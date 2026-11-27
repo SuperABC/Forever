@@ -52,6 +52,7 @@
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverWeatherFrameworkComponent.h"
 #include "Framework/ForeverMusicFrameworkComponent.h"
+#include "Framework/ForeverDeathFrameworkComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "Framework/ForeverGreenFrameworkComponent.h"
 #include "Framework/ForeverDoorFrameworkComponent.h"
@@ -116,6 +117,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
 	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));
 	musicFramework = CreateDefaultSubobject<UForeverMusicFrameworkComponent>(TEXT("MusicFramework"));
+	deathFramework = CreateDefaultSubobject<UForeverDeathFrameworkComponent>(TEXT("DeathFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
 	greenFramework = CreateDefaultSubobject<UForeverGreenFrameworkComponent>(TEXT("GreenFramework"));
 	doorFramework = CreateDefaultSubobject<UForeverDoorFrameworkComponent>(TEXT("DoorFramework"));
@@ -130,6 +132,7 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
 	delete skipStart;
 	delete skipTarget;
+	delete skipProfile;
 	delete player;
 	delete traffic;
 	delete industry;
@@ -872,7 +875,9 @@ Citizen* AForeverFrameworkActor::GetPlayerCitizen() const {
 	if (AVehicleElement* vehicle = Cast<AVehicleElement>(pawn)) pawn = vehicle->GetPreviousPawn().Get();
 	else if (ATransitVehicleElement* transit = Cast<ATransitVehicleElement>(pawn)) pawn = transit->GetPreviousPawn().Get();
 	const ACitizenElement* element = Cast<ACitizenElement>(pawn);
-	return element ? element->GetCitizen() : nullptr;
+	if (element) return element->GetCitizen();
+	// 死亡后继续游戏的跳时间期间尸体已经撤掉、还没复活(没有Pawn)：仍然是玩家的人，照样受保护。
+	return deathFramework ? deathFramework->GetDeadCitizen() : nullptr;
 }
 
 void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context) {
@@ -1170,7 +1175,9 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 WorldStepHooks AForeverFrameworkActor::MakeStepHooks()
 {
 	WorldStepHooks hooks;
+	hooks.profile = bTimeSkipping ? skipProfile : nullptr;
 	hooks.onCitizenChanges = [this](Citizen* citizen, const std::vector<Change*>& changes) {
+		const double begin = bTimeSkipping ? FPlatformTime::Seconds() : 0.0;
 		ScriptContext context;
 		if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
 		context.system = story ? story->GetSystemScript() : nullptr;
@@ -1178,14 +1185,23 @@ WorldStepHooks AForeverFrameworkActor::MakeStepHooks()
 		for (Change* change : changes) {
 			ApplyChange(change, context);
 		}
+		if (bTimeSkipping) {
+			skipChangeSeconds += FPlatformTime::Seconds() - begin;
+			skipChanges += static_cast<int32>(changes.size());
+		}
 	};
 	hooks.onOrganizationChanges = [this](Organization* organization, const std::vector<Change*>& changes) {
+		const double begin = bTimeSkipping ? FPlatformTime::Seconds() : 0.0;
 		ScriptContext context;
 		if (organization) context.self = organization->GetScript();
 		context.system = story ? story->GetSystemScript() : nullptr;
 		context.global = story ? story->GetGlobalScript() : nullptr;
 		for (Change* change : changes) {
 			ApplyChange(change, context);
+		}
+		if (bTimeSkipping) {
+			skipChangeSeconds += FPlatformTime::Seconds() - begin;
+			skipChanges += static_cast<int32>(changes.size());
 		}
 	};
 	hooks.controlledCitizen = GetControlledCitizen();
@@ -1315,12 +1331,19 @@ namespace {
 	constexpr int kTimeSkipMaxDrainRounds = 256;
 }
 
-void AForeverFrameworkActor::BeginTimeSkip(const Time& target)
+bool AForeverFrameworkActor::BeginTimeSkip(const Time& target, TFunction<void()> onFinished)
 {
-	if (bTimeSkipping || !player || !bInitialGenerationDone) return;
+	if (bTimeSkipping || !player || !bInitialGenerationDone) return false;
 	const double total = player->GetTime()->DifferenceInSeconds(target);
-	if (total <= 0.0) return;
+	if (total <= 0.0) return false;
 
+	skipFinished = MoveTemp(onFinished);
+	delete skipProfile;
+	skipProfile = new WorldStepProfile();
+	skipBeginWall = FPlatformTime::Seconds();
+	skipFirstWorkWall = skipWorkSeconds = 0.0;
+	skipStepWorldSeconds = skipTripsSeconds = skipDrainSeconds = skipTimerSeconds = skipChangeSeconds = 0.0;
+	skipFrames = skipChanges = 0;
 	skipStart = new Time(*player->GetTime());
 	skipTarget = new Time(target);
 	skipTotalSeconds = total;
@@ -1338,6 +1361,7 @@ void AForeverFrameworkActor::BeginTimeSkip(const Time& target)
 	UGameInstance* gameInstance = GetGameInstance();
 	UFadeSubsystem* fade = gameInstance ? gameInstance->GetSubsystem<UFadeSubsystem>() : nullptr;
 	bSkipFade = fade && fade->BeginHoldBlack();
+	return true;
 }
 
 bool AForeverFrameworkActor::GetTimeSkipProgress(float& outFraction, FText& outLabel) const
@@ -1350,9 +1374,13 @@ bool AForeverFrameworkActor::GetTimeSkipProgress(float& outFraction, FText& outL
 
 void AForeverFrameworkActor::RunTimeSkipBudget()
 {
-	const double deadline = FPlatformTime::Seconds() + kTimeSkipFrameBudgetSeconds;
+	const double frameBegin = FPlatformTime::Seconds();
+	const double deadline = frameBegin + kTimeSkipFrameBudgetSeconds;
+	if (skipFirstWorkWall <= 0.0) skipFirstWorkWall = frameBegin;
+	skipFrames++;
 	while (true) {
 		if (*player->GetTime() >= *skipTarget) {
+			skipWorkSeconds += FPlatformTime::Seconds() - frameBegin;
 			FinishTimeSkip();
 			return;
 		}
@@ -1376,12 +1404,19 @@ void AForeverFrameworkActor::RunTimeSkipBudget()
 			storyFramework->BroadcastWeatherChange(player->GetWeather().GetName());
 		}
 
+		double phaseBegin = FPlatformTime::Seconds();
 		StepWorld(crossedDay);
+		double phaseEnd = FPlatformTime::Seconds();
+		skipStepWorldSeconds += phaseEnd - phaseBegin;
 
 		// 在途的行程腿(步行/开车)按这一步的游戏时长推进，走完的触发真正的到达(npc_arrive/vehicle_arrive)并接着下一条腿。
+		phaseBegin = phaseEnd;
 		AdvanceTripsForTimeSkip(stepSeconds);
+		phaseEnd = FPlatformTime::Seconds();
+		skipTripsSeconds += phaseEnd - phaseBegin;
 
 		// Job/Scheduler/组织的到期项每次Tick有条数上限：同一时刻反复Tick(不再算跨天)直到排空。
+		phaseBegin = phaseEnd;
 		PostImplement postImplement(map, populace, society, story, industry, traffic, player);
 		for (int round = 0; round < kTimeSkipMaxDrainRounds; round++) {
 			const bool populaceDue = populace && populace->HasDueTimers(*player->GetTime());
@@ -1390,10 +1425,18 @@ void AForeverFrameworkActor::RunTimeSkipBudget()
 			if (populaceDue) TickPopulaceDomain(false, postImplement);
 			if (societyDue) TickSocietyDomain(false, postImplement);
 		}
+		phaseEnd = FPlatformTime::Seconds();
+		skipDrainSeconds += phaseEnd - phaseBegin;
+		phaseBegin = phaseEnd;
 		if (storyFramework) storyFramework->DrainExpiredTimers(kTimeSkipMaxDrainRounds);
+		phaseEnd = FPlatformTime::Seconds();
+		skipTimerSeconds += phaseEnd - phaseBegin;
 
 		skipDoneSeconds = skipStart->DifferenceInSeconds(*player->GetTime());
-		if (FPlatformTime::Seconds() >= deadline) return;
+		if (phaseEnd >= deadline) {
+			skipWorkSeconds += phaseEnd - frameBegin;
+			return;
+		}
 	}
 }
 
@@ -1411,8 +1454,55 @@ void AForeverFrameworkActor::AdvanceTripsForTimeSkip(double stepSeconds)
 	skipCreditSeconds = 0.0;
 }
 
+void AForeverFrameworkActor::ReportTimeSkipStats()
+{
+	const double now = FPlatformTime::Seconds();
+	const double wall = now - skipBeginWall;
+	const double waitBlack = skipFirstWorkWall > 0.0 ? skipFirstWorkWall - skipBeginWall : 0.0;
+	// 推进阶段(黑屏盖住后到跳完)里不在跳时间预算里的时间：渲染+其它Actor/组件Tick+引擎开销。
+	const double outside = FMath::Max(0.0, wall - waitBlack - skipWorkSeconds);
+	const double gameDays = skipTotalSeconds / 86400.0;
+	TMap<FString, double>& m = lastSkipMetrics;
+	m.Reset();
+	m.Add(TEXT("skip.game_days"), gameDays);
+	m.Add(TEXT("skip.wall"), wall);
+	m.Add(TEXT("skip.wait_black"), waitBlack);
+	m.Add(TEXT("skip.work"), skipWorkSeconds);
+	m.Add(TEXT("skip.outside_work"), outside);
+	m.Add(TEXT("skip.frames"), skipFrames);
+	m.Add(TEXT("skip.frame_outside_ms"), skipFrames > 0 ? outside / skipFrames * 1000.0 : 0.0);
+	m.Add(TEXT("skip.step_world"), skipStepWorldSeconds);
+	m.Add(TEXT("skip.trips"), skipTripsSeconds);
+	m.Add(TEXT("skip.drain"), skipDrainSeconds);
+	m.Add(TEXT("skip.story_timers"), skipTimerSeconds);
+	m.Add(TEXT("skip.apply_changes"), skipChangeSeconds);
+	m.Add(TEXT("skip.changes"), skipChanges);
+	if (skipProfile) {
+		const WorldStepProfile& p = *skipProfile;
+		m.Add(TEXT("skip.steps"), p.steps);
+		m.Add(TEXT("skip.populace_ticks"), p.populaceTicks);
+		m.Add(TEXT("skip.society_ticks"), p.societyTicks);
+		m.Add(TEXT("skip.core.map"), p.map);
+		m.Add(TEXT("skip.core.populace"), p.populace);
+		m.Add(TEXT("skip.core.society"), p.society);
+		m.Add(TEXT("skip.core.industry"), p.industry);
+		m.Add(TEXT("skip.core.economy"), p.economy);
+		m.Add(TEXT("skip.core.demography"), p.demography);
+		m.Add(TEXT("skip.core.immigration"), p.immigration);
+		m.Add(TEXT("skip.core.polit"), p.polit);
+		m.Add(TEXT("skip.core.traffic"), p.traffic);
+		m.Add(TEXT("skip.core.story"), p.story);
+	}
+	FString line;
+	for (const TPair<FString, double>& pair : m) line += FString::Printf(TEXT(" %s=%.3f"), *pair.Key, pair.Value);
+	UE_LOG(LogTemp, Display, TEXT("跳时间耗时:%s"), *line);
+}
+
 void AForeverFrameworkActor::FinishTimeSkip()
 {
+	ReportTimeSkipStats();
+	delete skipProfile;
+	skipProfile = nullptr;
 	bTimeSkipping = false;
 	delete skipStart;
 	delete skipTarget;
@@ -1424,6 +1514,13 @@ void AForeverFrameworkActor::FinishTimeSkip()
 	if (populaceFramework) populaceFramework->EndTimeSkip();
 	if (trafficFramework) trafficFramework->ResyncLineVehiclesAfterTimeSkip();
 	if (storyFramework) storyFramework->UpdateSystemTime();
+
+	// 调用方的收尾(死亡复活：在复活点重新操控、发player_revive)：此时还黑着屏，下面才渐隐。先移出成员再调，回调里可以再开一次跳时间。
+	if (skipFinished) {
+		TFunction<void()> finished = MoveTemp(skipFinished);
+		skipFinished = nullptr;
+		finished();
+	}
 
 	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(this, 0)) {
 		playerController->SetCinematicMode(false, false, false, true, true);
@@ -1652,8 +1749,8 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 		// 按Component加权分配Organization，再把成年市民匹配到空缺Job，见society.md。
 	society = new Society();
 	society->Init(map->GetAllComponents());
-	// 开局日期(1月1日8点)：世界生成时玩家时钟还没建。
-	const Time startTime(populace->GetCurrentYear(), 1, 1, 8);
+	// 开局日期(1月1日Player::kStartHour点)：世界生成时玩家时钟还没建。
+	const Time startTime(populace->GetCurrentYear(), 1, 1, Player::kStartHour);
 	society->RecruitCitizens(populace->GetCitizens(), startTime);
 	// 入职历史反推+同事关系依赖RecruitCitizens和毕业年份，见society.md。人口按存档恢复时已经有了，不补。
 	if (!bPopulaceRestored) {
@@ -1690,7 +1787,7 @@ void AForeverFrameworkActor::EnsurePolitGenerated()
 	}
 
 	// 新开局：党派的成员/会议室在这里一次性确定(Init不会在读档时再调)。
-	const Time startTime(populace->GetCurrentYear(), 1, 1, 8);
+	const Time startTime(populace->GetCurrentYear(), 1, 1, Player::kStartHour);
 	PostImplement postImplement(map, populace, society, nullptr, nullptr, nullptr, nullptr);
 	polit = new Polit();
 	polit->Bind(*map, *populace, *society);
@@ -1744,8 +1841,8 @@ void AForeverFrameworkActor::EnsurePlayerGenerated()
 
 	player = new Player();
 	player->Init();
-	// 开局时间=populace当前年份1月1日8点，让Citizen生日/年龄与时钟自洽，见populace.md"生日换算"。
-	player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
+	// 开局时间=populace当前年份1月1日Player::kStartHour(7)点，让Citizen生日/年龄与时钟自洽，见populace.md"生日换算"。
+	player->SetTime(Time(populace->GetCurrentYear(), 1, 1, Player::kStartHour));
 
 	// 主线脚本global_settings.time_flow_ratio覆盖默认值，多个文件按顺序后者覆盖前者，见player.md。
 	for (const std::string& path : Config::GetMainStoryScriptPaths()) {

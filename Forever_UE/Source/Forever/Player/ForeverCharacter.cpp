@@ -31,6 +31,8 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/App.h"
+#include "PhysicsEngine/PhysicsAsset.h"
 #include "UObject/ConstructorHelpers.h"
 
 #include "Element/BuildingElement.h"
@@ -310,6 +312,12 @@ void AForeverCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	CORE_GUARD_BEGIN("AForeverCharacter::Tick")
 
+	// 死了：只演死亡镜头(真实时间，世界正被慢放/停住)，游泳/瞄准等都不再处理。
+	if (bDeathPresentation) {
+		TickDeathPresentation(FApp::GetDeltaTime());
+		return;
+	}
+
 	// 长按3：按住的真实时间到阈值就弹出投掷物选择列表。
 	if (bThrowKeyHeld && GetWorld()->GetRealTimeSeconds() - throwKeyPressTime >= longPressThreshold) {
 		OpenThrowList();
@@ -381,6 +389,68 @@ void AForeverCharacter::ToggleCameraView()
 	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
 	UpdateRotationMode();
+}
+
+void AForeverCharacter::BeginDeathPresentation()
+{
+	if (bDeathPresentation) return;
+	bDeathPresentation = true;
+	deathElapsed = 0.f;
+
+	// 手上的动作全部停掉。
+	StopFireWeapon();
+	if (bIsAiming) StopAim();
+	bIsSprinting = false;
+	bThrowKeyHeld = false;
+	if (bSwimState) ExitSwimming();
+	// 第一人称也切回第三人称看自己倒下。
+	if (bIsFirstPerson) ToggleCameraView();
+	UpdateMoveSpeeds();
+
+	// 胶囊体原地不动。碰撞不关(关了会触发离开房间/建筑的重叠结束事件)，只是不和布娃娃的刚体互相顶；镜头臂的碰撞检测本来就忽略自己。
+	const FVector velocity = GetVelocity();
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->DisableMovement();
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
+
+	// 布娃娃：网格有物理资产才行(Manny/Quinn自带)，没有就保持死前的姿势(动画蓝图还在跑)。
+	USkeletalMeshComponent* body = GetMesh();
+	if (body && body->GetPhysicsAsset()) {
+		body->SetCollisionProfileName(TEXT("Ragdoll"));
+		body->SetAllBodiesSimulatePhysics(true);
+		body->SetSimulatePhysics(true);
+		body->WakeAllRigidBodies();
+		body->SetAllPhysicsLinearVelocity(velocity); // 跑着死的接着往前扑
+	}
+	cameraBoom->SocketOffset = defaultSocketOffset;
+}
+
+void AForeverCharacter::TickDeathPresentation(float realDeltaSeconds)
+{
+	deathElapsed += realDeltaSeconds;
+
+	// 镜头跟着尸体(布娃娃会脱离胶囊体滑出去)：弹簧臂的连接点放到骨盆上。
+	USkeletalMeshComponent* body = GetMesh();
+	if (body && body->DoesSocketExist(TEXT("pelvis"))) {
+		cameraBoom->SetWorldLocation(body->GetSocketLocation(TEXT("pelvis")));
+	}
+	cameraBoom->TargetArmLength = FMath::FInterpTo(cameraBoom->TargetArmLength, deathArmLength, realDeltaSeconds, deathCameraInterpSpeed);
+
+	// 镜头朝向由控制旋转决定(弹簧臂bUsePawnControlRotation)：俯仰慢慢压到deathCameraPitch，偏航匀速绕圈。
+	if (AController* controller = GetController()) {
+		FRotator rotation = controller->GetControlRotation();
+		const float pitch = FRotator::NormalizeAxis(rotation.Pitch);
+		rotation.Pitch = FMath::FInterpTo(pitch, deathCameraPitch, realDeltaSeconds, deathCameraInterpSpeed);
+		rotation.Yaw += deathOrbitSpeed * realDeltaSeconds;
+		controller->SetControlRotation(rotation);
+	}
+
+	// 画面褪色：第三人称相机自己的后处理(这个Actor之后会被撤掉，不用还原)。
+	const float t = deathDesaturateDuration > KINDA_SMALL_NUMBER ? FMath::Clamp(deathElapsed / deathDesaturateDuration, 0.f, 1.f) : 1.f;
+	const float saturation = FMath::Lerp(1.f, deathSaturation, t);
+	followCamera->PostProcessSettings.bOverride_ColorSaturation = true;
+	followCamera->PostProcessSettings.ColorSaturation = FVector4(saturation, saturation, saturation, 1.f);
+	followCamera->PostProcessBlendWeight = 1.f;
 }
 
 void AForeverCharacter::UpdateRotationMode()

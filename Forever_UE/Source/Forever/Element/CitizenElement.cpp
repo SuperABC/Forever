@@ -210,10 +210,10 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 	if (UGameInstance* gameInstance = GetGameInstance()) {
 		if (UForeverAvatarSubsystem* avatars = gameInstance->GetSubsystem<UForeverAvatarSubsystem>()) {
 			// 按当前游戏日期（按生日）算年龄，挑年龄相符的头像；全局时钟还没建时退回人口模拟"当前年份"的1月1日。
-			Time now(0, 1, 1, 8);
+			Time now(0, 1, 1, Player::kStartHour);
 			if (AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(inFramework ? inFramework->GetOwner() : nullptr)) {
 				if (Player* player = frameworkActor->GetPlayer(); player && player->GetTime()) now = *player->GetTime();
-				else if (Populace* populace = frameworkActor->GetPopulace()) now = Time(populace->GetCurrentYear(), 1, 1, 8);
+				else if (Populace* populace = frameworkActor->GetPopulace()) now = Time(populace->GetCurrentYear(), 1, 1, Player::kStartHour);
 			}
 			SetAvatarTexture(avatars->GetCitizenAvatar(citizen, now));
 		}

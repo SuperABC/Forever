@@ -2446,6 +2446,30 @@ const vector<RoadJunction*>& Map::GetJunctions() const {
 	return junctions;
 }
 
+bool Map::PickJunctionRespawn(float& outX, float& outY, float& outZ) const {
+	// 先收集每个路口的行人锚点(去重：同一个锚点可能被相邻两条进路共用)，只留有锚点的路口，等概率挑路口再挑锚点。
+	vector<vector<const Node*>> candidates;
+	for (const RoadJunction* junction : junctions) {
+		if (!junction) continue;
+		vector<const Node*> anchors;
+		for (const RoadJunctionApproach& approach : junction->GetApproaches()) {
+			for (const Node* anchor : approach.pedestrianSide) {
+				if (anchor && find(anchors.begin(), anchors.end(), anchor) == anchors.end()) anchors.push_back(anchor);
+			}
+		}
+		if (!anchors.empty()) candidates.push_back(move(anchors));
+	}
+	if (candidates.empty()) return false;
+
+	RandomStream* stream = RandomRegistry::GetDomainStream("core.respawn");
+	const vector<const Node*>& anchors = candidates[stream->Range(static_cast<int>(candidates.size()))];
+	const Node* anchor = anchors[stream->Range(static_cast<int>(anchors.size()))];
+	outX = anchor->GetX();
+	outY = anchor->GetY();
+	outZ = anchor->GetZ();
+	return true;
+}
+
 Lot* Map::LocateLot(const string& road, int index) const {
 	return roadnet ? roadnet->LocateLot(road, index) : nullptr;
 }

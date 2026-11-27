@@ -213,4 +213,10 @@
 
 `PlacedPreset::outputIndex`（预设在 `.roadnet output.presets` 里的原下标）；`InitBuildings` 里 `CreateBuildingAt(..., Building** created)` 建好后记 `presetOfBuilding[created]=outputIndex`（不存档）；`GetPresetIndexOfBuilding(const Building*)` 无记录返回 -1。`Map::GetTransit()` 返回 `Roadnet::GetTransit()` 的独立线路数据。
 
+## 复活点（2026-11-27）
+
+`PickJunctionRespawn(x,y,z)`：玩家死亡后"继续游戏"的复活点(UE`UForeverDeathFrameworkComponent::Revive`调)。收集每个路口各进路的行人锚点(`RoadJunctionApproach::pedestrianSide`，去重)，
+只留有锚点的路口，先等概率挑路口、再挑锚点，返回锚点坐标(地图单位，z=地面高度)；一个都没有返回false。随机用独立的`core.respawn`域流，不动`core.map`等其它域的流。
+以后有医院了改成医院门口(TODO.md)。
+
 - **房间mod放的物品**(2026-11-26)：`BuildRoomAssets(building)`在每条建筑落地路径里紧跟`BuildBuildingScripts`，对每个房间调`Room::CreatePlacedAssets`(见`room.md`"房间mod放的物品")；"物品mod没启用"的警告按mod id去重(`warnedPlacedAssetMods`)。读档不调。

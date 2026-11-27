@@ -37,6 +37,7 @@ class PuzzleResultEvent;
 class CitizenDeceaseEvent;
 class CitizenInjuredEvent;
 class Weapon;
+class ACitizenElement;
 
 // 一次开火的结果(UForeverWeaponComponent射线求交之后填)，NotifyWeaponFire把它变成weapon_fire事件的local变量，字段含义见WeaponFireEvent。
 struct FWeaponFireInfo
@@ -133,6 +134,13 @@ public:
 	// WeatherChangeEvent给所有脚本(含主线)，范围和global_message一样。读档不广播。
 	// @weather: 变化后的天气名(sunny/cloudy/overcast/light_rain/heavy_rain/light_snow/heavy_snow)
 	void BroadcastWeatherChange(const std::string& weather);
+
+	// 已经填好字段的事件发给所有脚本(含主线)，范围同weather_change。玩家死亡/复活(player_decease/player_revive)用。
+	void BroadcastToEveryone(Event& event);
+
+	// 让玩家操控叫这个名字的市民(change_control和死亡复活共用)：找/生成它的Actor、Possess、激活动态属性、冻结世界等建筑LOD建完。
+	// 找不到(不存在/死了/离城)返回nullptr。
+	ACitizenElement* PossessCitizenByName(const FString& name);
 
 	// 一句带label的台词播完(玩家点击/空格推进离开这一句)时由AdvanceDialog调用：广播
 	// SpeakingFinishEvent给所有脚本(含主线)，范围和global_message一样。

@@ -148,3 +148,11 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 - `flee_start`(`name`、`from`)：`citizen_flee`真的生效(开始逃跑，已在逃的只换目标不发)时发给逃跑者自己的Scheduler脚本。`$$local.destination`=开始逃跑时要回到的房间地址(正在走路=目的房间，没在走=当前所在房间，都没有=空串)，不能做过滤。被拒绝的逃跑(没实例化/被玩家占有/在车里等)不发任何事件。
 - `flee_end`(`name`、`from`、`reason`)：逃跑结束发给逃跑者自己的Scheduler脚本。`reason`：`far`(跑出实例化距离阈值)、`lost`(要远离的市民没了)、`interrupted`(被新导航/任务/瞬移/死亡/玩家接管打断)。
 - 公共脚本`Resource/Story/citizen_common.script`串起来：`citizen_injured`→`citizen_flee`；`flee_start`→记`self.flee_dest=$$local.destination`；`flee_end`(reason非interrupted)→`npc_navigate`回去并清记录。
+
+## player_decease / player_revive（2026-11-27）
+
+玩家扮演的市民(`AForeverFrameworkActor::GetPlayerCitizen`，开车时是车里那个)被打死时的死亡流程见`Forever/Framework/ForeverDeathFrameworkComponent.md`。两个事件都**发给所有脚本(含主线)**，范围同`weather_change`。
+- `player_decease`：死亡那一刻发(紧跟在这个市民的`citizen_decease`之后，慢镜头开始时)，早于"继续游戏"的跳时间。过滤字段`name`可省略。
+  `$$local`：`name`、`killer`(凶手姓名，可为空)、`weapon`、`part`(head/body/legs)、`location`(死亡地址)，同`citizen_decease`的运行时字段。
+- `player_revive`：点"继续游戏"、跳完时间、在复活点重新操控之后发。过滤字段`name`可省略。`$$local`：`name`、`location`(复活地址)。
+- 示例：`Forever_Mod/Test/Resource/test.script`的`test_player_decease`(`self.death_count`加一)和`test_player_revive`(后台对话"这是我第N次死亡")。

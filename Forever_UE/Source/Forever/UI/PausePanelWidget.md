@@ -28,5 +28,7 @@
 `ExitButton`（`BindWidgetOptional`）：`HandleExitClicked` 先 `ClosePanel()` 还原时间缩放和输入模式，再 `OpenLevel("/Game/Levels/Menu.Menu")`。关卡切换会销毁当前世界的所有 Actor，`AForeverFrameworkActor::EndPlay` 同步 delete Core 侧的 map/populace/society/story/industry/traffic/player。没有存档确认，没保存的进度直接丢弃。回菜单后 `AForeverMenuController` 强制 GC 并打一行内存快照，见 `Framework/ForeverMemoryReport.md`。
 编辑器手工步骤：`WBP_PausePanel` 里加一个 Button，变量名必须叫 `ExitButton`（文字"退出游戏"）。没加的话不影响编译，只是没有这个按钮。
 
+退出本身是静态函数`ExitToMainMenu(worldContext)`(时间缩放还原1+`OpenLevel(Menu)`)，死亡界面的"退出游戏"(`UForeverDeathFrameworkComponent::ExitToMenu`)调的是同一个。
+
 ## 状态文本
 可选`StatusText`(BindWidgetOptional)：打开期间每帧写三行："饱食度：xx%"和"瞌睡值：xx%"(被操控市民未实例化显示"--")，以及"金钱：xx.xx元"(被操控市民在Ledger里的余额，没有操控市民显示"--")。蓝图里加一个名为`StatusText`的TextBlock(Is Variable)。

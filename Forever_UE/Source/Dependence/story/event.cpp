@@ -1738,3 +1738,71 @@ bool MeetingEndEvent::GetLocalValue(const string& key, const ValueReceiver& rece
 const std::string& MeetingEndEvent::GetParty() const { return party; }
 const std::string& MeetingEndEvent::GetAddress() const { return address; }
 const std::string& MeetingEndEvent::GetHome() const { return home; }
+
+PlayerDeceaseEvent::PlayerDeceaseEvent(std::string name, std::string killer, std::string weapon, std::string part, std::string location) :
+	name(move(name)), killer(move(killer)), weapon(move(weapon)), part(move(part)), location(move(location)) {
+
+}
+
+PlayerDeceaseEvent::~PlayerDeceaseEvent() {
+
+}
+
+const string& PlayerDeceaseEvent::GetType() const {
+	static const string type = "player_decease";
+	return type;
+}
+
+bool PlayerDeceaseEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<PlayerDeceaseEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	return true;
+}
+
+bool PlayerDeceaseEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "killer") { receive(ValueType(killer)); return true; }
+	if (key == "weapon") { receive(ValueType(weapon)); return true; }
+	if (key == "part") { receive(ValueType(part)); return true; }
+	if (key == "location") { receive(ValueType(location)); return true; }
+	return false;
+}
+
+const std::string& PlayerDeceaseEvent::GetName() const { return name; }
+const std::string& PlayerDeceaseEvent::GetKiller() const { return killer; }
+const std::string& PlayerDeceaseEvent::GetWeapon() const { return weapon; }
+const std::string& PlayerDeceaseEvent::GetPart() const { return part; }
+const std::string& PlayerDeceaseEvent::GetLocation() const { return location; }
+
+PlayerReviveEvent::PlayerReviveEvent(std::string name, std::string location) :
+	name(move(name)), location(move(location)) {
+
+}
+
+PlayerReviveEvent::~PlayerReviveEvent() {
+
+}
+
+const string& PlayerReviveEvent::GetType() const {
+	static const string type = "player_revive";
+	return type;
+}
+
+bool PlayerReviveEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<PlayerReviveEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	return true;
+}
+
+bool PlayerReviveEvent::GetLocalValue(const string& key, const ValueReceiver& receive) const {
+	if (key == "name") { receive(ValueType(name)); return true; }
+	if (key == "location") { receive(ValueType(location)); return true; }
+	return false;
+}
+
+const std::string& PlayerReviveEvent::GetName() const { return name; }
+const std::string& PlayerReviveEvent::GetLocation() const { return location; }

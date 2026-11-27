@@ -65,6 +65,7 @@ void UForeverTestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	OutDir = FPaths::ProjectSavedDir() / TEXT("TestReports/ue");
 	FParse::Value(FCommandLine::Get(), TEXT("-ForeverTestOut="), OutDir);
 	FParse::Value(FCommandLine::Get(), TEXT("-ForeverTestPerfSeconds="), PerfSeconds);
+	FParse::Value(FCommandLine::Get(), TEXT("-ForeverTestSkipDays="), SkipDays);
 	IFileManager::Get().MakeDirectory(*OutDir, true);
 	StartSeconds = FPlatformTime::Seconds();
 	TickHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UForeverTestSubsystem::Tick), 0.0f);
@@ -135,7 +136,10 @@ bool UForeverTestSubsystem::Tick(float DeltaTime)
 			RunChangesSuite();
 			WriteReport(TEXT("changes"));
 		}
-		if (WantSuite(TEXT("perform"))) {
+		if (WantSuite(TEXT("skip"))) {
+			BeginSkip();
+		}
+		else if (WantSuite(TEXT("perform"))) {
 			BeginPerfSample();
 			Phase = EPhase::SamplePerf;
 		}
@@ -164,6 +168,9 @@ bool UForeverTestSubsystem::Tick(float DeltaTime)
 		break;
 	case EPhase::TrafficRun:
 		TickTraffic(DeltaTime);
+		break;
+	case EPhase::SkipRun:
+		TickSkip();
 		break;
 	case EPhase::SaveLoadSave:
 		RunSaveLoadSave();
