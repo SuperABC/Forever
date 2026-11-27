@@ -86,6 +86,13 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 - **计时**：`ShowCurrentBackground`用世界计时器`backgroundTimer`，跟随时间缩放，暂停时冻结；到时`AdvanceBackground`弹出队首、先显示下一条再广播`speaking_finish`（避免广播命中的里程碑往`backgroundQueue`追加台词时重复启动计时）。控件没配置时照样计时推进队列。
 - 后台对话不算`IsDialogActive()`（不阻止存档），存档时丢弃；`TogglePause`也不因它拒绝暂停。
 
+### 对话语音
+
+`EnqueueDialog`把求值后的`voice`存进`FPendingItem::voice`，每一项入队时分配编号`id`。`PlayVoice(slot, voice)`先停掉这个槽位的语音，再用`UForeverVoiceSubsystem::ResolveVoice`拿声音、`UGameplayStatics::SpawnSound2D`播放(2D、非UI声音，暂停游戏时跟着暂停；组件播完自动销毁，槽位是弱引用)。
+- **前台**(`foregroundVoice`)：`ShowCurrentItem`里队首那一项的`id`变了才重播(这个函数会对同一项重复调用)——是台词就播它的语音，是分支或队列空了就只停。所以点击/空格前进、选了选项、对话结束都会立刻停掉上一句。不会因为语音播完自动前进。
+- **后台**(`backgroundVoice`)：`ShowCurrentBackground`同样按`id`播；队列空了停掉。显示时长只看`background`秒数，切下一句时没播完的语音被停掉。
+- `EndPlay`两个都停。语音不存档、不影响`IsDialogActive`。
+
 ## 计时器
 
 `create_timer`/`remove_timer`由`AForeverFrameworkActor::ApplyChange`转发到`ApplyCreateTimer`/`ApplyRemoveTimer`，`FireExpiredTimers(deltaSeconds)`每帧在`Story::Tick`之后调用（计时器本体和存档见`Core/story/story.md`"计时器"）。

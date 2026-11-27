@@ -14,6 +14,7 @@
   - 尺寸变化回调`ResizeFunc`是**裸函数指针+`void* userData`**，不用`std::function`，原因同上。
 - **尺寸**：`Init(w,h)`分配缓冲区(不触发回调)；宿主侦测到视口尺寸变化后调`Resize`重新分配(旧内容不保留，反正每帧整张重画)，并调已注册的`ResizeFunc`通知PuzzleMod调整布局；尺寸没变直接跳过。同一时刻只支持一个回调。
 - **宽线**：`PutLine(..., width)`不是多次1像素直线偏移(斜线上相邻线各自取整会有缝隙)，而是按线宽算出矩形(两个填充三角形)，复用`PutTriangle`的扫描线填充，保证实心无缝；`width<=1`退化成1像素Bresenham。
+- **不绘制开关**：`SetDrawEnabled(false)`后所有绘图调用(`Clear`/`Put*`/`FloodFill`/图片)直接返回，尺寸、`StringWidth`、`GetFontHeight`、输入照常，`PutString`仍返回高度——给在后台只跑逻辑的手机App用(`Core/player/phone.md`)，App的布局计算不受影响。`ClearScreen`总是清成黑色，要别的底色自己`PutRect`。
 - **透明度**：`SetAlpha`(0~1)之后的所有绘图操作按这个比例和已有像素混合。
 - **图片**：`LoadImageFile(path, Bitmap&)`用stb_image(`common/3rdParty/stb_image.h`，公共领域，实现编进`canvas.cpp`)从磁盘解码，支持PNG/JPEG/BMP/GIF(只取第一帧)/TGA/PSD/HDR/PIC/PNM(不支持WebP/SVG)，Windows下路径按UTF-8解读，输出BGRA并保留alpha。`PutBitmap(bitmap,x,y,w,h)`双线性缩放+按图片每像素alpha(再乘`SetAlpha`)混合；`PutImage`(直接覆盖)和`PutRawImage`(忽略图片alpha)保持原样。`LoadImage`是Win32宏(`LoadImageW`)，所以方法名叫`LoadImageFile`。
 - **mod图片资源约定**：图片放在`Resource/Mod/<mod名>/`下，**文件名按约定以`<puzzle id>_`开头**(如puzzle_dodge_bg.png；`Resource/Mod/Basic/puzzle_anykey_icon.png`；`<mod名>`只是目录名，不进文件名)。`LoadModImage`传完整文件名，`Config::GetResourceFilePath`按文件名在`config.json`的`resource_paths`里递归匹配、取第一个命中，代码不校验前缀，前缀只是靠约定保证全局唯一。mod用自由函数`LoadModImage(post, "puzzle_anykey_icon.png", bitmap)`加载(内部走`PostHandle`的"resource path"查询+`LoadImageFile`)。`Bitmap`由mod这一侧创建和释放，符合上面的跨模块堆约定。网页版(`Tools/ModWeb`)把`Resource/Mod/Basic`用`--embed-file`内嵌进html，其它mod的图片要加到`build_web.bat`里。

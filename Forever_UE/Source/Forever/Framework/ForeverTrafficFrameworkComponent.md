@@ -26,6 +26,7 @@
   - 正被玩家操控（`IsPlayerControlled()`）或被线路控制器持续驱动（`IsDrivenByController`，有指令在跑）的车不销毁。
   - `SpawnCar`用`ESpawnActorCollisionHandlingMethod::AlwaysSpawn`：车身有真实碰撞，停车位离墙/地板很近，默认碰撞检测会因"生成点被占用"拒绝生成；
     生成高度加`TRAFFIC_HEIGHT_EPSILON`(50)，让刚体靠重力落地——刚体生成时哪怕嵌进地板1个单位，Chaos也会用很大的冲量把车弹飞。加载蓝图失败的登记项标`bBroken`，不再重试。
+    行进中(Core推算)的车生成朝向取剩余路径第一段有长度的线段：yaw对准它(倒车段+180)，pitch取它的坡度(倒车段取反)，占位重叠检测的盒子同样带pitch；平着生成在坡上会让车头/车尾插进路面卡住(2026-11-27)。停着的车仍水平。线路车`HandoffToPhysics`生成物理车时pitch沿用Core `Vehicle::GetPitch()`(运动学那辆也用它)，初速度方向同样带pitch。
   - `FindOrSpawnVehicle`：按名字找活着的Actor，没有就不看距离强制生成（剧情`enter_vehicle`/读档恢复"正在开的车"指定的车不一定在附近）；`FindVehicleElement`只返回活着的。
 - 公共交通车辆（`ATransitVehicleElement`）不受流式影响，常驻。
 

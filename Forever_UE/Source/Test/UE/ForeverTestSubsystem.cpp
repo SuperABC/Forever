@@ -16,6 +16,7 @@
 #include "GameFramework/PlayerController.h"
 
 #include "Framework/ForeverFrameworkActor.h"
+#include "Player/ForeverVoiceSubsystem.h"
 #include "UI/FadeSubsystem.h"
 #include "Mod/ForeverSaveSubsystem.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"

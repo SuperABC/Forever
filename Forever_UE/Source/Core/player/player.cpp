@@ -337,6 +337,20 @@ bool Player::ApplyChange(const Change* change, const ScriptContext& context) {
 		return true;
 	}
 
+	// 音乐音轨：只改Core的音轨状态，UE层对照着播，见music.md。省略的字段不求值。
+	case ChangeKind::Music: {
+		auto* music = static_cast<const MusicChange*>(change);
+		auto eval = [&context](const string& expression) {
+			return expression.empty() ? string() : ToString(EvaluateExpression(expression, context));
+		};
+		const string loopText = eval(music->GetLoop());
+		const string positionText = eval(music->GetPosition());
+		const string error = this->music.Apply(eval(music->GetOp()), eval(music->GetTrack()), eval(music->GetAsset()),
+			loopText == "true" || loopText == "1", positionText.empty() ? 0.0 : atof(positionText.c_str()));
+		if (!error.empty()) debugf(DebugLevel::Warning, "%s\n", error.c_str());
+		return true;
+	}
+
 	// add_option/remove_option作用在玩家身上/地上的资产上(房间里的由Map::ApplyChange处理)，名字全局唯一，
 	// 找不到静默忽略，和其它域一样。
 	case ChangeKind::AddOption: {

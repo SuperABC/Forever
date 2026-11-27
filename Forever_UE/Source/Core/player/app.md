@@ -2,7 +2,7 @@
 
 ## 职责
 
-`App`：手机里的一个App实例，**薄包装类**，持有`AppMod*`+`AppFactory*`，方法(`Init`/`Loop`/`Back`/`Refresh`)直接转发给mod。
+`App`：手机里的一个App实例，**薄包装类**，持有`AppMod*`+`AppFactory*`，方法(`Init`/`Loop`/`Back`/`Refresh`/`Exit`)直接转发给mod。
 
 ## 关键设计
 

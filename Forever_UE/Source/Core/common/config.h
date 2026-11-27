@@ -47,6 +47,9 @@ public:
 
 	// 按带扩展名的文件名在resource根目录下现扫递归查找(不缓存)，找不到返回空串
 	static std::string GetResourceFilePath(const std::string& fileName);
+	// 每个资源根目录下<folder>(UTF-8，相对根目录，空=根目录本身，不递归)里扩展名匹配的文件名(UTF-8，排好序去重)。
+	// 现场扫磁盘；扫到的登记进文件名索引，之后GetResourceFilePath能按名字找到。extensions不分大小写、带不带'.'都行，空=不限。
+	static std::vector<std::string> ListResourceFiles(const std::string& folder, const std::vector<std::string>& extensions);
 
 	// main_story字段，缺失返回空串(不兜底默认值)
 	static std::string GetMainStoryScriptModName();

@@ -38,6 +38,7 @@ class UForeverRoadnetFrameworkComponent;
 class UForeverRoomFrameworkComponent;
 class UForeverSkyFrameworkComponent;
 class UForeverStoryFrameworkComponent;
+class UForeverMusicFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
 class UForeverWaterFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
@@ -281,6 +282,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverWeatherFrameworkComponent> weatherFramework;
 
+	// 音乐音轨(对照Core的Player::GetMusic播放并回写进度)，见Source/Forever/Framework/ForeverMusicFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverMusicFrameworkComponent> musicFramework;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverZoneFrameworkComponent> zoneFramework;
 
@@ -323,6 +328,7 @@ public:
 	FORCEINLINE UForeverRoomFrameworkComponent* GetRoomFramework() const { return roomFramework; }
 	FORCEINLINE UForeverSkyFrameworkComponent* GetSkyFramework() const { return skyFramework; }
 	FORCEINLINE UForeverStoryFrameworkComponent* GetStoryFramework() const { return storyFramework; }
+	FORCEINLINE UForeverMusicFrameworkComponent* GetMusicFramework() const { return musicFramework; }
 	FORCEINLINE UForeverTerrainFrameworkComponent* GetTerrainFramework() const { return terrainFramework; }
 	FORCEINLINE UForeverTrafficFrameworkComponent* GetTrafficFramework() const { return trafficFramework; }
 	FORCEINLINE UForeverTrafficLightFrameworkComponent* GetTrafficLightFramework() const { return trafficLightFramework; }

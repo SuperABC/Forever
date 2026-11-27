@@ -28,3 +28,6 @@ ModHost.exe --dll X.dll --puzzle <id> [--param text] [--size 480x640] [--resourc
 新增的 puzzle / app 必须能只靠鼠标(点击/拖动)完成键盘能做的全部操作,以便在没有键盘的手机网页(`Tools/ModWeb`)里使用。
 
 `--resource`指定"resource path"查询的根目录(递归按文件名找),默认`Forever_UE/Resource`。
+
+除"resource path"外,`StubPost`还支持:"list resource files"(根目录下所有叫folder的文件夹,不递归,UTF-8文件名,排序)、
+"music"/"music status"(只记状态的假实现:不出声、进度不走、时长固定180秒,够看 Music app 的播放界面,`tests/music.txt`)。其余 post 一律失败。

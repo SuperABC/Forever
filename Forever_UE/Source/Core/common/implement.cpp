@@ -197,6 +197,50 @@ void PostImplement::Post(const JsonValue& request) {
 		return;
 	}
 
+	// 资源文件列表：每个resource_paths根目录下的<folder>(不递归)里扩展名匹配的文件，现场扫磁盘，UTF-8文件名排好序；
+	// 扫到的顺手登记进文件名索引(GetResourceFilePath能查到)。extensions省略=不限，见Core/common/config.md。
+	if (request.IsObject() && request["post"].AsString() == "list resource files") {
+		vector<string> extensions;
+		if (request["extensions"].IsArray()) {
+			for (unsigned int i = 0; i < request["extensions"].size(); i++) extensions.push_back(request["extensions"][i].AsString());
+		}
+		JsonValue files(DATA_ARRAY);
+		for (const string& name : Config::ListResourceFiles(request["folder"].AsString(), extensions)) files.append(JsonValue(name));
+		result["result"] = "success";
+		result["files"] = files;
+		return;
+	}
+
+	// 音乐音轨：{"post":"music","track","op":"play|pause|resume|stop|seek","asset","loop","position"}，
+	// 和music change同一套(Core/player/music.md)；{"post":"music status","track"}取UE回写的状态。
+	if (request.IsObject() && request["post"].AsString() == "music") {
+		if (!player) {
+			result["result"] = "fail";
+			result["msg"] = "no player available.";
+			return;
+		}
+		const string error = player->GetMusic().Apply(request["op"].AsString(), request["track"].AsString(), request["asset"].AsString(),
+			request["loop"].IsBool() && request["loop"].AsBool(), request["position"].IsNumeric() ? request["position"].AsDouble() : 0.0);
+		result["result"] = error.empty() ? "success" : "fail";
+		if (!error.empty()) result["msg"] = error;
+		return;
+	}
+	if (request.IsObject() && request["post"].AsString() == "music status") {
+		const MusicTracks::Track* track = player ? player->GetMusic().Find(request["track"].AsString()) : nullptr;
+		if (!track) {
+			result["result"] = "fail";
+			result["msg"] = "no track named \"" + request["track"].AsString() + "\"";
+			return;
+		}
+		result["result"] = "success";
+		result["asset"] = track->asset;
+		result["state"] = MusicTracks::StatusName(track->status, track->paused);
+		result["position"] = track->position;
+		result["duration"] = track->duration;
+		result["loop"] = track->loop;
+		return;
+	}
+
 	if (request.IsObject() && request["post"].AsString() == "screenshot") {
 		if (!screenshotHandler) {
 			result["result"] = "fail";

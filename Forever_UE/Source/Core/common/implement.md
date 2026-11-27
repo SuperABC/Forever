@@ -78,6 +78,14 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   找不到返回`{"result":"fail","msg":"resource not found: <name>"}`。不需要任何domain指针，所以
   构造时全传nullptr也能用。
 
+- `request["post"] == "list resource files"`（Music app的曲库）：`request["folder"]`是子文件夹名，`request["extensions"]`是扩展名数组，
+  交给`Config::ListResourceFiles`，返回`{"result":"success","files":["<UTF-8文件名>",...]}`(排序，可能为空)。不需要domain指针。
+
+- `request["post"] == "music"` / `"music status"`（音乐音轨，见`Core/player/music.md`）：前者
+  `{"track","op":"play|pause|resume|stop|seek","asset","loop"(bool),"position"(秒)}`交给`player->GetMusic().Apply`，成功success，
+  否则`{"result":"fail","msg":...}`；后者按`track`返回`{"asset","state":"loading|playing|paused|ended|error","position","duration","loop"}`，
+  没有这个轨道fail。`player`为空都返回fail。
+
 - `request["post"] == "screenshot"`（相机武器开火用）：`request["name"]`是文件名前缀。Core看不到UE，截屏由Forever层通过
   `SetScreenshotHandler`注入（没注入返回`{"result":"fail","msg":"screenshot not supported."}`）；handler返回保存路径，成功返回
   `{"result":"success","path":"<路径>"}`，handler返回空串返回`{"result":"fail","msg":"screenshot failed."}`。`UForeverWeaponComponent`

@@ -10,6 +10,7 @@
 #include "ForeverStoryFrameworkComponent.generated.h"
 
 class Story;
+class UAudioComponent;
 class Change;
 class ChangeControlChange;
 class StartPuzzleChange;
@@ -294,6 +295,11 @@ private:
 		float background = 0.f;
 		// 台词的label(已求值)，非空时这一句播完广播speaking_finish
 		std::string label;
+		// 台词的语音(已求值)：'/'开头=UE声音资产路径，否则=resource_paths里的.wav/.ogg文件名，空=没有语音。
+		// 见Player/ForeverVoiceSubsystem.md。
+		FString voice;
+		// 入队时分配的编号：ShowCurrentItem会对同一项重复调用(无副作用)，语音只在显示的那一项换了时才重新播。
+		uint64 id = 0;
 
 		// bBranch为true时有效，两个数组下标一一对应
 		TArray<FString> optionTexts;
@@ -324,4 +330,17 @@ private:
 	// 已经放行的后台台词，按顺序一条条计时播放，和pendingQueue互不阻塞。
 	TArray<FPendingItem> backgroundQueue;
 	FTimerHandle backgroundTimer;
+
+	// 正在播的对话语音(2D)：前台一条、后台一条，各自换句/结束时停掉。
+	UPROPERTY()
+	TWeakObjectPtr<UAudioComponent> foregroundVoice;
+	UPROPERTY()
+	TWeakObjectPtr<UAudioComponent> backgroundVoice;
+	// 两条语音各自对应的队列项编号(0=没有)，同一项重复显示不重播。
+	uint64 foregroundVoiceItem = 0;
+	uint64 backgroundVoiceItem = 0;
+	uint64 nextItemId = 0;
+	// 停掉slot上正在播的语音，再播voice(空=只停)。
+	void PlayVoice(TWeakObjectPtr<UAudioComponent>& slot, const FString& voice);
+	static void StopVoice(TWeakObjectPtr<UAudioComponent>& slot);
 };

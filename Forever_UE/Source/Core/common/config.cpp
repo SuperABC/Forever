@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include "common/error.h"
+#include "common/utf8_path.h"
 
 #include "json.h"
 
@@ -470,7 +471,8 @@ void Config::AddResourcePath(const string& rawPath) {
 		if (absoluteError) continue;
 		string full = ToForwardSlashes(absolutePath.string());
 		error_code typeError;
-		if (entry.is_regular_file(typeError) && !typeError) files.emplace(entry.path().filename().string(), full); // 同一个目录里重名取先扫到的
+		// 文件名索引用UTF-8(键和值都是)：脚本/mod/UE传的都是UTF-8文件名，中文名的音乐/语音才能对上。同一个目录里重名取先扫到的。
+		if (entry.is_regular_file(typeError) && !typeError) files.emplace(PathToUtf8(entry.path().filename()), ToForwardSlashes(PathToUtf8(absolutePath)));
 		if (CheckFileFormat(entry.path(), ".script")) {
 			scripts.push_back(full);
 		} else if (CheckFileFormat(entry.path(), ".uplugin")) {
@@ -556,6 +558,36 @@ string Config::GetResourceFilePath(const string& fileName) {
 		if (file != files->second.end()) return file->second;
 	}
 	return string();
+}
+
+vector<string> Config::ListResourceFiles(const string& folder, const vector<string>& extensions) {
+	auto lower = [](string text) {
+		transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
+		if (!text.empty() && text[0] == '.') text.erase(0, 1);
+		return text;
+	};
+	vector<string> wanted;
+	for (const string& extension : extensions) wanted.push_back(lower(extension));
+	vector<string> names;
+	for (const string& root : resourceRootOrder) {
+		error_code error;
+		const filesystem::path dir = folder.empty() ? filesystem::path(root) : filesystem::path(root) / Utf8ToPath(folder);
+		if (!filesystem::is_directory(dir, error) || error) continue;
+		for (const auto& entry : filesystem::directory_iterator(dir, filesystem::directory_options::skip_permission_denied, error)) {
+			error_code typeError;
+			if (!entry.is_regular_file(typeError) || typeError) continue;
+			if (!wanted.empty() && find(wanted.begin(), wanted.end(), lower(PathToUtf8(entry.path().extension()))) == wanted.end()) continue;
+			const string name = PathToUtf8(entry.path().filename());
+			error_code absoluteError;
+			const filesystem::path absolutePath = filesystem::absolute(entry.path(), absoluteError);
+			// 登记进文件名索引：游戏中途新放进来的文件也能按名字找到(已有同名的不覆盖)。
+			resourceFilesByRoot[root].emplace(name, ToForwardSlashes(PathToUtf8(absoluteError ? entry.path() : absolutePath)));
+			names.push_back(name);
+		}
+	}
+	sort(names.begin(), names.end());
+	names.erase(unique(names.begin(), names.end()), names.end());
+	return names;
 }
 
 bool Config::GetGlobalSeed(unsigned long long& seed) {

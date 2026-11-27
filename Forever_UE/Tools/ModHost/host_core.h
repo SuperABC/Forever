@@ -6,6 +6,7 @@
 #include "common/handle.h"
 #include "common/json.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,10 @@ public:
 
 private:
 	JsonValue result;
+
+	// "music"/"music status"的假实现：只记状态不出声，进度不走(固定报时长180秒)，够看Music app的播放界面。
+	struct FakeTrack { std::string asset; bool loop = false; bool paused = false; double position = 0.0; };
+	static std::map<std::string, FakeTrack>& FakeTracks();
 };
 
 class ModHost {

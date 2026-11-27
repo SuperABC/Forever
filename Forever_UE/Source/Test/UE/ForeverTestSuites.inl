@@ -33,6 +33,16 @@ void UForeverTestSubsystem::RunComponentsSuite()
 	Check(Actor->GetTerrainFramework() && Actor->GetRoadnetFramework() && Actor->GetTrafficFramework() && Actor->GetPopulaceFramework()
 		&& Actor->GetBuildingFramework() && Actor->GetDoorFramework() && Actor->GetStoryFramework() && Actor->GetSkyFramework(),
 		TEXT("components: all framework components are present"));
+
+	// 对话语音(UForeverVoiceSubsystem)：UE资产路径能加载、找不到的文件/空串返回空。
+	// (文件解码WAV/OGG没有常驻的测试文件，2026-11-27用演示文件在UE里验证过，见ForeverVoiceSubsystem.md。)
+	UForeverVoiceSubsystem* Voices = World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<UForeverVoiceSubsystem>() : nullptr;
+	Check(Voices != nullptr, TEXT("components: voice subsystem available"));
+	if (Voices) {
+		Check(Voices->ResolveVoice(TEXT("/Game/Asset/Sound/camera")) != nullptr, TEXT("components: a voice given as a UE asset path loads"));
+		Check(Voices->ResolveVoice(TEXT("voice_does_not_exist.ogg")) == nullptr && Voices->ResolveVoice(FString()) == nullptr,
+			TEXT("components: a missing or empty voice resolves to nothing"));
+	}
 }
 
 void UForeverTestSubsystem::RunSaveLoadSave()
@@ -405,8 +415,9 @@ void UForeverTestSubsystem::RunChangesSuite()
 	// 默认config没启用任何puzzle mod：用未启用的id验证"静默忽略并打日志、不崩溃"的路径(UPuzzleWidget::StartPuzzle)。
 	Add("start_puzzle", false, [] { return new StartPuzzleChange(Q("puzzle_not_enabled")); });
 	Add("play_video", false, [] { return new PlayVideoChange(Q("none")); });
-	Add("play_bgm", false, [] { return new PlayBgmChange(Q("none"), "false"); });
-	Add("stop_bgm", true, [] { return new StopBgmChange(); });
+	// 资产不存在：UE音乐组件下一帧报出错，只记一次警告。stop删掉轨道。
+	Add("music_play", false, [] { return new MusicChange(Q("changes_test"), Q("play"), Q("none.mp3"), "", ""); });
+	Add("music_stop", true, [] { return new MusicChange(Q("changes_test"), Q("stop"), "", "", ""); });
 	// 最后做会删掉测试市民的：
 	Add("remove_npc", true, [] { return new RemoveNpcChange(Q("changes_npc")); });
 	// visualize_navigation会留下一条活动导航线，之后每次换Pawn(上下车)都要按新Pawn重新规划路线(几十毫秒)，所以放在最后。

@@ -13,6 +13,10 @@
 解析时`new`出）不在`Milestone`的顶层列表里，由包含该分支段的`Dialog`在析构时递归`delete`——`Option`是被拷贝的值类型，
 不能由它释放。
 
+## 语音(`voice`)
+
+求值结果以`/`开头=UE声音资产路径(`/Game/...`、mod插件`/<Mod>/...`)，否则=config的`resource_paths`里的`.wav`/`.ogg`文件名(带扩展名)，空=没有语音。和其它字段一样是表达式，字面量要带内层引号：`"voice": "\"greeting.ogg\""`。UE层播放规则：前台台词显示时开始播2D语音，换句/显示选项/对话结束时停；后台台词也是2D，显示多久只看`background`秒数，切下一句时停。解析、解码和缓存见`Source/Forever/Player/ForeverVoiceSubsystem.md`，播放见`ForeverStoryFrameworkComponent.md`"对话语音"。
+
 ## 延迟求值
 
 `Section`的四个台词字段（`speaker`/`content`/`label`/`voice`）存成未解析的DSL源码字符串

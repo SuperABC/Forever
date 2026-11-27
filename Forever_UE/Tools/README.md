@@ -10,6 +10,7 @@
 | DoorRig | 用 UE Python 重写门骨骼网格的蒙皮权重 | `UnrealEditor-Cmd.exe Forever.uproject -run=pythonscript -script=Tools/DoorRig/fix_door_weights.py`，编辑器须关闭；环境变量 `DOOR_APPLY=1` 才写回，否则只打印 |
 | JunctionTest | `Core/traffic/junction.h` 单测控制台程序，返回值=失败数 | `MSBuild Tools\JunctionTest\JunctionTest.vcxproj /p:Configuration=Release /p:Platform=x64`，运行 `x64\Release\JunctionTest.exe` |
 | LayoutEditor | `.layout`（`Resource/Layouts/`）可视化编辑器，平面 + three.js 3D 视图，单个 HTML | 用 Chromium 系浏览器直接打开 `layout_editor.html`（需要 File System Access API 才能原地保存） |
+| SoundGen | `soundgen.py` 合成武器/投掷物等占位音效 WAV（numpy），再用 `import_sounds.py` 导入成 `/Game/Asset/Sound/*`；`voicegen.py` 合成占位对话语音（像说话的音高起伏，不是真人声），`--ogg` 用 ffmpeg 另存 OGG，生成的文件放进任一 `resource_paths` 目录即可给对话 `voice` 字段按文件名用（不用导入，见 `ForeverVoiceSubsystem.md`） | `python Tools/SoundGen/soundgen.py [输出目录]`；`python Tools/SoundGen/voicegen.py <输出目录> [--ogg]`（需要 ffmpeg 在 PATH 上） |
 | MapEditor | 地形 + 路网 + 地块手工编辑器（地形字符串笔刷、高度/水、直线/曲线路、隧道/桥/爬升、T口/十字自动路口、城外连接点、地块），导出 `.terrain`/`.roadnet`，由 Basic 的 `terrain_file`/`roadnet_file` mod 读取；单个 HTML + three.js | 用 Chromium 系浏览器直接打开 `map_editor.html`；纯逻辑测试 `node tests/test_*.js`，详见其 README |
 | MapEmbed | 把 `.terrain`/`.roadnet` 编码进 TerrainMod/RoadnetMod 的 C++ 源码(以 Basic 的 `terrain_file`/`roadnet_file` 为模板，数据内嵌，不读文件)，生成的 mod 和 `--path` 读文件的效果相同 | `python Tools/MapEmbed/embed_map.py terrain|roadnet <文件> --id <id> --class <类名> --name <显示名> --out <目录>`，详见其 README |
 | MixamoRetarget | Mixamo 人形动画重定向到 Manny 的编辑器手工流程(含已建好的 `IK_XBot`/`IK_Mannequin`/`RTG_NewRetargeter` 资产清单，游泳动画就是这么做的) | 只有文档，见其 README |

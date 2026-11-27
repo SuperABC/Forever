@@ -24,9 +24,12 @@
 #include "player/player.h"
 #include "player/player_save.h"
 #include "player/asset.h"
+#include "common/config.h"
+#include "common/utf8_path.h"
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -461,6 +464,106 @@ namespace {
 	}
 }
 
+namespace {
+	// 音乐音轨(Core/player/music)：操作语义、post和music change两个入口、resource_paths里的中文文件名、player段存读。
+	void CheckMusic(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+
+		MusicTracks tracks;
+		run.Check(!tracks.Play("bgm", "", false).empty() && !tracks.Pause("none").empty() && !tracks.Apply("jump", "bgm", "", false, 0).empty(),
+			"music: play without asset / unknown track / unknown op fail");
+		run.Check(tracks.Play("bgm", "a.mp3", true).empty(), "music: play creates a track");
+		const MusicTracks::Track* track = tracks.Find("bgm");
+		const uint64_t firstGeneration = track ? track->generation : 0;
+		run.Check(track && track->asset == "a.mp3" && track->loop && !track->paused && track->position == 0.0, "music: a new track starts at 0, looping as asked");
+		tracks.Report("bgm", 30.0, 100.0, MusicTracks::Status::Playing);
+		run.Check(tracks.Pause("bgm").empty() && tracks.Find("bgm")->paused && tracks.Find("bgm")->generation == firstGeneration,
+			"music: pause keeps the generation (UE pauses in place)");
+		run.Check(tracks.Seek("bgm", 500.0).empty() && tracks.Find("bgm")->position == 100.0 && tracks.Find("bgm")->paused
+			&& tracks.Find("bgm")->generation != firstGeneration, "music: seek clamps to the duration, keeps pause, bumps the generation");
+		tracks.Report("bgm", 100.0, 100.0, MusicTracks::Status::Ended);
+		run.Check(tracks.Seek("bgm", 10.0).empty() && tracks.Find("bgm")->status == MusicTracks::Status::Playing, "music: seeking an ended track plays it again");
+		run.Check(string(MusicTracks::StatusName(MusicTracks::Status::Playing, true)) == "paused", "music: a paused playing track reports paused");
+		run.Check(tracks.Play("other", "b.mp3", false).empty() && tracks.Stop("bgm").empty() && !tracks.Find("bgm") && tracks.Find("other"),
+			"music: tracks are independent and stop removes only its own track");
+
+		// post入口
+		Player& player = *world.player;
+		PostImplement post(world.map, world.populace, world.society, world.story, world.industry, world.traffic, world.player);
+		JsonValue play(DATA_OBJECT);
+		play["post"] = "music"; play["track"] = "coretest_post"; play["op"] = "play"; play["asset"] = "x.ogg"; play["loop"] = true;
+		post.Post(play);
+		const bool playOk = post.GetResult()["result"].AsString() == "success";
+		JsonValue status(DATA_OBJECT);
+		status["post"] = "music status"; status["track"] = "coretest_post";
+		post.Post(status);
+		run.Check(playOk && post.GetResult()["result"].AsString() == "success" && post.GetResult()["asset"].AsString() == "x.ogg"
+			&& post.GetResult()["state"].AsString() == "loading" && post.GetResult()["loop"].AsBool(), "music post: play then status");
+		JsonValue seek(DATA_OBJECT);
+		seek["post"] = "music"; seek["track"] = "coretest_post"; seek["op"] = "seek"; seek["position"] = 12.5;
+		post.Post(seek);
+		run.Check(post.GetResult()["result"].AsString() == "success" && player.GetMusic().Find("coretest_post")->position == 12.5, "music post: seek");
+		JsonValue bad(DATA_OBJECT);
+		bad["post"] = "music"; bad["track"] = "coretest_none"; bad["op"] = "pause";
+		post.Post(bad);
+		run.Check(post.GetResult()["result"].AsString() == "fail", "music post: pausing a missing track fails");
+
+		// change入口：Player::ApplyChange求值各字段表达式再执行(脚本JSON解析只是字段一一对应，Script::BuildChanges是私有的)
+		ChangeKind kind;
+		run.Check(FindChangeKind("music", kind) && kind == ChangeKind::Music && !FindChangeKind("play_bgm", kind), "music change: \"music\" replaces play_bgm/stop_bgm");
+		MusicChange playChange("\"coretest_change\"", "\"play\"", "\"/Game/Asset/Sound/none\"", "true", "");
+		MusicChange seekChange("\"coretest_change\"", "\"seek\"", "", "", "3+4");
+		ScriptContext context;
+		run.Check(player.ApplyChange(&playChange, context) && player.ApplyChange(&seekChange, context), "music change: handled by Player");
+		const MusicTracks::Track* changed = player.GetMusic().Find("coretest_change");
+		run.Check(changed && changed->asset == "/Game/Asset/Sound/none" && changed->loop && changed->position == 7.0, "music change: play + seek expression applied");
+
+		// player段存读：音轨回来，进度保持，generation换新(UE看到就从进度接着放)
+		player.GetMusic().Pause("coretest_post");
+		SaveArchive archive;
+		MapSaveCodec::Save(*world.map, archive);
+		PlayerSaveCodec::Save(player, *world.map, archive);
+		string error;
+		Map* loaded = MapSaveCodec::Load(archive, error);
+		Player* player2 = loaded ? PlayerSaveCodec::Load(archive, *loaded, error) : nullptr;
+		run.Check(player2 != nullptr, "music: player section loads back", error);
+		if (player2) {
+			const MusicTracks::Track* back = player2->GetMusic().Find("coretest_post");
+			const MusicTracks::Track* original = player.GetMusic().Find("coretest_post");
+			run.Check(back && original && back->asset == "x.ogg" && back->loop && back->paused && back->position == 12.5,
+				"music: a track survives the round trip (asset/loop/paused/position)");
+			run.Check(player2->GetMusic().GetTracks().size() == player.GetMusic().GetTracks().size(), "music: every track is saved");
+			SaveArchive again;
+			MapSaveCodec::Save(*loaded, again);
+			PlayerSaveCodec::Save(*player2, *loaded, again);
+			const SaveSection* before = archive.Find(SAVE_SECTION_PLAYER);
+			const SaveSection* after = again.Find(SAVE_SECTION_PLAYER);
+			run.Check(before && after && before->data == after->data, "music: the player section saves back byte for byte");
+		}
+		delete player2;
+		delete loaded;
+		player.GetMusic().Stop("coretest_post");
+		player.GetMusic().Stop("coretest_change");
+
+		// resource_paths里的中文文件名(Forever_UE/Resource/Audio/Music下两首测试mp3)：列出来是UTF-8，按名字能找到真实文件。
+		const vector<string> files = Config::ListResourceFiles("Music", { "mp3", ".WAV", "ogg" });
+		const string moon = "\xE5\x86\xB0\xE5\xBF\x83\xE6\x9C\x88\xE5\x85\x89.mp3"; // 冰心月光.mp3
+		const bool listed = find(files.begin(), files.end(), moon) != files.end();
+		run.Check(listed && is_sorted(files.begin(), files.end()), "list resource files: the UTF-8 Chinese mp3 name is listed (sorted)",
+			to_string(files.size()) + " files");
+		const string path = Config::GetResourceFilePath(moon);
+		error_code ec;
+		run.Check(!path.empty() && filesystem::exists(Utf8ToPath(path), ec), "list resource files: the listed name resolves to an existing file", path);
+		JsonValue list(DATA_OBJECT);
+		list["post"] = "list resource files"; list["folder"] = "Music";
+		JsonValue extensions(DATA_ARRAY);
+		extensions.append(JsonValue("mp3"));
+		list["extensions"] = extensions;
+		post.Post(list);
+		run.Check(post.GetResult()["result"].AsString() == "success" && post.GetResult()["files"].size() == files.size(), "list resource files post");
+	}
+}
+
 void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	(void)options;
 	TestRun& run = TestRun::Get();
@@ -482,6 +585,7 @@ void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckGroundAssetRoundTrip(world);
 	CheckRoomYawConvention(world);
 	CheckSocietyRoundTrip(world);
+	CheckMusic(world);
 	RecordMemory("save: after round trips"); // 回环重建的域如果没释放会在这里涨
 	CheckSleepiness(world); // 会推进世界时间，放最后
 }

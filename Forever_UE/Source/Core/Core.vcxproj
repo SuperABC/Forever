@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -120,6 +120,7 @@
     <ClCompile Include="player\vehicle_asset.cpp" />
     <ClCompile Include="player\weapon.cpp" />
     <ClCompile Include="player\weather.cpp" />
+    <ClCompile Include="player\music.cpp" />
     <ClCompile Include="player\app.cpp" />
     <ClCompile Include="player\phone.cpp" />
     <ClCompile Include="player\puzzle.cpp" />
@@ -201,6 +202,7 @@
     <ClInclude Include="player\vehicle_asset.h" />
     <ClInclude Include="player\weapon.h" />
     <ClInclude Include="player\weather.h" />
+    <ClInclude Include="player\music.h" />
     <ClInclude Include="player\app.h" />
     <ClInclude Include="player\phone.h" />
     <ClInclude Include="player\puzzle.h" />

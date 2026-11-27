@@ -69,6 +69,12 @@ public:
 	*/
 	void Refresh(Canvas* canvas, PostHandle* post);
 
+	/*
+	* 在任务列表里被关掉时调用一次(之后实例被销毁)
+	* @post: 向Core发起查询的句柄
+	*/
+	void Exit(PostHandle* post);
+
 private:
 	// 工厂
 	AppFactory* factory;

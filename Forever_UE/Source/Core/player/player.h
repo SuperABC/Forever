@@ -5,6 +5,7 @@
 #include "player/asset.h"
 #include "player/asset_factory.h"
 #include "player/weather.h"
+#include "player/music.h"
 
 #include <string>
 #include <unordered_map>
@@ -59,6 +60,10 @@ public:
 	// UE层每帧用ConsumeChanged()取变化、广播weather_change事件，见weather.md。
 	Weather& GetWeather() { return weather; }
 	const Weather& GetWeather() const { return weather; }
+
+	// 音乐音轨(按轨道名独立)：post {"post":"music"}和music change都改它，UE层每帧对照着播并回写进度，见music.md。随存档。
+	MusicTracks& GetMusic() { return music; }
+	const MusicTracks& GetMusic() const { return music; }
 
 	// 生命值——"扣血/回血/是否死亡"最小闭环，不做死亡后果(复活/game over等)，见
 	// Source/Forever/Player/ForeverWeaponComponent.md。伤害/治疗量传负数没有意义，调用方
@@ -212,6 +217,7 @@ private:
 
 	// 天气(默认晴天，自动换天气的倒计时在Weather自己里面)
 	Weather weather;
+	MusicTracks music;
 
 	// 100点是随手给的默认值，具体数值等PIE里试手感再调。
 	float health = 100.f;

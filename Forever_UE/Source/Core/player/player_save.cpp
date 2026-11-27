@@ -189,6 +189,16 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 	w.U8(static_cast<uint8_t>(player.weather.type));
 	w.F64(static_cast<double>(player.weather.remainingMs));
 
+	// 音乐音轨：轨道名、资产、循环、暂停、进度(UE回写的实际进度)。段尾后加的，更早的存档没有它。
+	w.U32(static_cast<uint32_t>(player.music.tracks.size()));
+	for (const auto& [name, track] : player.music.tracks) {
+		w.Str(name);
+		w.Str(track.asset);
+		w.U8(track.loop ? 1 : 0);
+		w.U8(track.paused ? 1 : 0);
+		w.F64(track.position);
+	}
+
 	archive.SetBinary(SAVE_SECTION_PLAYER, VersionOf(SAVE_SECTION_PLAYER), w.Take());
 }
 
@@ -245,6 +255,22 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 			if (!r.Failed() && weatherType <= static_cast<uint8_t>(Weather::Type::HeavySnow)) {
 				player->weather.type = static_cast<Weather::Type>(weatherType);
 				player->weather.remainingMs = static_cast<long long>(remaining);
+			}
+		}
+
+		// 音乐音轨。读档后都是"加载中"、带新的generation，UE层第一次对照时从存下的进度接着放。
+		if (!r.AtEnd()) {
+			uint32_t trackCount = r.U32();
+			for (uint32_t i = 0; i < trackCount && !r.Failed(); i++) {
+				string name = r.Str();
+				MusicTracks::Track track;
+				track.asset = r.Str();
+				track.loop = r.U8() != 0;
+				track.paused = r.U8() != 0;
+				track.position = r.F64();
+				if (r.Failed() || name.empty() || track.asset.empty()) continue;
+				track.generation = player->music.nextGeneration++;
+				player->music.tracks[name] = track;
 			}
 		}
 

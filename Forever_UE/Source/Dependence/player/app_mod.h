@@ -35,6 +35,10 @@ public:
 	// 从后台切回前台时调用:不重新Init,按已有状态重画。
 	virtual void Refresh(Canvas* canvas, PostHandle* post) = 0;
 
+	// 在任务列表里被关掉时调用一次(随后实例被销毁)，App在这里收尾，比如Music停掉自己的音轨。
+	// 只有关掉才调：退回桌面/切到别的App不算退出；整局结束(手机随世界销毁)也不调。默认什么都不做。
+	virtual void Exit(PostHandle* post) {}
+
 	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}

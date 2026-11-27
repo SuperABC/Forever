@@ -34,7 +34,13 @@ public:
 	// @ms: 距上一帧的毫秒数
 	// @post: 向Core发起查询的句柄(主屏日期/时间靠这个查"game time"，见Core/common/implement.cpp)
 	// @return: 0表示继续，非0表示请求关闭整个手机UI(目前只有Home界面按ESC才会触发)
+	// 打开过(在最近任务里、还没被关掉)的App每帧都跑：前台那个用canvas画，其余的用一块关掉绘制的画布(hiddenCanvas)
+	// 只跑逻辑(比如Music app放完一首接下一首)。后台App没有输入。
 	int Loop(Canvas* canvas, int ms, PostHandle* post);
+
+	// 手机关着(宿主不显示)时每帧调用：所有打开过的App都用不绘制的画布只跑逻辑。开局手机还没创建、在任务列表里
+	// 关掉的App已经被delete，都不会跑。
+	void LoopHidden(int ms, PostHandle* post);
 
 	// 桌面上的App类型(图标顺序)，Init之后有效。
 	const std::vector<std::string>& GetAppTypes() const { return appTypes; }
@@ -73,6 +79,9 @@ private:
 	std::vector<std::string> appNames; // 与appTypes一一对应，桌面图标下显示的App::GetName()
 	std::vector<std::string> appTypes; // 已启用的App类型(桌面图标顺序)，来自AppFactory::GetRegisteredIds()，跳过AppMod::showOnDesktop为false的
 	std::vector<AppEntry> entries;     // 打开过的App("最近任务")
+	Canvas hiddenCanvas;               // 后台App用的画布：和真画布同尺寸，关掉绘制(Canvas::SetDrawEnabled(false))
+	// 不在前台的、已经Init过的App各跑一帧逻辑(skipType=前台那个，空=全部)。
+	void TickBackgroundApps(int ms, PostHandle* post, const std::string& skipType);
 	State state = State::Home;
 	int homeSelection = 0;
 	int taskSelection = 0;
@@ -94,7 +103,7 @@ private:
 	void OpenApp(Canvas* canvas, int entryIndex, PostHandle* post);
 
 	void SaveSnapshot(Canvas* canvas, int entryIndex);
-	void CloseEntry(int entryIndex); // 从entries里erase，delete App*
+	void CloseEntry(int entryIndex, PostHandle* post); // 先调App::Exit，再从entries里erase，delete App*
 
 	// 离开当前InApp状态前先存缩略图，再切到Home/TaskList状态。
 	void GoHome(Canvas* canvas, PostHandle* post);

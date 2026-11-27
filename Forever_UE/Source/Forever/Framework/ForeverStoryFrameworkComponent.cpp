@@ -13,6 +13,9 @@
 #include "Player/ForeverWeaponComponent.h"
 #include "Player/ForeverProjectileBridgeComponent.h"
 #include "Player/ForeverDamage.h"
+#include "Player/ForeverVoiceSubsystem.h"
+#include "Components/AudioComponent.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/Pawn.h"
 #include "UI/SectionSpeakingWidget.h"
 #include "UI/BackgroundSpeakingWidget.h"
@@ -1068,8 +1071,10 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 			item.speaker = UTF8_TO_TCHAR(speaker.data());
 			item.content = UTF8_TO_TCHAR(content.data());
 			item.label = label;
+			item.voice = UTF8_TO_TCHAR(voice.data());
 			item.background = section.GetBackground();
 		}
+		item.id = ++nextItemId;
 
 		// 分支的选项全被condition过滤掉了：没有可点的选项，整个分支跳过，免得界面卡在空选项上。
 		if (item.bBranch && item.options.Num() == 0) continue;
@@ -1588,12 +1593,19 @@ void UForeverStoryFrameworkComponent::ShowCurrentBackground() {
 
 	if (backgroundQueue.Num() == 0) {
 		if (widget) widget->HideLine();
+		backgroundVoiceItem = 0;
+		StopVoice(backgroundVoice);
 		return;
 	}
 
 	// 不碰输入模式/鼠标/MeetOption——后台对话不抢操控。控件没配置时照样计时推进队列。
 	const FPendingItem& item = backgroundQueue[0];
 	if (widget) widget->ShowLine(item.speaker, item.content);
+	// 后台语音一律2D，显示多久只看background秒数，切下一句时没播完的停掉。
+	if (item.id != backgroundVoiceItem) {
+		backgroundVoiceItem = item.id;
+		PlayVoice(backgroundVoice, item.voice);
+	}
 	// 世界计时器跟随时间缩放：暂停(时间缩放为0)期间计时冻结。
 	if (UWorld* world = GetWorld()) {
 		world->GetTimerManager().SetTimer(backgroundTimer, this, &UForeverStoryFrameworkComponent::AdvanceBackground,
@@ -1631,8 +1643,27 @@ void UForeverStoryFrameworkComponent::EndPlay(const EEndPlayReason::Type EndPlay
 	UForeverProjectileBridgeComponent::HitHandler().Unbind();
 	if (UWorld* world = GetWorld()) world->GetTimerManager().ClearTimer(backgroundTimer);
 	backgroundQueue.Reset();
+	StopVoice(foregroundVoice);
+	StopVoice(backgroundVoice);
+	foregroundVoiceItem = backgroundVoiceItem = 0;
 	CORE_GUARD_END
 	Super::EndPlay(EndPlayReason);
+}
+
+void UForeverStoryFrameworkComponent::StopVoice(TWeakObjectPtr<UAudioComponent>& slot) {
+	if (UAudioComponent* component = slot.Get()) component->Stop();
+	slot = nullptr;
+}
+
+void UForeverStoryFrameworkComponent::PlayVoice(TWeakObjectPtr<UAudioComponent>& slot, const FString& voice) {
+	StopVoice(slot);
+	if (voice.IsEmpty()) return;
+	UGameInstance* gameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	UForeverVoiceSubsystem* voices = gameInstance ? gameInstance->GetSubsystem<UForeverVoiceSubsystem>() : nullptr;
+	USoundBase* sound = voices ? voices->ResolveVoice(voice) : nullptr;
+	if (!sound) return;
+	// 2D、非UI声音：暂停游戏时跟着暂停；播完自动销毁组件(弱引用随之失效)。
+	slot = UGameplayStatics::SpawnSound2D(this, sound, 1.f, 1.f, 0.f, nullptr, false, true);
 }
 
 void UForeverStoryFrameworkComponent::BroadcastSpeakingFinish(const string& label) {
@@ -1697,6 +1728,13 @@ void UForeverStoryFrameworkComponent::ShowCurrentItem() {
 		pendingQueue.RemoveAt(0);
 	}
 	if (backgroundWasIdle && backgroundQueue.Num() > 0) ShowCurrentBackground();
+
+	// 前台语音：显示的那一项换了才重新播(本函数会对同一项重复调用)；换成分支/对话结束时停掉。
+	const uint64 headId = pendingQueue.Num() > 0 ? pendingQueue[0].id : 0;
+	if (headId != foregroundVoiceItem) {
+		foregroundVoiceItem = headId;
+		PlayVoice(foregroundVoice, pendingQueue.Num() > 0 && !pendingQueue[0].bBranch ? pendingQueue[0].voice : FString());
+	}
 
 	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 	if (!playerController) return;

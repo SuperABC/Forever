@@ -176,6 +176,7 @@
     <ClCompile Include="traffic\vehicle_truck.cpp" />
     <ClCompile Include="player\app_bounce.cpp" />
     <ClCompile Include="player\app_notes.cpp" />
+    <ClCompile Include="player\app_music.cpp" />
     <ClCompile Include="player\asset_ammo_pistol.cpp" />
     <ClCompile Include="player\asset_ammo_rifle.cpp" />
     <ClCompile Include="player\asset_ammo_shotgun.cpp" />
@@ -309,6 +310,7 @@
     <ClInclude Include="traffic\vehicle_truck.h" />
     <ClInclude Include="player\app_bounce.h" />
     <ClInclude Include="player\app_notes.h" />
+    <ClInclude Include="player\app_music.h" />
     <ClInclude Include="player\asset_ammo_pistol.h" />
     <ClInclude Include="player\asset_ammo_rifle.h" />
     <ClInclude Include="player\asset_ammo_shotgun.h" />

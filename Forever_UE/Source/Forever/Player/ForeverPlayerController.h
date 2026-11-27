@@ -33,6 +33,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	// 手机关着时让打开过的App在后台跑逻辑(UPhoneWidget::TickHidden)。PlayerController暂停时也Tick。
+	virtual void Tick(float DeltaSeconds) override;
 
 	// 全局热键绑在这里而不是Pawn上：换人操控/换乘载具时Controller不变，见md。
 	virtual void SetupInputComponent() override;

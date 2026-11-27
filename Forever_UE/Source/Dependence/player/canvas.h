@@ -94,6 +94,11 @@ public:
 	const uint8_t* GetData() const; // BGRA，供UE桥接层贴图用
 	int GetDataSize() const;
 
+	// 不绘制开关(默认开)：关掉后所有画图调用直接返回，尺寸、字号、StringWidth/GetFontHeight和PutString的返回高度照常，
+	// 输入队列照常。Phone给后台运行(在任务列表里但不在前台、或手机关着)的app用一块关掉绘制的画布，见Core/player/phone.md。
+	void SetDrawEnabled(bool enabled) { drawEnabled = enabled; }
+	bool IsDrawEnabled() const { return drawEnabled; }
+
 	void SetColor(int r, int g, int b);
 	void SetAlpha(float alpha); // 0~1，之后的绘图操作跟画布已有像素按这个比例混合
 	float GetAlpha() const;
@@ -150,6 +155,7 @@ public:
 private:
 	int width = 0, height = 0;
 	std::vector<uint8_t> buffer; // BGRA
+	bool drawEnabled = true;
 
 	uint8_t brushR = 255, brushG = 255, brushB = 255;
 	float brushAlpha = 1.f;

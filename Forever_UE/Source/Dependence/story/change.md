@@ -34,7 +34,7 @@
    `TestNavigate*`/`VehicleCommand`/`ChangeControl`/`DebugPrint`/`GlobalSetting`/`GlobalMessage`/`CreateTimer`/`RemoveTimer`/
    `SpawnNpc`/`NPCRevive`/`NPCTeleport`/`NPCNavigate`/资产四种/`ForRange`等（Core不认识Actor/Controller/GEngine）。
 2. 其余转发给各域`ApplyChange`，谁认识谁处理：`Map`（`AddOption`/`RemoveOption`/`LaunchElevator`/`SetDoor`/`RecordObject`/
-   `RegisterDoor`）、`Player`（`ChangeWeather`/资产上的`AddOption`/`RemoveOption`）、`Populace`/`Traffic`（各自对象上的选项）、
+   `RegisterDoor`）、`Player`（`ChangeWeather`/`Music`/资产上的`AddOption`/`RemoveOption`）、`Populace`/`Traffic`（各自对象上的选项）、
    `Story`（`SetValue`）。
 3. `PlaceHolderChange`没有任何执行效果；它是留给`ScriptMod::WrapScript`替换的锚点（见下）。没被替换就原样落到这里，不崩溃但等于
    剧情作者忘了配对应的mod逻辑。
@@ -42,10 +42,12 @@
 ## JSON分发
 
 `Core/story/script.h`的`Script::BuildChanges`识别35种`type`，未识别的`type`直接`THROW_EXCEPTION`（剧情写错应尽早报错）；
-`ApplyChange`链上没人认识的Change则只是不生效（运行时每次匹配后都会走，比解析阶段宽松）。**没有JSON分支的19种**
-（只能由C++构造，或尚未实现）：`GameEnd`/`RemoveValue`/`DeactivateMilestone`/`RemoveNpc`/`TeleportPlayer`/`PlayVideo`/`PlayBgm`/
-`StopBgm`/`BankTransaction`/`GiveEstate`/`RemoveEstate`/`GiveVehicle`/`RemoveVehicle`/`PlayerInjured`/`PlayerCured`/`PlayerIll`/
+`ApplyChange`链上没人认识的Change则只是不生效（运行时每次匹配后都会走，比解析阶段宽松）。**没有JSON分支的17种**
+（只能由C++构造，或尚未实现）：`GameEnd`/`RemoveValue`/`DeactivateMilestone`/`RemoveNpc`/`TeleportPlayer`/`PlayVideo`/
+`BankTransaction`/`GiveEstate`/`RemoveEstate`/`GiveVehicle`/`RemoveVehicle`/`PlayerInjured`/`PlayerCured`/`PlayerIll`/
 `PlayerRecover`/`ChangeTime`/`ChangeWanted`。
+
+`music`(2026-11-27实现，替换了从没实现过的`play_bgm`/`stop_bgm`)：按轨道名控制音乐，`{ "type": "music", "track": "\"bgm\"", "op": "\"play\"", "asset": "\"冰心月光.mp3\"", "loop": "true" }`。字段都是表达式：`track`轨道名、`op`是play/pause/resume/stop/seek、`asset`(只有play要)以`/`开头是UE声音资产，否则是resource_paths里的音频文件名(wav/ogg/mp3)、`loop`求值为true/1才循环、`position`(只有seek要)秒。由`Player::ApplyChange`改Core的`MusicTracks`，UE的`UForeverMusicFrameworkComponent`每帧对照着播，见`Core/player/music.md`。和post handle的`music`是同一套操作。
 
 `player_sleep`(2026-11-26实现)：玩家操控的市民睡觉，`{ "type": "player_sleep" }`。`hour`(表达式，游戏小时)可选：省略=按瞌睡值算要睡多久
 (`Citizen::SleepHoursFor`；瞌睡值还在80%以上时不困、不睡，只提示一句)，给了就睡那么久。UE层执行：`Citizen::BeginSleep`后跳时间，醒来瞌睡值回满。

@@ -417,14 +417,19 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, b
 	}
 
 	// 行进中的车(Core推算中)：车头对准当前路线的前进方向(倒车段则车尾朝前进方向)，不用上次记下的朝向，
-	// 否则刚生成就要掉头。取剩余路径里第一段有长度的线段。
+	// 否则刚生成就要掉头。取剩余路径里第一段有长度的线段。俯仰角也按这段的坡度给(倒车段取反)，
+	// 平着生成在坡上会让车头/车尾插进路面卡住。停着的车(车位在楼板上)仍然水平。
+	float spawnPitch = 0.f;
 	if (entry.vehicle && entry.vehicle->IsDriving() && GetWorld()) {
 		std::vector<Vehicle::DrivePoint> remaining;
 		entry.vehicle->GetRemainingDrive(GetWorld()->GetTimeSeconds(), remaining);
 		for (size_t i = 1; i < remaining.size(); i++) {
 			const float dx = remaining[i].x - remaining[i - 1].x, dy = remaining[i].y - remaining[i - 1].y;
 			if (dx * dx + dy * dy < 1.f) continue;
-			entry.yaw = FMath::RadiansToDegrees(FMath::Atan2(dy, dx)) + (remaining[i - 1].reverse ? 180.f : 0.f);
+			const bool bReverse = remaining[i - 1].reverse;
+			entry.yaw = FMath::RadiansToDegrees(FMath::Atan2(dy, dx)) + (bReverse ? 180.f : 0.f);
+			const float slope = FMath::RadiansToDegrees(FMath::Atan2(remaining[i].z - remaining[i - 1].z, FMath::Sqrt(dx * dx + dy * dy)));
+			spawnPitch = bReverse ? -slope : slope;
 			break;
 		}
 	}
@@ -447,7 +452,7 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, b
 		const USkeletalMeshComponent* defaultMesh = defaults ? defaults->GetCarMesh() : nullptr;
 		FVector extent = defaultMesh ? defaultMesh->CalcBounds(FTransform::Identity).BoxExtent : FVector(250.f, 110.f, 90.f);
 		extent = FVector(FMath::Max(extent.X, 150.f), FMath::Max(extent.Y, 80.f), FMath::Max(extent.Z, 60.f));
-		const FQuat rotation = FRotator(0.f, entry.yaw, 0.f).Quaternion();
+		const FQuat rotation = FRotator(spawnPitch, entry.yaw, 0.f).Quaternion();
 		const FVector center = entry.location + FVector(0.f, 0.f, extent.Z + 20.f);
 		FCollisionQueryParams queryParams(SCENE_QUERY_STAT(VehicleSpawnSpace), false);
 		if (GetWorld()->OverlapAnyTestByObjectType(center, rotation, FCollisionObjectQueryParams(ECC_Vehicle),
@@ -462,7 +467,7 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, b
 	spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	AVehicleElement* vehicleElement = GetWorld()->SpawnActor<AVehicleElement>(
-		vehicleClass, entry.location, FRotator(0.f, entry.yaw, 0.f), spawnParams);
+		vehicleClass, entry.location, FRotator(spawnPitch, entry.yaw, 0.f), spawnParams);
 	if (!vehicleElement) return nullptr;
 
 	vehicleElement->Init(entry.vehicle, nullptr); // 这时候还没人上车，previousPawn先留空
@@ -1604,14 +1609,14 @@ bool UForeverTrafficFrameworkComponent::HandoffToPhysics(FLineVehicleState& stat
 	FActorSpawnParameters params;
 	params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AVehicleElement* element = GetWorld()->SpawnActor<AVehicleElement>(
-		state.physicsClass, location, FRotator(0.f, yaw, 0.f), params);
+		state.physicsClass, location, FRotator(vehicle->GetPitch(), yaw, 0.f), params); // 俯仰角沿用运动学那辆的(线路坡度)，平着生成在坡上会卡进路面
 	if (!element) {
 		if (ATransitVehicleElement* kinematic = state.kinematic.Get()) kinematic->SetSuspended(false);
 		return false;
 	}
 	vehicle->SetPhysicsDriven(true);
 	element->Init(vehicle, nullptr);
-	const FVector forward = FRotator(0.f, yaw, 0.f).Vector();
+	const FVector forward = FRotator(vehicle->GetPitch(), yaw, 0.f).Vector();
 	element->ResumePhysics(forward * schedule.speedMapPerRealSecond * TRAFFIC_WORLD_SCALE);
 
 	state.element = element;

@@ -19,6 +19,7 @@
 #include "player/puzzle_dodge.h"
 #include "player/app_bounce.h"
 #include "player/app_notes.h"
+#include "player/app_music.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -57,7 +58,7 @@ EMSCRIPTEN_KEEPALIVE void web_setup() {
 	host = new ModHost();
 	StubPost::ResourceRoot() = "/res"; // build_web.bat用--embed-file把Resource/Mod/Basic内嵌到这里
 
-	ModHost::EnableIds({ TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId(), DodgePuzzle::GetId(), DancePuzzle::GetId(), CoinsPuzzle::GetId(), TubesPuzzle::GetId(), RhythmPuzzle::GetId(), ChasePuzzle::GetId(), TowerPuzzle::GetId(), MinerPuzzle::GetId(), BurgerPuzzle::GetId(), PokerPuzzle::GetId() }, { BounceApp::GetId(), NotesApp::GetId() });
+	ModHost::EnableIds({ TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId(), DodgePuzzle::GetId(), DancePuzzle::GetId(), CoinsPuzzle::GetId(), TubesPuzzle::GetId(), RhythmPuzzle::GetId(), ChasePuzzle::GetId(), TowerPuzzle::GetId(), MinerPuzzle::GetId(), BurgerPuzzle::GetId(), PokerPuzzle::GetId() }, { BounceApp::GetId(), NotesApp::GetId(), MusicApp::GetId() });
 	PuzzleFactory& puzzles = Registry::Get().GetPuzzleFactory();
 	puzzles.RegisterPuzzle(TetrisPuzzle::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new TetrisPuzzle(); },
@@ -101,6 +102,9 @@ EMSCRIPTEN_KEEPALIVE void web_setup() {
 		[](AppMod* m) { delete m; });
 	apps.RegisterApp(NotesApp::GetId(),
 		[](const std::string&) -> AppMod* { return new NotesApp(); },
+		[](AppMod* m) { delete m; });
+	apps.RegisterApp(MusicApp::GetId(),
+		[](const std::string&) -> AppMod* { return new MusicApp(); },
 		[](AppMod* m) { delete m; });
 }
 

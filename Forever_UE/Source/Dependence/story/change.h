@@ -20,7 +20,7 @@ enum class ChangeKind : int {
 	OpenShop, StartPuzzle, PayWage, EnterVehicle, ShowRoute, VisualizeNavigation,
 	VehicleCommand, VehicleNavigate, LeaveVehicle, BoardVehicle, ForceLeave, SetDoor,
 	RecordObject, RegisterDoor, JumpTime, CreateTimer, RemoveTimer, LaunchElevator,
-	PlayVideo, PlayBgm, StopBgm, BankTransaction, GiveEstate, RemoveEstate,
+	PlayVideo, Music, BankTransaction, GiveEstate, RemoveEstate,
 	GiveVehicle, RemoveVehicle, PlayerInjured, PlayerCured, PlayerIll, PlayerRecover,
 	PlayerSleep, ChangeTime, ChangeWanted, ChangeWeather, ChangeControl, PickAsset,
 	GrantAsset, DeductAsset, DropAsset, SpawnEffect, SoundEffect, SpawnActor,
@@ -1107,44 +1107,32 @@ private:
 
 };
 
-// 播放背景音乐
-class PlayBgmChange : public Change {
+// 音乐音轨：按轨道名播放/暂停/继续/停止/跳转(op="play|pause|resume|stop|seek")，和post {"post":"music"}同一套，
+// 由Player::ApplyChange改Core的音轨状态(MusicTracks)，UE层对照着播，见Core/player/music.md。全部字段都是表达式。
+// asset：'/'开头=UE声音资产路径，否则=resource_paths里的.wav/.ogg/.mp3文件名(同对话语音)，只有play要；
+// loop：play时是否循环(求值为"true"/"1"算真)；position：seek的秒数。
+class MusicChange : public Change {
 public:
-	PlayBgmChange();
+	MusicChange();
 
-	PlayBgmChange(std::string bgm, std::string loop);
+	MusicChange(std::string track, std::string op, std::string asset, std::string loop, std::string position);
 
-	virtual ~PlayBgmChange();
+	virtual ~MusicChange();
 
-	static constexpr ChangeKind Kind = ChangeKind::PlayBgm;
+	static constexpr ChangeKind Kind = ChangeKind::Music;
 
-	void SetBgm(std::string bgm);
-
-	const std::string& GetBgm() const;
-
-	void SetLoop(std::string loop);
-
-	const std::string& GetLoop() const;
+	const std::string& GetTrack() const { return track; }
+	const std::string& GetOp() const { return op; }
+	const std::string& GetAsset() const { return asset; }
+	const std::string& GetLoop() const { return loop; }
+	const std::string& GetPosition() const { return position; }
 
 private:
-	// 背景音乐标识
-	std::string bgm;
-
-	// 是否循环播放
+	std::string track;
+	std::string op;
+	std::string asset;
 	std::string loop;
-
-};
-
-// 停止背景音乐
-class StopBgmChange : public Change {
-public:
-	StopBgmChange();
-
-	virtual ~StopBgmChange();
-
-	static constexpr ChangeKind Kind = ChangeKind::StopBgm;
-
-private:
+	std::string position;
 };
 
 // 存款收支

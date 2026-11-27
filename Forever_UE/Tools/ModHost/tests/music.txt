@@ -1,0 +1,33 @@
+# Music app(480x640)：曲库 -> 点第一首播放(迷你条出现) -> 点迷你条进正在播放 -> 切单曲循环 -> 暂停 -> 拖进度条 -> 系统返回回曲库
+# ModHost的"music"/"music status"是假实现：不出声、进度不走、时长固定180秒。
+wait 100
+open_app 2
+wait 100
+shot music_01_library
+click 240 146
+wait 100
+shot music_02_playing_minibar
+click 200 570
+wait 100
+shot music_03_now_playing
+click 48 505
+wait 50
+shot music_04_single_loop
+click 240 505
+wait 50
+shot music_05_paused
+drag 48 427 300 427
+wait 50
+shot music_06_seeked
+bar back
+wait 50
+key down
+wait 50
+shot music_07_back_to_library
+# 在任务列表里关掉Music(AppMod::Exit停掉音轨)，重新打开：没有迷你条
+bar tasks
+close_task 0
+bar home
+open_app 2
+wait 100
+shot music_08_closed_and_reopened

@@ -45,8 +45,7 @@ namespace {
 		"remove_timer",
 		"launch_elevator",
 		"play_video",
-		"play_bgm",
-		"stop_bgm",
+		"music",
 		"bank_transaction",
 		"give_estate",
 		"remove_estate",
@@ -1233,42 +1232,17 @@ const std::string& PlayVideoChange::GetPath() const {
 	return path;
 }
 
-PlayBgmChange::PlayBgmChange() :
-	Change(Kind), bgm(), loop() {
-
-}
-
-PlayBgmChange::PlayBgmChange(std::string bgm, std::string loop) :
-	Change(Kind), bgm(move(bgm)), loop(move(loop)) {
-
-}
-
-PlayBgmChange::~PlayBgmChange() {
-
-}
-
-void PlayBgmChange::SetBgm(std::string bgm) {
-	this->bgm = move(bgm);
-}
-
-const std::string& PlayBgmChange::GetBgm() const {
-	return bgm;
-}
-
-void PlayBgmChange::SetLoop(std::string loop) {
-	this->loop = move(loop);
-}
-
-const std::string& PlayBgmChange::GetLoop() const {
-	return loop;
-}
-
-StopBgmChange::StopBgmChange() :
+MusicChange::MusicChange() :
 	Change(Kind) {
 
 }
 
-StopBgmChange::~StopBgmChange() {
+MusicChange::MusicChange(std::string track, std::string op, std::string asset, std::string loop, std::string position) :
+	Change(Kind), track(move(track)), op(move(op)), asset(move(asset)), loop(move(loop)), position(move(position)) {
+
+}
+
+MusicChange::~MusicChange() {
 
 }
 

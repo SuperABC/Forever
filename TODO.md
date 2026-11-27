@@ -114,6 +114,9 @@
 ### 界面与输入
 
 - [ ] **游戏内改键并持久化**；Move/Look 的模拟量组合按键配置化（`ForeverKeyBindingSubsystem.md`）。
+- [ ] **对话语音**：没有语音音量设置（声音分组是 `SOUNDGROUP_Voice`，但没有界面）；后台对话的语音一律 2D，不按说话人位置播 3D；文件语音只支持 16 位 PCM 的 WAV、单/双声道 OGG 和 MP3（`ForeverVoiceSubsystem.md`）。
+- [ ] **音乐**：没有全局/分轨音量设置；歌曲只读文件名，没有歌手/专辑信息和封面图；文件音乐整首解码进内存（一首约 35MB，缓存上限 128MB），很长的音频要改成流式解码（`Core/player/music.md`、`ForeverMusicFrameworkComponent.md`、`app_music.md`）。
+- [ ] **正式发行包里的原始文件**：脚本、mod 图片、对话语音和音乐（`.wav`/`.ogg`/`.mp3`）这些从 `resource_paths` 读的原始文件，现在靠 `pak.bat` 把 `Resource/` 做成 junction 指回开发目录才能读到，真正分发时要把它们 stage 进包（`config.md`、`ForeverVoiceSubsystem.md`）。
 - [ ] **识别模式**：更多信息行（年龄、职业等）；白天曝光材质（`ForeverIdentifyComponent.md`）。
 - [ ] **天空**：没有月光和星空（`ForeverSkyFrameworkComponent.md`）。
 - [ ] **天气**：雨雪音效、闪电、雷声没做（`ForeverWeatherFrameworkComponent.md`）。

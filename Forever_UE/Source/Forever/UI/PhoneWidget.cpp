@@ -74,6 +74,7 @@ void UPhoneWidget::OpenPhone() {
 void UPhoneWidget::ClosePhone() {
 	CORE_GUARD_BEGIN("UPhoneWidget::ClosePhone")
 	SetVisibility(ESlateVisibility::Collapsed);
+	for (bool& pressed : pressedInside) pressed = false; // 关着收不到抬起，下次打开不能凭空发一个
 
 	if (APlayerController* playerController = GetOwningPlayer()) {
 		playerController->bShowMouseCursor = false;
@@ -105,8 +106,7 @@ void UPhoneWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	// 缓存)，不用持久持有。找不到AForeverFrameworkActor(理论上不会发生)时对应域指针传
 	// nullptr，PostImplement::Post自己会处理成查询失败，Phone::RenderHome那边已经做了
 	// result["result"]=="success"的判断。
-	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
-		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	AForeverFrameworkActor* framework = FindFramework();
 	PostImplement post(
 		framework ? framework->GetMap() : nullptr,
 		framework ? framework->GetPopulace() : nullptr,
@@ -154,12 +154,12 @@ FReply UPhoneWidget::NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent&
 	return FReply::Handled();
 }
 
-FReply UPhoneWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+bool UPhoneWidget::UpdateMousePos(const FPointerEvent& mouseEvent) {
 	// 不能用InGeometry：DisplayImage是手机形状、在Widget里有偏移。要用DisplayImage自己的CachedGeometry做AbsoluteToLocal，
 	// 再按LocalSize/AbsoluteSize(DPI缩放)换算成画布像素坐标，和ComputeCanvasSize()同一基准，否则点击位置差一个固定比例。
-	if (!DisplayImage) return FReply::Handled();
+	if (!DisplayImage) return false;
 	FGeometry displayGeometry = DisplayImage->GetCachedGeometry();
-	FVector2D localPos = displayGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+	FVector2D localPos = displayGeometry.AbsoluteToLocal(mouseEvent.GetScreenSpacePosition());
 	FVector2D localSize = displayGeometry.GetLocalSize();
 	FVector2D absoluteSize = displayGeometry.GetAbsoluteSize();
 
@@ -168,18 +168,57 @@ FReply UPhoneWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPoint
 		canvasX = localPos.X * (absoluteSize.X / localSize.X);
 		canvasY = localPos.Y * (absoluteSize.Y / localSize.Y);
 	}
-	canvas.SetMousePos(FMath::RoundToInt(canvasX), FMath::RoundToInt(canvasY));
+	const int32 x = FMath::RoundToInt(canvasX), y = FMath::RoundToInt(canvasY);
+	canvas.SetMousePos(x, y); // 位置照常更新(画布内按下后拖出去，App的拖动还要跟着走)
+	return x >= 0 && y >= 0 && x < canvas.GetWidth() && y < canvas.GetHeight();
+}
+
+FReply UPhoneWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+	UpdateMousePos(InMouseEvent);
 	return FReply::Handled();
 }
 
 FReply UPhoneWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	int32 button = CanvasInputTranslation::TranslateMouseButton(InMouseEvent.GetEffectingButton());
-	if (button >= 0) canvas.PushMouseButton(button, true);
+	if (button < 0 || button > 2) return FReply::Handled();
+	// 按键事件自带位置，不依赖之前的MouseMove。画布外按下：什么都不发(以前会带着画布外的坐标发进去，
+	// Phone把y超出画布的点当成底部导航栏、App把它夹到边上的控件上)。
+	pressedInside[button] = UpdateMousePos(InMouseEvent);
+	if (pressedInside[button]) canvas.PushMouseButton(button, true);
+	return FReply::Handled();
+}
+
+void UPhoneWidget::TickHidden(float deltaSeconds) {
+	CORE_GUARD_BEGIN("UPhoneWidget::TickHidden")
+	if (!phone || GetVisibility() == ESlateVisibility::Visible) return;
+	AForeverFrameworkActor* framework = FindFramework();
+	PostImplement post(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		framework ? framework->GetStory() : nullptr,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	phone->LoopHidden(FMath::RoundToInt(deltaSeconds * 1000.f), &post);
+	CORE_GUARD_END
+}
+
+AForeverFrameworkActor* UPhoneWidget::FindFramework() const {
+	return Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+}
+
+FReply UPhoneWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+	if (UpdateMousePos(InMouseEvent)) canvas.PushMouseWheel(FMath::RoundToInt(InMouseEvent.GetWheelDelta()));
 	return FReply::Handled();
 }
 
 FReply UPhoneWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	int32 button = CanvasInputTranslation::TranslateMouseButton(InMouseEvent.GetEffectingButton());
-	if (button >= 0) canvas.PushMouseButton(button, false);
+	if (button < 0 || button > 2) return FReply::Handled();
+	UpdateMousePos(InMouseEvent);
+	// 只给在画布内按下的键发抬起(拖到画布外松开也发)；画布外按下的那次没发过按下，抬起也不发。
+	if (pressedInside[button]) canvas.PushMouseButton(button, false);
+	pressedInside[button] = false;
 	return FReply::Handled();
 }

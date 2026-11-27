@@ -47,3 +47,7 @@ void App::Back(Canvas* canvas, PostHandle* post) {
 void App::Refresh(Canvas* canvas, PostHandle* post) {
 	MOD_CALL(mod, mod->Refresh(canvas, post));
 }
+
+void App::Exit(PostHandle* post) {
+	MOD_CALL(mod, mod->Exit(post));
+}

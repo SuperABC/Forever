@@ -70,6 +70,14 @@ void AForeverPlayerController::TestNavigate() {
 	traffic->StartGuideToGreen(target, circleIndex, endX, endY);
 }
 
+#include "Misc/App.h"
+
+void AForeverPlayerController::Tick(float DeltaSeconds) {
+	Super::Tick(DeltaSeconds);
+	// 用不受时间缩放影响的真实帧时长：暂停/跳时间冻结世界时，后台App(音乐)照常跑。
+	if (phoneWidget) phoneWidget->TickHidden(FApp::GetDeltaTime());
+}
+
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
 	InitializeOnce();

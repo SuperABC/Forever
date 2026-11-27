@@ -286,6 +286,9 @@
     <ClCompile Include="player\app_bounce.cpp">
       <Filter>player</Filter>
     </ClCompile>
+    <ClCompile Include="player\app_music.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
     <ClCompile Include="player\app_notes.cpp">
       <Filter>player</Filter>
     </ClCompile>
@@ -679,6 +682,9 @@
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="player\app_bounce.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\app_music.h">
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\app_notes.h">

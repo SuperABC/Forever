@@ -273,6 +273,7 @@ void Canvas::SetAlpha(float alpha) { brushAlpha = clamp(alpha, 0.f, 1.f); }
 float Canvas::GetAlpha() const { return brushAlpha; }
 
 void Canvas::ClearScreen() {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			size_t idx = (static_cast<size_t>(y) * width + x) * 4;
@@ -299,6 +300,7 @@ void Canvas::BlendPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b, float alp
 }
 
 void Canvas::PutPixel(int x, int y) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	BlendPixel(x, y, brushR, brushG, brushB, brushAlpha);
 }
 
@@ -311,6 +313,7 @@ Color Canvas::GetPixel(int x, int y) const {
 }
 
 void Canvas::PutLine(int x1, int y1, int x2, int y2) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	// Bresenham直线算法
 	int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
 	int dy = -abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
@@ -326,6 +329,7 @@ void Canvas::PutLine(int x1, int y1, int x2, int y2) {
 }
 
 void Canvas::PutLine(int x1, int y1, int x2, int y2, int width) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (width <= 1) {
 		PutLine(x1, y1, x2, y2);
 		return;
@@ -360,6 +364,7 @@ void Canvas::FastLine(int x1, int x2, int y) {
 }
 
 void Canvas::PutRect(int x1, int y1, int x2, int y2, bool fill) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (x1 > x2) swap(x1, x2);
 	if (y1 > y2) swap(y1, y2);
 	if (fill) {
@@ -380,6 +385,7 @@ namespace {
 }
 
 void Canvas::PutTriangle(int x1, int y1, int x2, int y2, int x3, int y3, bool fill) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (!fill) {
 		PutLine(x1, y1, x2, y2);
 		PutLine(x2, y2, x3, y3);
@@ -402,6 +408,7 @@ void Canvas::PutTriangle(int x1, int y1, int x2, int y2, int x3, int y3, bool fi
 }
 
 void Canvas::PutCircle(int x, int y, int radius, bool fill) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (radius <= 0) return;
 	for (int dy = -radius; dy <= radius; dy++) {
 		for (int dx = -radius; dx <= radius; dx++) {
@@ -417,6 +424,7 @@ void Canvas::PutCircle(int x, int y, int radius, bool fill) {
 }
 
 void Canvas::PutEllipse(int x, int y, int radiusX, int radiusY, bool fill) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (radiusX <= 0 || radiusY <= 0) return;
 	for (int dy = -radiusY; dy <= radiusY; dy++) {
 		for (int dx = -radiusX; dx <= radiusX; dx++) {
@@ -432,6 +440,7 @@ void Canvas::PutEllipse(int x, int y, int radiusX, int radiusY, bool fill) {
 }
 
 void Canvas::FloodFill(int x, int y, Color color) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (!InBounds(x, y)) return;
 	Color target = GetPixel(x, y);
 	if (target.r == color.r && target.g == color.g && target.b == color.b) return;
@@ -475,6 +484,7 @@ void Canvas::GetImage(int left, int top, int right, int bottom, Bitmap& outBitma
 }
 
 void Canvas::PutImage(int left, int top, const Bitmap& bitmap) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	for (int y = 0; y < bitmap.height; y++) {
 		for (int x = 0; x < bitmap.width; x++) {
 			int dstX = left + x, dstY = top + y;
@@ -487,6 +497,7 @@ void Canvas::PutImage(int left, int top, const Bitmap& bitmap) {
 }
 
 void Canvas::PutRawImage(const uint8_t* srcBGRA, int srcWidth, int srcHeight, int x, int y, int dstWidth, int dstHeight) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	if (!srcBGRA || srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) return;
 
 	for (int dy = 0; dy < dstHeight; dy++) {
@@ -501,6 +512,7 @@ void Canvas::PutRawImage(const uint8_t* srcBGRA, int srcWidth, int srcHeight, in
 
 bool Canvas::LoadImageFile(const string& path, Bitmap& outBitmap) const {
 	int w = 0, h = 0, channels = 0;
+	// path是UTF-8(资源文件名索引是UTF-8，见Core/common/config.md)；Windows下STBI_WINDOWS_UTF8让stbi按UTF-8打开。
 	unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &channels, 4); // 强制4通道RGBA
 	if (!pixels || w <= 0 || h <= 0) {
 		if (pixels) stbi_image_free(pixels);
@@ -523,6 +535,7 @@ bool Canvas::LoadImageFile(const string& path, Bitmap& outBitmap) const {
 }
 
 void Canvas::PutBitmap(const Bitmap& bitmap, int x, int y, int dstWidth, int dstHeight) {
+	if (!drawEnabled) return; // 后台运行的app：不画
 	int srcW = bitmap.width, srcH = bitmap.height;
 	if (srcW <= 0 || srcH <= 0 || bitmap.data.size() < static_cast<size_t>(srcW) * srcH * 4) return;
 	if (dstWidth <= 0) dstWidth = srcW;
@@ -583,7 +596,7 @@ int Canvas::PutString(const string& text, int x, int y) {
 		if (i != text.size() && text[i] != '\n') continue;
 
 		string line = text.substr(start, i - start);
-		if (!line.empty()) {
+		if (!line.empty() && drawEnabled) { // 不画时照样返回高度，布局计算不受影响
 			wstring wline = Utf8ToWide(line);
 			DrawLine(buffer, width, height, wline, x, curY, fontSize, brushR, brushG, brushB, brushAlpha);
 		}

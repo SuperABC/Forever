@@ -7,6 +7,7 @@
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Player/ForeverExplosionEffect.h"
+#include "Player/ForeverVoiceSubsystem.h"
 #include "Player/ForeverDamage.h"
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
@@ -750,8 +751,8 @@ void UForeverAssetFrameworkComponent::ApplySoundEffect(const SoundEffectChange* 
 	}
 	FString path = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetSound(), context)).c_str());
 	if (path.IsEmpty()) return;
-	// 只写包路径时补上对象名(<名>)，同spawn_effect/spawn_actor对蓝图类路径的处理。
-	if (!path.Contains(TEXT("."))) path += TEXT(".") + FPackageName::GetShortName(path);
+	// 只写包路径时补上对象名(<名>)，同spawn_effect/spawn_actor对蓝图类路径的处理(和对话语音共用一个函数)。
+	path = UForeverVoiceSubsystem::ToObjectPath(path);
 	USoundBase* sound = LoadObject<USoundBase>(nullptr, *path);
 	if (!sound) {
 		UE_LOG(LogTemp, Warning, TEXT("sound_effect: failed to load sound %s, skipped."), *path);

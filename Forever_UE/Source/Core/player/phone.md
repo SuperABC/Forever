@@ -11,6 +11,7 @@
 - **`AppEntry`直接持有`App*`实例**；任务列表缩略图用"离开InApp状态前存的原始BGRA快照"，**快照的宽高单独记录**，不复用`Phone`当前宽高——拍完快照后用户可能拖动窗口改变画布尺寸，`PutRawImage`必须按快照自己实际尺寸解读像素，否则读越界。
 - **桌面图标**来自`AppFactory::GetRegisteredIds()`，跳过`AppMod::showOnDesktop`为false的(mod自己声明要不要上桌面，Core不认具体的App名字)。
 - **输入分层**：`InApp`状态下只拦截`Phone`自己关心的几个键(ESC/Tab/Space/Backspace)，其余按键/鼠标事件原样重新入队，留给当前App的`Loop`消费。ESC语义是"退一级"：只有`Home`态的ESC会置`pendingClose`，`Loop`返回非0请求关闭整个手机UI。
+- **打开过的App一直在跑**(2026-11-27)：`Loop`里前台App用真画布，任务列表里其它打开过的App用一块不绘制的`hiddenCanvas`(`Canvas::SetDrawEnabled(false)`，尺寸跟着`Resize`)照样调`Loop`(`TickBackgroundApps`)，没有输入；手机关着时宿主调`LoopHidden(ms, post)`，所有打开过的App都这样跑。开局没有打开过的App(手机还没创建)，在任务列表里关掉的App先调`App::Exit`收尾(只对Init过的)，再被删除、不再运行。Music app靠这个在后台/关着手机时自动切歌。
 - 主屏日期/时间通过`post`查"game time"，见`Core/common/implement.cpp`。
 
 ## 依赖关系

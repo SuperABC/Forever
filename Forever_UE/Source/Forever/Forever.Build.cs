@@ -42,6 +42,13 @@ public class Forever : ModuleRules
 		// DesktopPlatform：ForeverDialogUtils/ForeverConfigBridgeSubsystem用IDesktopPlatform弹原生文件夹/文件选择器。
 		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "DesktopPlatform" });
 
+		// VorbisAudioDecoder：对话语音的.ogg文件运行时解码(FVorbisAudioInfo)，见Player/ForeverVoiceSubsystem.md。
+		PrivateDependencyModuleNames.Add("VorbisAudioDecoder");
+		// dr_libs：引擎自带的MP3逐帧解码(FMP3Decoder，WITH_DR_LIBS_MP3)，音乐/语音的.mp3文件用，见Player/ForeverAudioDecode.md。
+		PrivateDependencyModuleNames.Add("dr_libs");
+		// AudioExtensions：UForeverPcmSoundWave继承USoundWaveProcedural，虚表里有IAudioProxyDataFactory::CreateNewProxyData。
+		PrivateDependencyModuleNames.Add("AudioExtensions");
+
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
 

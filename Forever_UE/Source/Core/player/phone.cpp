@@ -27,6 +27,8 @@ void Phone::Init(int inWidth, int inHeight) {
 	height = inHeight;
 	RecomputeLayout(width, height);
 	BuildAppList();
+	hiddenCanvas.Init(width, height);
+	hiddenCanvas.SetDrawEnabled(false);
 }
 
 void Phone::Resize(int inWidth, int inHeight) {
@@ -34,6 +36,20 @@ void Phone::Resize(int inWidth, int inHeight) {
 	width = inWidth;
 	height = inHeight;
 	RecomputeLayout(width, height);
+	hiddenCanvas.Resize(width, height);
+}
+
+void Phone::TickBackgroundApps(int ms, PostHandle* post, const string& skipType) {
+	// 按下标走：App的Loop不会改entries(关App只有任务列表里的手动操作)。
+	for (size_t i = 0; i < entries.size(); i++) {
+		AppEntry& entry = entries[i];
+		if (!entry.initialized || !entry.app || (!skipType.empty() && entry.type == skipType)) continue;
+		entry.app->Loop(&hiddenCanvas, ms, post);
+	}
+}
+
+void Phone::LoopHidden(int ms, PostHandle* post) {
+	TickBackgroundApps(ms, post, string());
 }
 
 void Phone::RecomputeLayout(int w, int h) {
@@ -113,7 +129,8 @@ void Phone::SaveSnapshot(Canvas* canvas, int entryIndex) {
 	entry.snapshotHeight = canvas->GetHeight();
 }
 
-void Phone::CloseEntry(int entryIndex) {
+void Phone::CloseEntry(int entryIndex, PostHandle* post) {
+	if (entries[entryIndex].initialized) entries[entryIndex].app->Exit(post); // 关掉=退出，App收尾(比如停掉自己的音乐)
 	delete entries[entryIndex].app;
 	if (entries[entryIndex].type == currentAppType) currentAppType.clear();
 	entries.erase(entries.begin() + entryIndex);
@@ -270,7 +287,7 @@ void Phone::HandleTaskListInput(Canvas* canvas, PostHandle* post) {
 		else if (key == KEY_UP) { if (row > 0) taskSelection -= taskCols; }
 		else if (key == KEY_DOWN) { if (taskSelection + taskCols < count) taskSelection += taskCols; }
 		else if (key == KEY_ENTER) { OpenApp(canvas, taskSelection, post); return; }
-		else if (key == KEY_BACKSPACE) { CloseEntry(taskSelection); return; }
+		else if (key == KEY_BACKSPACE) { CloseEntry(taskSelection, post); return; }
 		else if (key == ' ' || key == KEY_ESCAPE || key == KEY_TAB) { state = State::Home; return; }
 	}
 
@@ -287,7 +304,7 @@ void Phone::HandleTaskListInput(Canvas* canvas, PostHandle* post) {
 		int hitIndex = HitTaskGrid(event.x, event.y);
 		if (hitIndex < 0) continue;
 
-		if (HitTaskCloseButton(hitIndex, event.x, event.y)) { CloseEntry(hitIndex); return; }
+		if (HitTaskCloseButton(hitIndex, event.x, event.y)) { CloseEntry(hitIndex, post); return; }
 
 		taskSelection = hitIndex;
 		OpenApp(canvas, hitIndex, post);
@@ -422,6 +439,8 @@ int Phone::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	case State::TaskList: RenderTaskList(canvas); break;
 	}
 	RenderBottomBar(canvas);
+	// 其余打开过的App在后台只跑逻辑不画(前台那个上面已经跑过了)。
+	TickBackgroundApps(ms, post, state == State::InApp ? currentAppType : string());
 
 	return pendingClose ? 1 : 0;
 }

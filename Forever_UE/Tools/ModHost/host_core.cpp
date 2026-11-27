@@ -4,6 +4,7 @@
 #include "player/phone.h"
 #include "common/registry.h"
 #include "story/event.h"
+#include "common/utf8_path.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -19,6 +20,11 @@ using namespace std;
 
 StubPost::StubPost() : result(DATA_OBJECT) {
 	result["result"] = "fail";
+}
+
+map<string, StubPost::FakeTrack>& StubPost::FakeTracks() {
+	static map<string, FakeTrack> tracks;
+	return tracks;
 }
 
 string& StubPost::ResourceRoot() {
@@ -46,6 +52,71 @@ void StubPost::Post(const JsonValue& request) {
 		}
 		result["result"] = "fail";
 		result["msg"] = "resource not found: " + name;
+		return;
+	}
+
+	// "list resource files"：和Core的Config::ListResourceFiles一样，列ResourceRoot下所有叫folder的文件夹里(不递归)
+	// 扩展名匹配(不分大小写)的文件名，UTF-8，排序去重。Music app的曲库界面靠它在ModHost里有东西可看。
+	if (request.IsObject() && request["post"].AsString() == "list resource files") {
+		const string folder = request["folder"].AsString();
+		vector<string> extensions;
+		for (unsigned int i = 0; request["extensions"].IsArray() && i < request["extensions"].size(); i++) {
+			string extension = request["extensions"][i].AsString();
+			if (!extension.empty() && extension[0] == '.') extension.erase(0, 1);
+			transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
+			extensions.push_back(extension);
+		}
+		vector<string> names;
+		error_code ec;
+		if (!ResourceRoot().empty() && !folder.empty()) {
+			for (const auto& entry : filesystem::recursive_directory_iterator(
+					ResourceRoot(), filesystem::directory_options::skip_permission_denied, ec)) {
+				if (!entry.is_regular_file() || PathToUtf8(entry.path().parent_path().filename()) != folder) continue;
+				string extension = PathToUtf8(entry.path().extension());
+				if (!extension.empty() && extension[0] == '.') extension.erase(0, 1);
+				transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
+				if (!extensions.empty() && find(extensions.begin(), extensions.end(), extension) == extensions.end()) continue;
+				names.push_back(PathToUtf8(entry.path().filename()));
+			}
+		}
+		sort(names.begin(), names.end());
+		names.erase(unique(names.begin(), names.end()), names.end());
+		JsonValue files(DATA_ARRAY);
+		for (const string& name : names) files.append(JsonValue(name));
+		result["result"] = "success";
+		result["files"] = files;
+		return;
+	}
+
+	if (request.IsObject() && request["post"].AsString() == "music") {
+		const string op = request["op"].AsString(), track = request["track"].AsString();
+		auto& tracks = FakeTracks();
+		auto found = tracks.find(track);
+		bool ok = true;
+		if (op == "play" && !track.empty() && !request["asset"].AsString().empty()) {
+			FakeTrack entry;
+			entry.asset = request["asset"].AsString();
+			entry.loop = request["loop"].IsBool() && request["loop"].AsBool();
+			tracks[track] = entry;
+		}
+		else if (found == tracks.end()) ok = false;
+		else if (op == "pause") found->second.paused = true;
+		else if (op == "resume") found->second.paused = false;
+		else if (op == "stop") tracks.erase(found);
+		else if (op == "seek") found->second.position = max(0.0, min(180.0, request["position"].IsNumeric() ? request["position"].AsDouble() : 0.0));
+		else ok = false;
+		result["result"] = ok ? "success" : "fail";
+		return;
+	}
+	if (request.IsObject() && request["post"].AsString() == "music status") {
+		auto found = FakeTracks().find(request["track"].AsString());
+		if (found == FakeTracks().end()) { result["result"] = "fail"; return; }
+		result["result"] = "success";
+		result["asset"] = found->second.asset;
+		result["state"] = found->second.paused ? "paused" : "playing";
+		result["position"] = found->second.position;
+		result["duration"] = 180.0;
+		result["loop"] = found->second.loop;
 		return;
 	}
 

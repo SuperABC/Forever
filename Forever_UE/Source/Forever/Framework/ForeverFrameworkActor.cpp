@@ -51,6 +51,7 @@
 #include "Element/AssetElement.h"
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverWeatherFrameworkComponent.h"
+#include "Framework/ForeverMusicFrameworkComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "Framework/ForeverGreenFrameworkComponent.h"
 #include "Framework/ForeverDoorFrameworkComponent.h"
@@ -114,6 +115,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	vegetationFramework = CreateDefaultSubobject<UForeverVegetationFrameworkComponent>(TEXT("VegetationFramework"));
 	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
 	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));
+	musicFramework = CreateDefaultSubobject<UForeverMusicFrameworkComponent>(TEXT("MusicFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
 	greenFramework = CreateDefaultSubobject<UForeverGreenFrameworkComponent>(TEXT("GreenFramework"));
 	doorFramework = CreateDefaultSubobject<UForeverDoorFrameworkComponent>(TEXT("DoorFramework"));

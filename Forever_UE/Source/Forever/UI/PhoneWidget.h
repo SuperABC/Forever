@@ -23,6 +23,10 @@ public:
 	// OpenPhone。两个分支都不会delete/重建phone，见类注释第1点。
 	void TogglePhone();
 
+	// 手机关着(Collapsed，NativeTick不会被调用)时由AForeverPlayerController::Tick每帧调：打开过的App在后台只跑逻辑不画
+	// (Phone::LoopHidden)，比如Music app放完一首接下一首。手机还没创建过(开局)时什么都不做。
+	void TickHidden(float deltaSeconds);
+
 protected:
 	virtual void NativeConstruct() override; // 默认Collapsed，没打开手机就不显示
 	virtual void NativeDestruct() override;  // Widget自己被销毁时才真正delete phone
@@ -32,6 +36,8 @@ protected:
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	// 滚轮一格±1交给Canvas累加(App用ConsumeMouseWheel取，向上为正)，同PuzzleWidget。
+	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	// 命名避开跟Core层Canvas类同名，Blueprint子类里摆一个手机形状(不用铺满全屏，见类注释
 	// 第2点)的Image控件绑到这个名字上。
@@ -48,6 +54,14 @@ private:
 	// DisplayImage在屏幕上的实际像素footprint(GetAbsoluteSize()已经包含DPI缩放)，查不到
 	// (比如Widget还没Visible过、几何信息还没算出来)时退回kFallbackPhoneWidth/Height。
 	FIntPoint ComputeCanvasSize() const;
+
+	// 现场构造给Phone用的PostImplement的各域指针(找不到FrameworkActor时都是nullptr)。
+	class AForeverFrameworkActor* FindFramework() const;
+
+	// 鼠标屏幕位置 -> 画布像素坐标(按DisplayImage自己的几何换算)，写进canvas的鼠标位置；返回是否落在画布内。
+	bool UpdateMousePos(const FPointerEvent& mouseEvent);
+	// 各键是不是在画布内按下的：画布外的按下/滚轮不发给手机；画布内按下、拖到外面松开的抬起照发(不然App里一直当按着)。
+	bool pressedInside[3] = { false, false, false };
 
 	Canvas canvas;
 	Phone* phone = nullptr; // 跨越开/关手机持续存在，只在NativeDestruct里delete

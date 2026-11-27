@@ -679,6 +679,12 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				obj["volume"].AsString(), obj["pitch"].AsString());
 			break;
 		}
+		case ChangeKind::Music: {
+			// asset只有play要、loop默认不循环、position只有seek要，见Core/player/music.md。
+			change = new MusicChange(obj["track"].AsString(), obj["op"].AsString(), obj["asset"].AsString(),
+				obj["loop"].AsString(), obj["position"].AsString());
+			break;
+		}
 		case ChangeKind::SpawnActor: {
 			// direction/scale可以省略：不旋转、缩放1。
 			change = new SpawnActorChange(obj["actor"].AsString(), obj["position"].AsString(), obj["direction"].AsString(),

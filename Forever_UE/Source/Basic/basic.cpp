@@ -123,6 +123,7 @@
 #include "player/asset_wheat.h"
 #include "player/app_bounce.h"
 #include "player/app_notes.h"
+#include "player/app_music.h"
 #include "player/puzzle_tetris.h"
 #include "player/puzzle_anykey.h"
 #include "player/puzzle_poker.h"
@@ -778,7 +779,7 @@ extern "C" __declspec(dllexport) void FinishModAssets(AssetFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModApps() {
-	static vector<string> mods = { BounceApp::GetId(), NotesApp::GetId() };
+	static vector<string> mods = { BounceApp::GetId(), NotesApp::GetId(), MusicApp::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModApps(AppFactory* factory) {
@@ -787,6 +788,9 @@ extern "C" __declspec(dllexport) void RegisterModApps(AppFactory* factory) {
 		[](AppMod* m) { delete m; });
 	factory->RegisterApp(NotesApp::GetId(),
 		[](const std::string&) -> AppMod* { return new NotesApp(); },
+		[](AppMod* m) { delete m; });
+	factory->RegisterApp(MusicApp::GetId(),
+		[](const std::string&) -> AppMod* { return new MusicApp(); },
 		[](AppMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {

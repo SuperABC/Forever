@@ -93,6 +93,12 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   `GetResourceRootPaths`、写回`config.json`都按这个顺序；扫描时发现同名脚本、同名layout会打警告说明用了哪个。
   这个函数
   给`PostImplement`的`"resource path"`查询用，让mod能读`.txt`等非`.script`/`.layout`数据文件。
+  **索引的键(文件名)和值(完整路径)都是UTF-8**(`Dependence/common/utf8_path.h`的`PathToUtf8`/`Utf8ToPath`)：Windows上
+  `path.string()`给的是系统代码页(GBK)，而脚本、mod、UE都按UTF-8传文件名，中文名(比如`冰心月光.mp3`)以前查不到。
+  用返回的路径开文件要先`Utf8ToPath`(UE侧`UTF8_TO_TCHAR`)。
+  `ListResourceFiles(folder, extensions)`：每次调用都现场扫一遍每个根目录下的`<root>/<folder>`(不递归)，扩展名不分大小写、
+  带不带点都行(空表=全部)，返回排好序去重的UTF-8文件名；扫到的文件顺手登记进上面的索引，所以游戏中途新放进去的文件
+  马上能按名字找到。给`"list resource files"` post用(Music app的曲库)。
   `GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
   扩展名）反查实际路径，供`JobMod`/`OrganizationMod`/`Story`这类只知道bare文件名、不应该
   替Mod决定"脚本实际存放在哪"的调用方使用，见`Core/society/job.md`"Script配置"一节。
