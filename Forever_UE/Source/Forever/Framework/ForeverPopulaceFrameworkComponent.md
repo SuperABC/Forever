@@ -78,7 +78,7 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
    位置进入生成距离就生成Actor（抬一个胶囊半高），用`GetRemainingWalk`的剩余路径`WalkTo`接着走并`EndWalk`（之后按正常速度，进度被拖慢）。
 5. 无Actor且路径为空：`EndWalk` + `SetCurrentRoom(destination)` + `ClearPosition()`（位置重置，下次生成按新房间重算）。
 
-`TeleportCitizen`：有Actor就`TeleportToRoom`，否则`EndWalk`+`SetCurrentRoom`+`ClearPosition`；被玩家占有的不动。
+`TeleportCitizen`：有Actor就`TeleportToRoom`，否则`EndWalk`+`SetCurrentRoom`+`ClearPosition`；被玩家占有的不动。Core人口推进的搬家(成年搬出/婚后同居，`populace/demography.md`)也走它：Core已经把家和`currentRoom`改成新家，这里只把Actor挪过去、作废在途寻路/通勤/跳时间路段，房间没变所以不发`npc_arrive`。新生儿走`AddCitizen`、自然死亡走`HandleCitizenDeath`，和迁入/离城一样。
 
 不使用`AIController`/`NavMesh`：`ACitizenElement::WalkTo`沿`Map::FindPedestrianPath`算好的路径点逐点前进，见`Element/CitizenElement.md`。
 

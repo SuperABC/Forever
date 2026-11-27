@@ -19,7 +19,7 @@ map->Checkin(*populace);
 （`SpawnCitizen`）。
 
 ## 关键设计
-- `initialPopulation`：`Init`跑完时的市民总数，随人口段存档，`Immigration`以它为基准（目标是它的1.5倍）。`SpawnImmigrant`是迁入用的随机成年新市民（性别/姓名/20~45岁生日/日程随机，不设住处、积蓄、工作），见`society/immigration.md`。
+- `initialPopulation`：`Init`跑完时的市民总数，随人口段存档，`Immigration`以它为基准（目标是它的1.5倍）。`SpawnImmigrant`是迁入用的随机成年新市民（性别/姓名/20~45岁生日/日程随机，不设住处、积蓄、工作），见`society/immigration.md`。`SpawnNewborn`是运行时出生用的婴儿(随机性别、姓取父亲的、名随机重名重试)；运行时的出生/自然死亡/配对/搬家见`demography.md`，`DatingHazardForAge`/`IsCloseRelative`/亲属关系初始化挪到了`kinship.h`和它共用。
 
 ### 年表模拟算法
 

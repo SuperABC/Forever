@@ -178,6 +178,16 @@ Citizen* Citizen::GetSpouse() const { return spouse; }
 void Citizen::SetSpouse(Citizen* value) { spouse = value; }
 const vector<Citizen*>& Citizen::GetChildren() const { return children; }
 void Citizen::AddChild(Citizen* child) { if (child) children.push_back(child); }
+bool Citizen::HasLivingSpouse() const { return spouse && spouse->IsActive(); }
+
+bool Citizen::IsPregnant() const { return pregnancyDue.IsValid(); }
+const Time& Citizen::GetPregnancyDue() const { return pregnancyDue; }
+void Citizen::SetPregnancyDue(const Time& due) { pregnancyDue = due; }
+void Citizen::ClearPregnancy() { pregnancyDue = Time(); }
+const Time& Citizen::GetLastBirth() const { return lastBirth; }
+void Citizen::SetLastBirth(const Time& date) { lastBirth = date; }
+bool Citizen::IsPendingMoveOut() const { return pendingMoveOut; }
+void Citizen::SetPendingMoveOut(bool value) { pendingMoveOut = value; }
 
 const Personality& Citizen::GetPersonality() const { return personality; }
 void Citizen::SetPersonalityValue(PERSONALITY_TYPE type, float value) { personality[type] = value; }

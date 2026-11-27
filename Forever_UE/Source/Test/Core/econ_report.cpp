@@ -460,6 +460,7 @@ void Reporter::PrintFinance(const string& title, const string& label, const Fina
 		static_cast<int>(initial * 1.5), dead, gone, employed, adultsActive);
 	Out("  本期迁入 %d 人, 离城 %d 人(%d 户), 其中迁入者 %d 人; 迁入者目前仍在场 %d 人\n", totals.immigrated, totals.departed,
 		totals.departedHouseholds, totals.departedImmigrants, immigrantsActive);
+	Out("  本期出生 %d 人, 自然死亡 %d 人, 结婚 %d 对, 搬家 %d 人次\n", totals.born, totals.died, totals.married, totals.moved);
 
 	// 股市。
 	int listed = 0, holders = 0, withHistory = 0;

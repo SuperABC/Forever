@@ -51,6 +51,10 @@ void Household::AddMember(Citizen* citizen) {
 	if (citizen && !Contains(citizen)) members.push_back(citizen);
 }
 
+void Household::RemoveMember(const Citizen* citizen) {
+	members.erase(remove(members.begin(), members.end(), citizen), members.end());
+}
+
 void Household::Absorb(Household& other) {
 	for (Citizen* member : other.members) AddMember(member);
 	other.members.clear();

@@ -45,7 +45,7 @@
     设，详见`Source/Core/populace/populace.md`"房产归属"一节——**和"谁住在这里"
     （households）完全无关**，一个room的owner可以是从没在这里住过的人（相当于"房东"），
     也可能恰好是自己住在这里的人。
-  - `GetHouseholds()` / `AddResident(Citizen*)` / `AddHousehold()`——住在这个房间的户
+  - `GetHouseholds()` / `AddResident(Citizen*)` / `AddHousehold()` / `RemoveResident(Citizen*)`(搬家/自然死亡/离城时移出，户空了删掉，2026-11-27) / `HasActiveResident()`——住在这个房间的户
     （见`populace/household.md`）。入住时按夫妻/父母子女关系
     并入已有的户、合并相连的户或新建一户，没有亲属关系的住户分属不同户。私有归属时owner本人
     **有可能**也住在这里，但这不是必然的——"房产归属"和"住处分配"是两个独立、顺序执行的步骤。

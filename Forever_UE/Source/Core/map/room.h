@@ -150,6 +150,11 @@ public:
 	const std::vector<Household*>& GetHouseholds() const;
 	Household* AddResident(Citizen* citizen);
 	Household* AddHousehold();
+	// 住户搬走/死亡/离城：移出所在的户并SetHousehold(nullptr)，户空了就删掉。不在这里的人什么都不做。
+	// 不改市民记的家(GetRoom)，调用方决定。
+	void RemoveResident(Citizen* citizen);
+	// 住宅里还有没有活着、没离城的住户(没有任何户的住宅=空房，见Map::PickVacantResidence)。
+	bool HasActiveResident() const;
 
 	const std::vector<Citizen*>& GetOccupants() const;
 	void AddOccupant(Citizen* citizen);

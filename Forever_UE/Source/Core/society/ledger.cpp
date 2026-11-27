@@ -65,6 +65,7 @@ const char* FlowName(Flow flow) {
 	case Flow::BOND_INTEREST: return "国债利息";
 	case Flow::PRINT_MONEY: return "印钞";
 	case Flow::EMIGRATE: return "离城带走";
+	case Flow::INHERIT: return "遗产";
 	default: return "?";
 	}
 }

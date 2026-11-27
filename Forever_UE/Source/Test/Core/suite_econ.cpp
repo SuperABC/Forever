@@ -143,6 +143,17 @@ void EconSuiteBody(TestWorld& world, const TestOptions& options) {
 	Reporter::FinanceTotals finance;
 	Reporter::ServiceTotals totals;
 	hooks.onImmigrated = [&](Citizen* arrived) { immigrantSet.insert(arrived); finance.immigrated++; };
+	long long bornTotal = 0, diedTotal = 0, marriedTotal = 0, movedTotal = 0;
+	hooks.onDemography = [&](const DemographyReport& demography) {
+		finance.born += static_cast<int>(demography.births.size());
+		finance.died += static_cast<int>(demography.deaths.size());
+		finance.married += static_cast<int>(demography.marriages.size());
+		finance.moved += static_cast<int>(demography.moves.size());
+		bornTotal += static_cast<long long>(demography.births.size());
+		diedTotal += static_cast<long long>(demography.deaths.size());
+		marriedTotal += static_cast<long long>(demography.marriages.size());
+		movedTotal += static_cast<long long>(demography.moves.size());
+	};
 
 	// 月度经济报表(econ_report.h的Reporter)：只在父进程第一遍("a")写，同一份摘要比对不受影响。
 	unique_ptr<Reporter> reporter;
@@ -237,12 +248,17 @@ void EconSuiteBody(TestWorld& world, const TestOptions& options) {
 	if (reporter) { reporter->PrintSummaryTable(); reporter->PrintFinanceTable(); }
 
 	const size_t endPopulation = world.populace->GetCitizens().size();
-	immigrantTotal = static_cast<long long>(endPopulation) - static_cast<long long>(startPopulation) + departedTotal;
+	// 市民表只增不减：增加的人 = 迁入 + 出生。
+	immigrantTotal = static_cast<long long>(endPopulation) - static_cast<long long>(startPopulation) - bornTotal;
 	run.Metric("simulated days", days, "");
 	run.Metric("economy days", ranDays, "");
 	run.Metric("slowest day", slowestDay, "s");
 	run.Metric("citizens departed", static_cast<double>(departedTotal), "");
 	run.Metric("citizens immigrated (derived)", static_cast<double>(immigrantTotal), "");
+	run.Metric("citizens born", static_cast<double>(bornTotal), "");
+	run.Metric("citizens died naturally", static_cast<double>(diedTotal), "");
+	run.Metric("marriages", static_cast<double>(marriedTotal), "");
+	run.Metric("moves", static_cast<double>(movedTotal), "");
 	run.Check(badLedgerDays == 0, "ledger total stays zero every day", to_string(badLedgerDays) + " bad days");
 	run.Check(ranDays >= days, "economy ran on every day", to_string(ranDays) + "/" + to_string(days));
 	run.Check(endPopulation > 0, "population never dies out");

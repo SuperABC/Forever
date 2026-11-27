@@ -14,6 +14,8 @@ public:
 
 	Vehicle* GetVehicle() const { return vehicle; }
 	Citizen* GetOwnerCitizen() const { return ownerCitizen; }
+	// 继承(自然死亡，见populace/demography.md)：只改字段，调用方负责把资产从旧主人的资产列表挪到新主人的。
+	void SetOwnerCitizen(Citizen* value) { ownerCitizen = value; }
 	Organization* GetOwnerOrganization() const { return ownerOrganization; }
 
 private:

@@ -43,7 +43,8 @@ void WorldStep::TickSociety(const WorldDomains& domains, bool crossedDay, PostIm
 		hooks.onOrganizationChanges ? hooks.onOrganizationChanges : function<void(Organization*, const vector<Change*>&)>(noop), &post);
 }
 
-DailyReport WorldStep::Step(const WorldDomains& domains, bool crossedDay, const WorldStepHooks& hooks, bool* economyRan) {
+DailyReport WorldStep::Step(const WorldDomains& domains, bool crossedDay, const WorldStepHooks& hooks, bool* economyRan,
+	DemographyReport* demographyOut) {
 	DailyReport report;
 	if (economyRan) *economyRan = false;
 	if (!domains.player) return report;
@@ -78,10 +79,18 @@ DailyReport WorldStep::Step(const WorldDomains& domains, bool crossedDay, const 
 			if (!building) continue;
 			for (Room* room : building->GetRooms()) allRooms.push_back(room);
 		}
+		const Citizen* protectedCitizen = hooks.protectedCitizen ? hooks.protectedCitizen : hooks.controlledCitizen;
 		report = Economy::Daily(*domains.society, *domains.industry, allRooms, domains.populace->GetCitizens(), now, &post,
-			hooks.controlledCitizen);
+			protectedCitizen);
 		if (economyRan) *economyRan = true;
 		if (hooks.onDeparted) for (Citizen* departed : report.departed) hooks.onDeparted(departed);
+		// 人口推进放在迁入之前：死亡和搬家刚腾出来的空房当天就能住进迁入的人。
+		{
+			ErrorScope demographyScope(kErrorScopeStep, "daily.demography");
+			DemographyReport demography = Demography::Daily(*domains.populace, *domains.map, *domains.society, now, protectedCitizen);
+			if (hooks.onDemography) hooks.onDemography(demography);
+			if (demographyOut) *demographyOut = std::move(demography);
+		}
 		for (Citizen* immigrant : Immigration::Daily(*domains.society, *domains.populace, *domains.map, now)) {
 			if (hooks.onImmigrated) hooks.onImmigrated(immigrant);
 		}

@@ -90,6 +90,7 @@ static int RealMain(int argc, char** argv) {
 		{ "lint", RunLintSuite },
 		{ "world", RunWorldSuite },
 		{ "econ", RunEconSuite },
+		{ "demography", RunDemographySuite },
 		{ "save", RunSaveSuite },
 		{ "perform", RunPerfSuite },
 		{ "route", RunRouteSuite },

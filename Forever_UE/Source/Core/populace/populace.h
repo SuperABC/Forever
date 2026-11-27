@@ -60,6 +60,10 @@ public:
 	// 随机日程类型，不设住处/积蓄/工作。姓名一直撞车时返回nullptr。
 	Citizen* SpawnImmigrant(int currentYear);
 
+	// 运行中出生一个婴儿(Demography::Daily用)：随机性别，姓取surnameFrom(父亲，没有就母亲)的姓，名随机(重名重试)，
+	// 生日=birthday，随机日程类型；不设住处/亲属，由调用方处理。姓名一直撞车时返回nullptr。
+	Citizen* SpawnNewborn(const Citizen* surnameFrom, const Time& birthday);
+
 	// 模拟结束时的"当前年份"，Init()跑完之前返回默认值2000。
 	int GetCurrentYear() const;
 	// 跳时间跨年时由框架同步(年龄=currentYear-出生年)，随人口段存档。

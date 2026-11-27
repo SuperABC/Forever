@@ -21,6 +21,8 @@ public:
 	bool IsRelatedTo(const Citizen* citizen) const;
 
 	void AddMember(Citizen* citizen);
+	// 成员搬走/死亡/离城时移出(Room::RemoveResident调用)。剩下的人即使不再彼此连通也不拆户。
+	void RemoveMember(const Citizen* citizen);
 	// 并入另一户的全部成员（另一户之后为空，由调用方销毁）。
 	void Absorb(Household& other);
 

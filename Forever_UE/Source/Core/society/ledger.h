@@ -50,6 +50,7 @@ enum class Flow {
 	BOND_INTEREST,    // 国债利息（政府付给市民）
 	PRINT_MONEY,      // 印钞（城市外账户直接打给政府）
 	EMIGRATE,         // 离城市民带走的正余额（付给城市外）
+	INHERIT,          // 自然死亡市民的遗产（给在世配偶/子女，没有继承人时归政府），见populace/demography.md
 	COUNT
 };
 const char* FlowName(Flow flow); // 中文名

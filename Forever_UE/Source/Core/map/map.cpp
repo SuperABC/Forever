@@ -15,6 +15,7 @@
 #include "player/estate_asset.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
+#include "society/job.h"
 #include "story/script.h"
 
 #include <algorithm>
@@ -1397,6 +1398,29 @@ void Map::SettleCitizen(Citizen* citizen, Room* room) {
 		citizen->SetLot(building->GetParentLot());
 	}
 	room->AddResident(citizen);
+}
+
+void Map::MoveCitizen(Citizen* citizen, Room* newHome) {
+	if (!citizen || !newHome) return;
+	if (Room* oldHome = citizen->GetRoom()) oldHome->RemoveResident(citizen);
+	citizen->EndWalk();
+	citizen->SetCurrentGreen(nullptr, -1);
+	citizen->ClearPosition();
+	SettleCitizen(citizen, newHome);
+	if (Job* job = citizen->GetJob()) job->SetOccupant(citizen); // 只是刷新工作脚本里的home地址
+}
+
+Room* Map::PickVacantResidence() const {
+	// 和Immigration::Daily收集空房的方式一样(同一张buildings表、同样的"没有任何户"判定)。
+	vector<Room*> vacancies;
+	for (const auto& [name, building] : buildings) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && room->IsResidence() && room->GetHouseholds().empty()) vacancies.push_back(room);
+		}
+	}
+	if (vacancies.empty()) return nullptr;
+	return vacancies[GetRandom(static_cast<int>(vacancies.size()))];
 }
 
 void Map::BuildEstateAssets() {

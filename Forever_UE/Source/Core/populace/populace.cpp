@@ -9,6 +9,7 @@
 #include "populace/name.h"
 #include "populace/scheduler.h"
 #include "populace/experience.h"
+#include "populace/kinship.h"
 #include "populace/school.h"
 #include "common/registry.h"
 #include "common/config.h"
@@ -50,17 +51,7 @@ struct Human {
 constexpr int kDatingMinAge = 14;
 constexpr int kMarriageMinAge = 18;
 
-// 四类人际关系Relation随机初始化——数值量级参考，均值/方差实现后可再调。人际关系强度
-// 约定俗成非负，clamp到[0,1]，这次不引入负值关系。
-void RandomizeKinshipRelation(Citizen* citizen, const string& otherName) {
-	citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.8f, 0.15f), 0.0f, 1.0f));
-	citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.6f, 0.2f), 0.0f, 1.0f));
-	citizen->SetAcquaintanceValue(otherName, RELATION_FAVOUR, clamp(GetRandomNormal(0.7f, 0.2f), 0.0f, 1.0f));
-	citizen->SetAcquaintanceValue(otherName, RELATION_TRUST, clamp(GetRandomNormal(0.7f, 0.2f), 0.0f, 1.0f));
-	citizen->SetAcquaintanceValue(otherName, RELATION_COMPETING, clamp(GetRandomNormal(0.2f, 0.15f), 0.0f, 1.0f));
-	citizen->SetAcquaintanceValue(otherName, RELATION_RELIABILITY, clamp(GetRandomNormal(0.7f, 0.2f), 0.0f, 1.0f));
-}
-
+// 亲属关系的RandomizeKinshipRelation、DatingHazardForAge、IsCloseRelative在populace/kinship.cpp(运行时人口推进也用)。
 void RandomizeRomanticRelation(Citizen* citizen, const string& otherName) {
 	citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.85f, 0.1f), 0.0f, 1.0f));
 	citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.6f, 0.2f), 0.0f, 1.0f));
@@ -77,29 +68,6 @@ void RandomizeClassmateRelation(Citizen* citizen, const string& otherName) {
 	citizen->SetAcquaintanceValue(otherName, RELATION_TRUST, clamp(GetRandomNormal(0.4f, 0.25f), 0.0f, 1.0f));
 	citizen->SetAcquaintanceValue(otherName, RELATION_COMPETING, clamp(GetRandomNormal(0.3f, 0.2f), 0.0f, 1.0f));
 	citizen->SetAcquaintanceValue(otherName, RELATION_RELIABILITY, clamp(GetRandomNormal(0.4f, 0.25f), 0.0f, 1.0f));
-}
-
-// 按年龄递减的"这一年开始一段新恋情"基础年概率——年轻人恋爱更频繁，年龄越大频率越低，
-// 参考现实约会频率随年龄下降的趋势。恋爱史生成、当前情人/婚外情判定都基于这同一个
-// 函数，不能用和年龄无关的常数（否则会让单身时间越长的人反而分配到越多段恋爱史，或者
-// 老年人和年轻人一样容易有婚外情）。
-float DatingHazardForAge(int age) {
-	if (age < 20) return 0.10f;
-	if (age < 30) return 0.14f;
-	if (age < 40) return 0.07f;
-	if (age < 50) return 0.03f;
-	if (age < 60) return 0.012f;
-	return 0.005f;
-}
-
-// 两个citizen是否已经是亲属(用来避免恋爱/情人对象选中近亲)——扫描一方的experiences找
-// 是否有一条KinshipExperience指向另一方，见populace.md"四类人际关系生成"一节。
-bool IsCloseRelative(Citizen* a, Citizen* b) {
-	for (Experience* experience : a->GetExperiences()) {
-		if (experience->GetCategory() != RELATIONSHIP_KINSHIP) continue;
-		if (static_cast<KinshipExperience*>(experience)->GetOther() == b) return true;
-	}
-	return false;
 }
 
 // 是否已经是citizen当前的情人(避免重复选中同一个人)。
@@ -389,6 +357,19 @@ Citizen* Populace::SpawnImmigrant(int year) {
 	return nullptr;
 }
 
+Citizen* Populace::SpawnNewborn(const Citizen* surnameFrom, const Time& birthday) {
+	CORE_RANDOM_SCOPE("core.populace");
+	constexpr int kNameAttempts = 8;
+	if (!name || !surnameFrom) return nullptr;
+	GENDER_TYPE gender = GetRandom(2) == 0 ? GENDER_MALE : GENDER_FEMALE;
+	string surname = name->GetSurname(surnameFrom->GetName());
+	for (int attempt = 0; attempt < kNameAttempts; attempt++) {
+		string candidate = name->GenerateName(surname, gender == GENDER_MALE, gender == GENDER_FEMALE, true);
+		if (Citizen* citizen = SpawnCitizen(candidate, gender, birthday.GetYear(), birthday.GetMonth(), birthday.GetDay(), "")) return citizen;
+	}
+	return nullptr;
+}
+
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
 int Populace::GetCurrentYear() const { return currentYear; }
 void Populace::SetCurrentYear(int year) { currentYear = year; }
@@ -437,9 +418,10 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 	hasLastTickTime = true;
 
 	if (crossedDay) {
+		// 死亡/离城的人(IsActive为false)不再排工作和日程的计划，到点的旧计时器也不执行。
 		for (Citizen* citizen : citizens) {
 			Job* job = citizen->GetJob();
-			if (!job) continue;
+			if (!job || !citizen->IsActive()) continue;
 			job->DailyPlan(currentTime, post);
 			for (const auto& [node, time] : job->GetPlans()) {
 				jobTimerSet.insert({ time, citizen, node });
@@ -453,7 +435,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 		const auto& [target, citizen, node] = *it;
 		if (currentTime < target) break;
 		Job* job = citizen->GetJob();
-		if (job) {
+		if (job && citizen->IsActive()) {
 			vector<Change*> changes = job->ExecNode(node, post);
 			onActions(citizen, changes);
 		}
@@ -465,7 +447,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 	if (crossedDay) {
 		for (Citizen* citizen : citizens) {
 			Scheduler* scheduler = citizen->GetScheduler();
-			if (!scheduler || citizen->IsDeparted()) continue;
+			if (!scheduler || !citizen->IsActive()) continue;
 			scheduler->DailyPlan(currentTime, post);
 			for (const auto& [node, time] : scheduler->GetPlans()) {
 				schedulerTimerSet.insert({ time, citizen, node });
@@ -479,7 +461,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 		const auto& [target, citizen, node] = *it;
 		if (currentTime < target) break;
 		Scheduler* scheduler = citizen->GetScheduler();
-		if (scheduler && !citizen->IsDeparted()) {
+		if (scheduler && citizen->IsActive()) {
 			vector<Change*> changes = scheduler->ExecNode(node, post);
 			onActions(citizen, changes);
 		}

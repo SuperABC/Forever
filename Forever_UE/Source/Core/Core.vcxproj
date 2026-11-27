@@ -87,6 +87,8 @@
     <ClCompile Include="common\world_step.cpp" />
     <ClCompile Include="common\registry.cpp" />
     <ClCompile Include="populace\household.cpp" />
+    <ClCompile Include="populace\kinship.cpp" />
+    <ClCompile Include="populace\demography.cpp" />
     <ClCompile Include="society\economy.cpp" />
     <ClCompile Include="society\ledger.cpp" />
     <ClCompile Include="society\treasury.cpp" />
@@ -166,6 +168,8 @@
     <ClInclude Include="common\world_step.h" />
     <ClInclude Include="common\registry.h" />
     <ClInclude Include="populace\household.h" />
+    <ClInclude Include="populace\kinship.h" />
+    <ClInclude Include="populace\demography.h" />
     <ClInclude Include="society\economy.h" />
     <ClInclude Include="society\ledger.h" />
     <ClInclude Include="society\treasury.h" />

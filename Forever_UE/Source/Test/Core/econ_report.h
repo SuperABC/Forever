@@ -59,6 +59,7 @@ public:
 		int departed = 0;             // 离城人数
 		int departedHouseholds = 0;   // 离城户数
 		int departedImmigrants = 0;   // 离城的人里，本次模拟中迁入的人数
+		int born = 0, died = 0, married = 0, moved = 0; // 人口推进(Demography::Daily)：出生/自然死亡/结婚对数/搬家人次
 		int64_t turnover = 0;         // 股票成交额
 		int64_t volume = 0;           // 股票成交股数
 		int64_t sharesIssued = 0, sharesSubscribed = 0, issueProceeds = 0; // 增发新股数/老股东认购数/募资

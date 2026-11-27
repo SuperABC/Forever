@@ -73,7 +73,9 @@
 现场构造一个只覆盖这一帧的`PostImplement`(Job/OrganizationMod通过`Post()`查市民家/工位地址，见`Core/common/implement.md`)，依次`Tick`：map → populace → society(两者的回调
 构造per-entity的`ScriptContext`，`context.self`指向`citizen->GetJob()->GetScript()`/`organization->GetScript()`，对每个`Change*`调`ApplyChange`；`Change*`所有权在产出它的mod实例上，这里只读) →
 `Economy::SyncIndustry` → industry → 每日经济(`crossedDay`时`Economy::Daily`，货款/服务/房租/工资/补助/月初分红，之后检查`Ledger::Total()==0`否则报错，见`Core/society/economy.md`) →
-traffic(并把`ConsumeStopEvents`转成`EnterStopEvent`/`LeaveStopEvent`广播给公交自己的script) → story → `FireExpiredTimers`。新的每帧逻辑加进这同一个`Tick`，不要新开入口。
+traffic(并把`ConsumeStopEvents`转成`EnterStopEvent`/`LeaveStopEvent`广播给公交自己的script) → story → `FireExpiredTimers`。
+
+**人口变化**(2026-11-27，`MakeStepHooks`)：`protectedCitizen=GetPlayerCitizen()`(开车/坐公交时取载具的`GetPreviousPawn`，同存档)；`onDeparted`(离城)/`onImmigrated`(迁入)各写一行日志后照旧`HandleCitizenDeath`/`AddCitizen`；`onDemography`对自然死亡`HandleCitizenDeath`、出生`AddCitizen`、搬家`TeleportCitizen(新家)`，每件事一行"人口：…"日志(`LogTemp`)。`StepWorld`在跨天那一步再写一行"人口（日汇总）"(出生/自然死亡/结婚/搬家/迁入/离城人数)。没有任何界面显示，也不发脚本事件。新的每帧逻辑加进这同一个`Tick`，不要新开入口。
 
 ## 统一的Change消费入口：`ApplyChange`
 

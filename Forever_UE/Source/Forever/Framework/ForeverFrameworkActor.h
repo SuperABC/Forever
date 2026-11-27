@@ -119,6 +119,9 @@ public:
 	// 玩家当前操控的市民(玩家Pawn是ACitizenElement时)，不是市民(载具/没有Pawn)返回nullptr。
 	// 玩家的钱就是它在Ledger里的账户，物品在Player上，见Core/society/economy.md"玩家参与经济"。
 	Citizen* GetControlledCitizen() const;
+	// 玩家所扮演的市民：Pawn是市民时同GetControlledCitizen；开车/坐公交时取载具记的下车后回到的那个市民
+	// (同ForeverSaveSubsystem存档的做法)。传给Core做"玩家的人不离城/不自然死亡/不搬家"的保护。
+	Citizen* GetPlayerCitizen() const;
 
 	// 统一的Change消费入口:任何地方产出的Change都通过它消费。先处理需要UE层能力的类型,
 	// 余下的转发给Core各域的ApplyChange,见ForeverFrameworkActor.md。

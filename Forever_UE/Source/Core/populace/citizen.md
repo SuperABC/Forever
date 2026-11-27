@@ -20,7 +20,8 @@
   随人口段存档。见`Source/Forever/Player/ForeverAvatarSubsystem.md`。
 - **`spouse`/`children`**：只保留模拟结束后双方都幸存的婚姻/亲子关系，供`Map::Checkin()`决定配偶/未成年子女
   是否搬进同一间。**不保留**父母/兄弟姐妹链接（没有消费方）；兄弟姐妹关系在生成时就写进了`acquaintances`/
-  `KinshipExperience`。
+  `KinshipExperience`。运行时配对结婚直接`SetSpouse`双向设上，出生时父母各`AddChild`(见`demography.md`)；`HasLivingSpouse()`=配偶在世没离城，丧偶的人算单身。
+- **生育/搬出状态**(2026-11-27，只有`Demography::Daily`改，随人口段存档)：`pregnancyDue`(预产期，无效=没怀孕，`IsPregnant`)、`lastBirth`(运行时上次生育日期，开局前的不记)、`pendingMoveOut`(满18岁那天家里还有别人但没找到空房，之后每天重试搬出)。
 - **两种年龄**：`GetAge(const Time& now)`按生日算（没过今年生日少一岁），运行时的成年/退休/补助/投资等判断都用它；`GetAge(int year)`是按年份差的粗年龄，只给按年回溯生成人口/入职历史/Checkin用。
 - **家和当前位置是两个独立字段**：`GetRoom()`（家，`Map::Checkin`一次性设好，不搬家）与`GetCurrentRoom()`
   （当前物理位置）不能合并。`SetCurrentRoom`同步维护房间`occupants`（旧房间移出、新房间加入；死人不加入）；

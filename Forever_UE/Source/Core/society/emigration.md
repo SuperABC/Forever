@@ -10,8 +10,10 @@
   1. 清算：持股按市价卖给组织库存股、取回存款、提前赎回国债；
   2. 账户归零：负余额由城市外账户核销（`DEBT_WRITE_OFF`），正余额付给城市外（`EMIGRATE`）；
   3. 放弃名下房间的房主身份；
-  4. `Citizen::Depart()`：置`departed`标记、断开岗位、结束行进、离开当前房间并清位置。
-- 市民对象保留（和`isDead`一样用标记），存档下标不变；`departed`随人口段存档。户、`Room::households`里的成员关系也保留，但`Household::GetAdults`会过滤不在场的人，租金、饭钱、补助等经济结算都只看`IsActive`。
+  4. `Citizen::Depart()`：置`departed`标记、断开岗位、结束行进、离开当前房间并清位置；
+  5. `Room::RemoveResident`：移出住户，整户都走了的房子变回空房，迁入的人能住进来。
+- 市民对象保留（和`isDead`一样用标记），存档下标不变；`departed`随人口段存档。家(`GetRoom`)留着当记录，但人已经移出户。`Monthly`遍历户表和成员表的拷贝(Depart会改它们)。
+- 第1步的清算抽成了`Emigration::Liquidate`，自然死亡的遗产也用它(`populace/demography.md`)。
 - UE层：`Economy::Daily`把当天离城的市民放进`DailyReport::departed`，`AForeverFrameworkActor`据此调用`UForeverPopulaceFrameworkComponent::HandleCitizenDeath`销毁Actor，之后流式生成都因`!IsActive()`跳过他们。
 
 ## 依赖关系

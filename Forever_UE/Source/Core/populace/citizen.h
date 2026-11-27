@@ -168,8 +168,21 @@ public:
 	// 配偶/子女：只保留幸存双方都物化成Citizen的关系，不保留父母/兄弟姐妹，见citizen.md。
 	Citizen* GetSpouse() const;
 	void SetSpouse(Citizen* value);
+	// 配偶还活着、没离城。丧偶/配偶离城的人算单身(运行时可以再配对，见populace/demography.md)。
+	bool HasLivingSpouse() const;
 	const std::vector<Citizen*>& GetChildren() const;
 	void AddChild(Citizen* child);
+
+	// 运行时的生育状态(只有Demography::Daily改)：预产期无效=没怀孕；lastBirth无效=没生过(或开局前的不记)。
+	// pendingMoveOut：满18岁那天家里还有别人、但没找到空房，之后每天重试搬出。都随人口段存档。
+	bool IsPregnant() const;
+	const Time& GetPregnancyDue() const;
+	void SetPregnancyDue(const Time& due);
+	void ClearPregnancy();
+	const Time& GetLastBirth() const;
+	void SetLastBirth(const Time& date);
+	bool IsPendingMoveOut() const;
+	void SetPendingMoveOut(bool value);
 
 	// 个人属性与熟人列表接口
 	const Personality& GetPersonality() const;
@@ -416,4 +429,8 @@ private:
 	float maxHealth = 100.f;
 	bool isDead = false;
 	bool departed = false;
+
+	Time pregnancyDue;   // 无效=没怀孕
+	Time lastBirth;      // 无效=运行时没生过
+	bool pendingMoveOut = false;
 };

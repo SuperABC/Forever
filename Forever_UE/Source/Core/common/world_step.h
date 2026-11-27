@@ -3,6 +3,7 @@
 #include "class.h"
 
 #include "common/implement.h"
+#include "populace/demography.h"
 #include "society/economy.h"
 
 #include <functional>
@@ -25,12 +26,17 @@ struct WorldDomains {
 struct WorldStepHooks {
 	std::function<void(Citizen*, const std::vector<Change*>&)> onCitizenChanges;
 	std::function<void(Organization*, const std::vector<Change*>&)> onOrganizationChanges;
-	// 玩家当前控制的市民：他所在的户不会被判离城。
+	// 玩家当前控制的市民(Pawn就是他时)：只有他扣瞌睡值，见Populace::Tick。
 	const Citizen* controlledCitizen = nullptr;
+	// 玩家所扮演的市民(开车/坐公交时也算)：他所在的户不会被判离城，他不会自然死亡、不配对、不搬家。空=取controlledCitizen。
+	const Citizen* protectedCitizen = nullptr;
 	// 本月整户离城的市民(Economy::Daily产出)。
 	std::function<void(Citizen*)> onDeparted;
 	// 城外迁入的新市民(Immigration::Daily产出)。
 	std::function<void(Citizen*)> onImmigrated;
+	// 当天的人口推进(Demography::Daily：自然死亡/出生/结婚/搬家)，在离城之后、迁入之前。UE层据此销毁死者的Actor、
+	// 登记新生儿、把搬家的人的Actor瞬移到新家，并写日志。
+	std::function<void(const DemographyReport&)> onDemography;
 	// Traffic::Tick之后、Story::Tick之前：UE层在这里消费公交停站事件，转发给载具脚本。
 	std::function<void()> onTrafficTicked;
 	// Polit::Step之后：UE层在这里取党代会开始/结束通知(Polit::ConsumeMeetingNotices)，转发给党员的脚本。
@@ -42,7 +48,9 @@ class WorldStep {
 public:
 	// 玩家时钟(domains.player)必须已经推进到本步的时间。crossedDay=本步是否跨过0点。
 	// 返回当天的经济日报；没跑经济链(没跨天或缺域)时返回的日报是默认值，economyRan为false。
-	static DailyReport Step(const WorldDomains& domains, bool crossedDay, const WorldStepHooks& hooks, bool* economyRan = nullptr);
+	// demographyOut非空时拿到当天的人口推进报告(测试用；没跨天时是空的)。
+	static DailyReport Step(const WorldDomains& domains, bool crossedDay, const WorldStepHooks& hooks, bool* economyRan = nullptr,
+		DemographyReport* demographyOut = nullptr);
 
 	// 单独Tick人口/社会域，跳时间排空到期计时器时反复调用。
 	static void TickPopulace(const WorldDomains& domains, bool crossedDay, PostImplement& post, const WorldStepHooks& hooks);

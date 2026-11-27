@@ -249,6 +249,12 @@ public:
 	// 让citizen住进room：家(Lot/Zone/Building/Room+户)和当前位置(CurrentRoom+occupants)都设成这里。
 	// Checkin和spawn_npc的home字段共用。
 	void SettleCitizen(Citizen* citizen, Room* room);
+	// 搬家(成年搬出/婚后同居，见populace/demography.md)：从原来的家移出(Room::RemoveResident，户空了房子就空出来)，
+	// SettleCitizen到newHome，并瞬移过去(结束行走、清掉自由位置)；有工作的刷新工作脚本里的home地址。
+	// UE层另外按WorldStepHooks::onRelocated挪它的Actor。
+	void MoveCitizen(Citizen* citizen, Room* newHome);
+	// 随机一间空住宅(住宅房间且没有任何户)，没有返回nullptr。迁入和人口推进共用。调用方负责随机作用域。
+	Room* PickVacantResidence() const;
 
 	// 创建一扇门并登记进三份索引(id/交互名/allDoors)，详见map.md"门系统"
 	Door* CreateDoor(DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room* room,

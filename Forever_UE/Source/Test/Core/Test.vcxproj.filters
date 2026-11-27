@@ -26,6 +26,7 @@
     <ClCompile Include="suite_presets.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_transit.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_polit.cpp"><Filter>suites</Filter></ClCompile>
+    <ClCompile Include="suite_demography.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="econ_report.cpp"><Filter>framework</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>

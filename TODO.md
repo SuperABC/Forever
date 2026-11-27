@@ -29,7 +29,13 @@
   - 一并考虑：瞌睡值掉到 0 的强制睡觉触发跳时间时，不检查是否正在对话。
 - [ ] **通用的自由游走**：没有工作或日程的市民站在分配到的房间里不动（`citizen.md`、`populace.md`、`CitizenElement.md`）。
 - [ ] **下班行为**：`scheduler_basic` 是占位，没有真正的下班行为（`Basic/populace/scheduler_basic.md`）。
-- [ ] **离城后的空位**：离城空出的房间和岗位不会有新人迁入（`Core/society/emigration.md`）。
+- [ ] **被打死的人要单独加善后逻辑**：现在武器致死（`FForeverDamage::DamageCitizen` → `Citizen::TakeDamage` → `Die()`）仍走老逻辑，不结算遗产、不释放工作、不腾房，死者还在领利息/分红/房租；只有自然死亡走 `Demography::Kill`。后面要单独设计（要考虑 `npc_revive` 复活后怎么办），不能直接套自然死亡那套（`Core/populace/demography.md`、`ForeverDamage.md`）。
+- [ ] **运行时人口推进的缺口**（`Core/populace/demography.md`）：
+  - 新生儿和孩子还是成人的身体网格，头像落到最小那一档（3~5 岁）；Actor 存在期间年龄变了头像也不换。
+  - 新出生的孩子不会上学（入学只在开局 `GenerateEducations` 分配），长大成年后也不会有同学关系。
+  - 开局就分居的夫妻（约 10%）不会自动团聚；运行时没有离异、分居、婚外情。
+  - 搬家后车还停在原来那栋楼的车位上。
+  - 迁入的人仍然一个人来，不带家属。
 - [ ] **父母、兄弟姐妹"是谁"的原始数据不存档**，只保留了反推出的关系结果（`populace.md`）。
 - [ ] **取名**：同一轮生成内不查重（`name.md`、`name_chinese.md`）；只有中文取名算法（`populace.md`）。
 

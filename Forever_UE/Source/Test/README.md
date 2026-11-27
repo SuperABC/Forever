@@ -8,7 +8,7 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 ```
 `core` 管线先对 config 里 `dll_paths` 下的全部 mod dll 跑 ModTest(报告在 `<out>/../mod`)，再跑 CoreTest。
 单独跑 ModTest：`x64\Release\ModTest.exe <mod.dll|目录>... [--with <dll|目录>] [--config config.json] [--seed N] [--out dir]`，全量(含 `Forever_Mod` 下所有 mod、查重名)用 `x64\Release\ModTest.exe x64\Release ..\Forever_Mod`。
-单独跑 CoreTest：`x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,perform,route,green,presets,plateau,polit,transit,terrain,unload,fault|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
+单独跑 CoreTest：`x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,demography,save,perform,route,green,presets,plateau,polit,transit,terrain,unload,fault|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
 先编译：`MSBuild Source\Framework.sln /p:Configuration=Release /p:Platform=x64`(必须编整个 sln：只编 `Source/Test/Core/Test.vcxproj`(输出仍是 `CoreTest.exe`)不会重编 Core.lib，改了 Core 会测到旧代码)。改了 `Dependence` 头文件要把 `Forever_Mod` 下 Empty/Test/Wxdj/Yuanshen/Tutorial 也各自重编，lint 会检查 DLL 是否比头文件旧。UE 代码用 UBT 编 `ForeverEditor Win64 Development`。
 
 ## 套件
@@ -26,6 +26,7 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - 内存统计(所有Core套件)：`RecordMemory(label)`(`test_framework.h`)记"memory <label> private"(进程私有内存MB)和"delta"(比上一次记录的增量)。世界套件的子进程自动记每个生成阶段的内存(`stage.<阶段> memory`)、生成后/套件结束后的内存和峰值工作集；mods(单测前后)、world(连通校验后)、econ(每月末，单调增长=泄漏或无上限缓存)、save(一份存档/回环重建后)、perform(寻路/每日tick前后)、route(各缓存状态/车辆寻路前后)各自在关键点记。
 - perform：各阶段耗时、路线规划 p50/p95/max、每日 tick 耗时，预算见 `budgets.json`(只告警)。
 - world：多种子世界不变量(建筑/房间/车行与步行连通——飞机位不计/人口/账本/股份)；机场恰2个机位且各停一架飞机，港口恰1个船位且停一艘船，所有 stocked 车位(`ParkingSlotSpec::stocked`)开局都停了车。
+- demography：运行时人口推进(Core/populace/demography，2026-11-27)。先用`DemographyConfig`把某一项概率拉到1、其余置0逐个分支检查：自然死亡(变成不活跃、工作空出、遗产给在世配偶且账本仍为0、独居者的房子空出、被操控的市民不死)、怀孕(只有育龄已婚女性、预产期280天后)、出生(住父母共同的家/分居时住母亲家、父母和兄弟姐妹的亲属关系、钱包0、名字唯一)、配对(异性/成年/单身/非近亲/双向配偶/同住一间、旧房空出、被操控的不参与)、成年搬出(18岁生日搬到空房、家人留在原处、已独居的不搬)；生成后和各场景后住户与家互相一致。再用默认参数按WorldStep逐日跑400天：账本每天为0、出生/死亡/结婚都发生、住户一致、没有作用域外随机数；事件日志写到`<out>/demography_logs/demography_seed<S>_<tag>.log`，同种子两遍逐字节一致。econ套件的月报也多一行出生/自然死亡/结婚/搬家。
 - polit：政治域(2026-11-21)，长期行为(选举、政策演化、党代会、权力)全靠它验证，PIE只看第一天的党内选举。纯函数/目录检查；带两党的世界推进>=13个月(步长<=1小时覆盖每月1号12:00~15:00的党代会窗口)，模拟党员按月轮换的出席(全到/部分/没人；没有会议室的党线上召开，全体党员都算到场、通知地址为空、照常选出党首)，逐步检查选举时点、政策单次变化幅度<=10%且在[min,max]内、执政期数、执政党不开会、start/end通知成对、党首只能是到场者、权力只属于执政党党员、账本总和恒0；跳时间补发、党员死亡被移出、会议室重叠兜底(最多4次；这个世界里没有任何党拿到会议室时这一项跳过并记一条note)；完整政治日志写到`<out>/polit_logs/polit_seed<S>_<tag>.log`并解析日志交叉验证；同种子两次日志逐字节一致；没启用党派时政策值始终是默认值。世界/econ/save/perf套件也带两党跑。
 - econ：每月经济报表(`econ_report.*` 的 `Reporter`)写到 `<out>/econ_digests/econ_report_seed<S>.txt`；分红、倒闭重启场景作为检查项。`Tools/EconSim` 已移除。
   用 Core `WorldStep`(与 UE StepWorld 同一份)按日推进，逐日账本守恒，同种子逐日摘要必须一致。

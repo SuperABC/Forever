@@ -403,6 +403,30 @@ Household* Room::AddResident(Citizen* citizen) {
 	return target;
 }
 
+void Room::RemoveResident(Citizen* citizen) {
+	if (!citizen) return;
+	for (size_t i = 0; i < households.size(); i++) {
+		Household* household = households[i];
+		if (!household->Contains(citizen)) continue;
+		household->RemoveMember(citizen);
+		if (citizen->GetHousehold() == household) citizen->SetHousehold(nullptr);
+		if (household->GetMembers().empty()) {
+			delete household;
+			households.erase(households.begin() + i);
+		}
+		return;
+	}
+}
+
+bool Room::HasActiveResident() const {
+	for (const Household* household : households) {
+		for (const Citizen* member : household->GetMembers()) {
+			if (member && member->IsActive()) return true;
+		}
+	}
+	return false;
+}
+
 const vector<Citizen*>& Room::GetOccupants() const { return occupants; }
 
 void Room::AddOccupant(Citizen* citizen) {

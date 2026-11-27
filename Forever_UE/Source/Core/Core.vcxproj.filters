@@ -51,6 +51,12 @@
     <ClCompile Include="populace\household.cpp">
       <Filter>populace</Filter>
     </ClCompile>
+    <ClCompile Include="populace\kinship.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\demography.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
     <ClCompile Include="society\economy.cpp">
       <Filter>society</Filter>
     </ClCompile>
@@ -282,6 +288,12 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="populace\household.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\kinship.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\demography.h">
       <Filter>populace</Filter>
     </ClInclude>
     <ClInclude Include="society\economy.h">

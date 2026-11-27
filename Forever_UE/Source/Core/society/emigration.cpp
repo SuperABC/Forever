@@ -22,15 +22,20 @@ int64_t Emigration::NetWorth(const Society& society, const Citizen* citizen) {
 	return worth;
 }
 
-void Emigration::Depart(Society& society, const vector<Room*>& rooms, Citizen* citizen) {
+void Emigration::Liquidate(Society& society, Citizen* citizen) {
 	Ledger& ledger = society.GetLedger();
-
-	// 清算：股票按市价卖给组织库存股，存款取回，国债提前赎回。
 	for (Organization* organization : society.GetOrganizations()) {
 		society.GetMarket().SellAllToTreasury(ledger, organization, citizen);
 	}
 	society.GetTreasury().Withdraw(ledger, citizen, society.GetTreasury().DepositOf(citizen));
 	society.GetTreasury().RedeemBonds(ledger, citizen);
+}
+
+void Emigration::Depart(Society& society, const vector<Room*>& rooms, Citizen* citizen) {
+	Ledger& ledger = society.GetLedger();
+
+	// 清算：股票按市价卖给组织库存股，存款取回，国债提前赎回。
+	Liquidate(society, citizen);
 
 	// 余额归零：欠款由城市外账户核销，剩下的钱被带走。
 	int64_t balance = ledger.Balance(Holder::Of(citizen));
@@ -41,6 +46,8 @@ void Emigration::Depart(Society& society, const vector<Room*>& rooms, Citizen* c
 		if (room && room->GetOwner() == citizen) room->SetOwner(nullptr);
 	}
 	citizen->Depart();
+	// 移出住户：整户都走了的房子变回空房，迁入的人能住进来。家(GetRoom)留着当记录。
+	if (Room* home = citizen->GetRoom()) home->RemoveResident(citizen);
 }
 
 vector<Citizen*> Emigration::Monthly(Society& society, const vector<Room*>& rooms, const Time& now,
@@ -48,7 +55,9 @@ vector<Citizen*> Emigration::Monthly(Society& society, const vector<Room*>& room
 	vector<Citizen*> departed;
 	for (const Room* room : rooms) {
 		if (!room || !room->IsResidence()) continue;
-		for (Household* household : room->GetHouseholds()) {
+		// Depart会把人移出户、户空了就删掉，所以遍历户表和成员表的拷贝。
+		const vector<Household*> households = room->GetHouseholds();
+		for (Household* household : households) {
 			if (protectedCitizen && household->Contains(protectedCitizen)) continue;
 			vector<Citizen*> adults = household->GetAdults(now);
 			if (adults.empty()) continue;
@@ -62,7 +71,8 @@ vector<Citizen*> Emigration::Monthly(Society& society, const vector<Room*>& room
 			}
 			if (!allNegative) continue;
 
-			for (Citizen* member : household->GetMembers()) {
+			const vector<Citizen*> members = household->GetMembers();
+			for (Citizen* member : members) {
 				if (!member || !member->IsActive()) continue;
 				Depart(society, rooms, member);
 				departed.push_back(member);

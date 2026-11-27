@@ -164,6 +164,10 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.I32(c->currentGreenCircle);
 		SaveRefs::WriteGreen(map, c->walkGreen, w);
 		w.I32(c->walkGreenCircle);
+		// 运行时人口推进的生育/搬出状态(追加在记录最后，按项目约定没升段版本)，见demography.md。
+		SaveRefs::WriteTime(c->pregnancyDue, w);
+		SaveRefs::WriteTime(c->lastBirth, w);
+		w.U8(c->pendingMoveOut ? 1 : 0);
 	}
 
 	// 班级。
@@ -376,6 +380,9 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			if (!c->currentGreen) c->currentGreenCircle = -1;
 			Green* walkGreenSaved = SaveRefs::ReadGreen(map, r);
 			int walkGreenCircleSaved = r.I32();
+			c->pregnancyDue = SaveRefs::ReadTime(r);
+			c->lastBirth = SaveRefs::ReadTime(r);
+			c->pendingMoveOut = r.U8() != 0;
 			if (savedWalking && !r.Failed()) {
 				// 起算时间先记0，UE侧GenerateCitizens再用RebaseWalk对齐到当前游戏时钟。
 				if (walkGreenSaved) c->BeginWalkToGreen(walkPathSaved, walkGreenSaved, walkGreenCircleSaved, 0.0, walkSpeedSaved);

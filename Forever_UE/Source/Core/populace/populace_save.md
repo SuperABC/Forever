@@ -59,6 +59,10 @@
 ## 补充说明
 - 房间里的物品（`Room::assets`）存在玩家段，见 `Source/Core/player/player_save.md`。
 
+## 生育/搬出状态（2026-11-27）
+
+`pregnancyDue`（预产期，无效=没怀孕）、`lastBirth`（运行时上次生育日期）、`pendingMoveOut`（成年时没找到空房、待重试）追加在每个市民记录的最后（在绿化区字段之后），按项目约定没升段版本，见`demography.md`。
+
 ## 动态属性
 每个市民记录末尾(avatarIndex之后)追加`U8 statsActive`+`F32 satiety`+`U8 departed`，读写严格对称。
 人口段头部`currentYear`之后是`I32 initialPopulation`（开局市民总数，迁入机制的基准）。

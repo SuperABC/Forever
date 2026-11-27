@@ -25,6 +25,9 @@ public:
 
 	// 所有者：私有归属是对应市民，公有(stated)为nullptr(即政府)。
 	Citizen* GetOwner() const { return owner; }
+	// 继承(自然死亡，见populace/demography.md)：只改资产自己记的所有者，对应Zone/Building/Room的owner和
+	// 资产列表由调用方一起改。
+	void SetOwner(Citizen* value) { owner = value; }
 
 private:
 	Level level;

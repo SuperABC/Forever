@@ -865,6 +865,14 @@ Citizen* AForeverFrameworkActor::GetControlledCitizen() const {
 	return element ? element->GetCitizen() : nullptr;
 }
 
+Citizen* AForeverFrameworkActor::GetPlayerCitizen() const {
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (AVehicleElement* vehicle = Cast<AVehicleElement>(pawn)) pawn = vehicle->GetPreviousPawn().Get();
+	else if (ATransitVehicleElement* transit = Cast<ATransitVehicleElement>(pawn)) pawn = transit->GetPreviousPawn().Get();
+	const ACitizenElement* element = Cast<ACitizenElement>(pawn);
+	return element ? element->GetCitizen() : nullptr;
+}
+
 void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context) {
 	if (!populace || !change) return;
 	std::string name = ToString(EvaluateExpression(change->GetName(), context));
@@ -1179,13 +1187,44 @@ WorldStepHooks AForeverFrameworkActor::MakeStepHooks()
 		}
 	};
 	hooks.controlledCitizen = GetControlledCitizen();
+	hooks.protectedCitizen = GetPlayerCitizen();
 	// 本月整户离城的市民：移除他们在场景里的Actor。
 	hooks.onDeparted = [this](Citizen* departed) {
+		if (!departed) return;
+		UE_LOG(LogTemp, Log, TEXT("人口：%s 离城"), UTF8_TO_TCHAR(departed->GetName().c_str()));
 		if (populaceFramework) populaceFramework->HandleCitizenDeath(departed);
 	};
 	// 城外迁入的新市民：登记给人口组件，之后按距离流式生成Actor。
 	hooks.onImmigrated = [this](Citizen* immigrant) {
+		if (!immigrant) return;
+		UE_LOG(LogTemp, Log, TEXT("人口：%s 迁入 %s"), UTF8_TO_TCHAR(immigrant->GetName().c_str()),
+			immigrant->GetRoom() ? UTF8_TO_TCHAR(immigrant->GetRoom()->GetAddress().c_str()) : TEXT("(没有住处)"));
 		if (populaceFramework) populaceFramework->AddCitizen(immigrant);
+	};
+	// 当天的人口推进(纯Core算完)：死者撤掉Actor，新生儿登记进流式生成，搬家的人把Actor瞬移到新家。只写日志，不发脚本事件。
+	hooks.onDemography = [this](const DemographyReport& demography) {
+		auto nameOf = [](const Citizen* citizen) { return citizen ? FString(UTF8_TO_TCHAR(citizen->GetName().c_str())) : FString(TEXT("(无)")); };
+		auto addressOf = [](const Room* room) { return room ? FString(UTF8_TO_TCHAR(room->GetAddress().c_str())) : FString(TEXT("(没有住处)")); };
+		for (const DemographyReport::Death& death : demography.deaths) {
+			FString heirs;
+			for (const Citizen* heir : death.heirs) heirs += (heirs.IsEmpty() ? TEXT("") : TEXT("、")) + nameOf(heir);
+			UE_LOG(LogTemp, Log, TEXT("人口：%s 自然死亡（%d岁），遗产给 %s"), *nameOf(death.citizen), death.age,
+				heirs.IsEmpty() ? TEXT("政府") : *heirs);
+			if (populaceFramework) populaceFramework->HandleCitizenDeath(death.citizen);
+		}
+		for (const DemographyReport::Birth& birth : demography.births) {
+			UE_LOG(LogTemp, Log, TEXT("人口：%s 出生于 %s（母亲 %s，父亲 %s）"), *nameOf(birth.child),
+				*addressOf(birth.child ? birth.child->GetRoom() : nullptr), *nameOf(birth.mother), *nameOf(birth.father));
+			if (populaceFramework) populaceFramework->AddCitizen(birth.child);
+		}
+		for (const auto& [a, b] : demography.marriages) {
+			UE_LOG(LogTemp, Log, TEXT("人口：%s 和 %s 结婚"), *nameOf(a), *nameOf(b));
+		}
+		for (const DemographyReport::Move& move : demography.moves) {
+			UE_LOG(LogTemp, Log, TEXT("人口：%s 从 %s 搬到 %s（%s）"), *nameOf(move.citizen), *addressOf(move.from), *addressOf(move.to),
+				move.reason == DemographyReport::MoveReason::Marriage ? TEXT("婚后同居") : TEXT("成年搬出"));
+			if (populaceFramework) populaceFramework->TeleportCitizen(move.citizen, move.to);
+		}
 	};
 	// 线路车停稳/离站：Core只产出事件队列，转发给载具自己的script(脚本据此控制上下车选项)。
 	hooks.onTrafficTicked = [this]() {
@@ -1243,11 +1282,21 @@ void AForeverFrameworkActor::StepWorld(bool crossedDay)
 {
 	// 各Core域按固定顺序推进一步(Player已经推进了全局时钟)：和自动化测试共用同一份实现，见Core/common/world_step.md。
 	bool economyRan = false;
-	const DailyReport economyReport = WorldStep::Step(MakeWorldDomains(), crossedDay, MakeStepHooks(), &economyRan);
+	WorldStepHooks hooks = MakeStepHooks();
+	int32 immigrated = 0;
+	auto onImmigrated = hooks.onImmigrated;
+	hooks.onImmigrated = [&immigrated, onImmigrated](Citizen* immigrant) {
+		immigrated++;
+		if (onImmigrated) onImmigrated(immigrant);
+	};
+	DemographyReport demography;
+	const DailyReport economyReport = WorldStep::Step(MakeWorldDomains(), crossedDay, hooks, &economyRan, &demography);
 	if (!economyRan) return;
-	if (!economyReport.departed.empty()) {
-		UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: %d citizens left the city."), static_cast<int32>(economyReport.departed.size()));
-	}
+	// 人口变化的每日汇总(逐人明细在MakeStepHooks的回调里)。
+	UE_LOG(LogTemp, Log, TEXT("人口（日汇总）：出生 %d，自然死亡 %d，结婚 %d 对，搬家 %d 人次，迁入 %d，离城 %d"),
+		static_cast<int32>(demography.births.size()), static_cast<int32>(demography.deaths.size()),
+		static_cast<int32>(demography.marriages.size()), static_cast<int32>(demography.moves.size()),
+		immigrated, static_cast<int32>(economyReport.departed.size()));
 	// 全系统资金总和必须始终为0。
 	if (society && society->GetLedger().Total() != 0) {
 		UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: ledger total is %lld, expected 0."),

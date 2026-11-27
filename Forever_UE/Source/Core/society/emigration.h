@@ -17,6 +17,10 @@ public:
 	static std::vector<Citizen*> Monthly(Society& society, const std::vector<Room*>& rooms, const Time& now,
 		const Citizen* protectedCitizen);
 
+	// 清算成现金：股票按市价卖给组织库存股、存款取回、国债提前赎回，之后全部资产都在账户余额里。
+	// 离城和自然死亡(遗产，见populace/demography.md)共用。
+	static void Liquidate(Society& society, Citizen* citizen);
+
 private:
 	// 一个市民离开：清算股票/存款/国债，余额归零（负的核销、正的带走），放弃名下房产，打上departed。
 	static void Depart(Society& society, const std::vector<Room*>& rooms, Citizen* citizen);
